@@ -513,7 +513,8 @@ class MainWindow(QtWidgets.QMainWindow):
         """
         if obj is None:
             return False
-        if dock_widget.widget().model() is None or getattr(self, tree_name).isChecked():
+        tree_widget = dock_widget.tree_widget
+        if tree_widget is None or tree_widget.model() is None or getattr(self, tree_name).isChecked():
             if obj.activate():
                 dock_widget.init_menu()
                 dock_widget.setWidget(obj.tree_view())

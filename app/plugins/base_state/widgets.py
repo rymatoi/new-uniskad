@@ -9,7 +9,7 @@ from PySide2.QtGui import QIcon, QCursor, QColor, QFont, QBrush, QKeySequence
 from PySide2.QtWidgets import QTreeView, QMenu, QColorDialog, QInputDialog, QDockWidget, \
     QHBoxLayout, QToolButton, QWidget, QLabel, QAbstractItemView, QAction, \
     QFontDialog, QComboBox, QCompleter, QTableWidget, QTableWidgetItem, QVBoxLayout, QTreeWidget, QTreeWidgetItem, \
-    QApplication
+    QApplication, QLineEdit
 from openpyxl.workbook import Workbook
 from app import app_logger, _menu, basic_funcs
 from app._eval_expr import eval_expr
@@ -95,6 +95,9 @@ class TreeView(QTreeView):
 
         self._opened_tabs = {}
 
+        self._filter_text = ''
+        self._model = None
+
         self.setContextMenuPolicy(Qt.CustomContextMenu)
         self.__create_connections()
         icon_size = QSize(16, 16)
@@ -109,6 +112,9 @@ class TreeView(QTreeView):
         self._link_dict = link_dict
 
     def setModel(self, model: QtCore.QAbstractItemModel) -> None:
+        if self._model:
+            self._disconnect_model_signals()
+        self._model = model
         super(TreeView, self).setModel(model)
         model.set_view(self)
         self.model().font_name = 'Times New Roman'
@@ -119,9 +125,60 @@ class TreeView(QTreeView):
             if font_size := self.main_window.user_settings.get('font_size'):
                 self.model().font_size = font_size
         self.resizeColumnToContents(0)
+        self._connect_model_signals()
         self.refresh()
 
+    def _connect_model_signals(self):
+        if not self._model:
+            return
+        try:
+            self._model.dataChanged.connect(self._on_model_data_changed)
+            self._model.layoutChanged.connect(self._on_model_layout_changed)
+            self._model.rowsInserted.connect(self._on_model_structure_changed)
+            self._model.rowsRemoved.connect(self._on_model_structure_changed)
+        except AttributeError:
+            pass
+
+    def _disconnect_model_signals(self):
+        if not self._model:
+            return
+        for signal, slot in (
+            (self._model.dataChanged, self._on_model_data_changed),
+            (self._model.layoutChanged, self._on_model_layout_changed),
+            (self._model.rowsInserted, self._on_model_structure_changed),
+            (self._model.rowsRemoved, self._on_model_structure_changed),
+        ):
+            try:
+                signal.disconnect(slot)
+            except (TypeError, RuntimeError):
+                pass
+
+    def _on_model_data_changed(self, *args, **kwargs):
+        self._reapply_filter()
+
+    def _on_model_layout_changed(self, *args, **kwargs):
+        self._reapply_filter()
+
+    def _on_model_structure_changed(self, *args, **kwargs):
+        self._reapply_filter()
+
+    def _reapply_filter(self):
+        if not self.model():
+            return
+        if self._filter_text:
+            self._apply_filter_to_all()
+        else:
+            self._refresh_without_filter()
+
     def refresh(self):
+        if not self.model():
+            return
+        if self._filter_text:
+            self._apply_filter_to_all()
+        else:
+            self._refresh_without_filter()
+
+    def _refresh_without_filter(self):
         for row in range(self.model().rowCount()):
             index = self.model().index(row, 0)
             hidden = self.model().data(index, Qt.UserRole)
@@ -129,6 +186,47 @@ class TreeView(QTreeView):
                 self.setItemVisibility(self.model(), index, False)
             else:
                 self.setItemVisibility(self.model(), index, hidden)
+
+    def filter_items(self, text: str):
+        normalized = text.lower().strip()
+        if normalized == self._filter_text:
+            return
+        self._filter_text = normalized
+        self.refresh()
+
+    def _apply_filter_to_all(self):
+        model = self.model()
+        if model is None:
+            return
+        for row in range(model.rowCount()):
+            index = model.index(row, 0)
+            self._apply_filter(index)
+
+    def _apply_filter(self, index):
+        model = self.model()
+        item = index.internalPointer()
+        matches = self._item_matches_filter(item)
+        child_visible = False
+        for i in range(model.rowCount(index)):
+            child_index = model.index(i, 0, index)
+            if self._apply_filter(child_index):
+                child_visible = True
+        hidden_by_state = False
+        if self.HIDE_REMOVED_ITEMS:
+            hidden_by_state = bool(model.data(index, Qt.UserRole))
+        visible = (matches or child_visible) and not hidden_by_state
+        self.setRowHidden(index.row(), index.parent(), not visible)
+        if visible and (matches or child_visible):
+            self.expand(index)
+        return visible or matches
+
+    def _item_matches_filter(self, item):
+        if not self._filter_text:
+            return True
+        value = item.data()
+        if not value:
+            return False
+        return self._filter_text in str(value).lower()
 
     def setItemVisibility(self, model, index, hidden):
         self.setRowHidden(index.row(), index.parent(), hidden)
@@ -489,12 +587,76 @@ class TreeView(QTreeView):
         self.model().removeRows(row, count, parent)
 
 
+class TreeDockWidgetContainer(QWidget):
+    """Вспомогательный виджет для отображения дерева с панелью поиска и сортировки."""
+
+    def __init__(self, tree_view: TreeView, parent=None):
+        super().__init__(parent)
+        self.tree_view = tree_view
+        self._sort_order = Qt.AscendingOrder
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(4)
+
+        controls_layout = QHBoxLayout()
+        controls_layout.setContentsMargins(4, 4, 4, 0)
+
+        self.search_edit = QLineEdit(self)
+        self.search_edit.setPlaceholderText('Поиск...')
+        try:
+            self.search_edit.setClearButtonEnabled(True)
+        except AttributeError:
+            pass
+        self.search_edit.textChanged.connect(self.tree_view.filter_items)
+
+        self.clear_button = QToolButton(self)
+        self.clear_button.setText('✕')
+        self.clear_button.setToolTip('Очистить поиск')
+        self.clear_button.clicked.connect(lambda: self.search_edit.setText(''))
+
+        self.sort_button = QToolButton(self)
+        self.sort_button.setToolTip('Изменить порядок сортировки')
+        self.sort_button.setCheckable(True)
+        self.sort_button.toggled.connect(self._toggle_sort_order)
+        self._update_sort_button_label(False)
+
+        controls_layout.addWidget(self.search_edit, 1)
+        controls_layout.addWidget(self.clear_button, 0)
+        controls_layout.addWidget(self.sort_button, 0)
+
+        layout.addLayout(controls_layout)
+        layout.addWidget(self.tree_view, 1)
+
+        self._setup_tree()
+
+    def _setup_tree(self):
+        self.tree_view.setSortingEnabled(True)
+        header = self.tree_view.header()
+        header.setSortIndicatorShown(True)
+        header.setSectionsClickable(True)
+        header.setSortIndicator(0, self._sort_order)
+        self.tree_view.sortByColumn(0, self._sort_order)
+
+    def _toggle_sort_order(self, checked):
+        self._sort_order = Qt.DescendingOrder if checked else Qt.AscendingOrder
+        self.tree_view.sortByColumn(0, self._sort_order)
+        header = self.tree_view.header()
+        header.setSortIndicator(0, self._sort_order)
+        self._update_sort_button_label(checked)
+
+    def _update_sort_button_label(self, descending):
+        self.sort_button.setText('Я→А' if descending else 'А→Я')
+
+
 class DockWidget(QDockWidget):
     def __init__(self, title, menu_name, plugin_name, parent=None):
         super().__init__(parent)
         self.plugin_name = plugin_name
         self.available_actions = []
         self._parent = parent
+        self._tree_widget = None
+        self._tree_container = None
         layout = QHBoxLayout()
         self.menu_name = menu_name
 
@@ -554,6 +716,21 @@ class DockWidget(QDockWidget):
         self.setTitleBarWidget(widget)
         self.topLevelChanged.connect(lambda: self.dock_button.setHidden(not self.isFloating()))
 
+    @property
+    def tree_widget(self):
+        return self._tree_widget
+
+    def setWidget(self, widget):
+        if isinstance(widget, TreeView):
+            container = TreeDockWidgetContainer(widget, self)
+            self._tree_widget = widget
+            self._tree_container = container
+            super().setWidget(container)
+        else:
+            self._tree_widget = None
+            self._tree_container = None
+            super().setWidget(widget)
+
     def update_npps(self, root):
         update_data = []
         for child in root.children:
@@ -566,7 +743,9 @@ class DockWidget(QDockWidget):
         pass
 
     def move_up(self):
-        tree = self.widget()
+        tree = self.tree_widget
+        if tree is None:
+            return
         index = tree.selectionModel().currentIndex()
         if not index.isValid() or index.row() <= 0:
             return
@@ -588,7 +767,9 @@ class DockWidget(QDockWidget):
                 self.hide_hidden_children(tree, tree.model(), index.parent())
 
     def move_down(self):
-        tree = self.widget()
+        tree = self.tree_widget
+        if tree is None:
+            return
         index = tree.selectionModel().currentIndex()
         if not index.isValid() or index.row() >= tree.model().rowCount(index.parent()):
             return
@@ -646,9 +827,9 @@ class DockWidget(QDockWidget):
         self._show_removed_items()
 
     def _show_removed_items(self):
-        if hasattr(self, '_show_removed'):
-            setattr(self.widget(), 'HIDE_REMOVED_ITEMS', not getattr(self, '_show_removed').isChecked())
-            self.widget().refresh()
+        if hasattr(self, '_show_removed') and self.tree_widget:
+            setattr(self.tree_widget, 'HIDE_REMOVED_ITEMS', not getattr(self, '_show_removed').isChecked())
+            self.tree_widget.refresh()
 
     def hide_(self):
         getattr(self._parent, self.menu_name).setChecked(False)

@@ -21,8 +21,9 @@ class AdminUsersDockWidget(DockWidget):
 
     def change_view(self, view):
         if view == 'activeness':
-            self.widget().add_folders(getattr(self, '_activeness').isChecked())
-            self.widget().sort_items_to_folders(getattr(self, '_activeness').isChecked())
-            self.widget().refresh()
+            if self.tree_widget:
+                self.tree_widget.add_folders(getattr(self, '_activeness').isChecked())
+                self.tree_widget.sort_items_to_folders(getattr(self, '_activeness').isChecked())
+                self.tree_widget.refresh()
         elif view == 'blocked':
             pass
