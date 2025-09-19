@@ -1,4 +1,5 @@
 import asyncio
+import threading
 from functools import wraps
 from inspect import signature
 
@@ -51,11 +52,33 @@ class Session:
     def __init__(self, **dsn):
         self.dsn = dsn
         self.loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(self.loop)
-        self._remote_connection = self.loop.run_until_complete(self.connect_db())
+        self._loop_ready = threading.Event()
+        self._loop_thread = threading.Thread(target=self._run_event_loop, daemon=True)
+        self._loop_thread.start()
+        self._loop_ready.wait()
+
+        self._remote_connection = None
+        self._execute_lock = None
+        self._reconnect_lock = None
         self.main_window = None
         self._login = None
         self._password = None
+
+        self.run_sync(self._initialize_async_state())
+
+    def _run_event_loop(self):
+        asyncio.set_event_loop(self.loop)
+        self._loop_ready.set()
+        self.loop.run_forever()
+
+    async def _initialize_async_state(self):
+        self._execute_lock = asyncio.Lock()
+        self._reconnect_lock = asyncio.Lock()
+        self._remote_connection = await self.connect_db()
+
+    def run_sync(self, coro):
+        future = asyncio.run_coroutine_threadsafe(coro, self.loop)
+        return future.result()
 
     def init_main_window(self, mw):
         self.main_window = mw
@@ -70,20 +93,30 @@ class Session:
             return None
 
     async def reconnect_db(self, retries=5, delay=5):
-        for attempt in range(retries):
-            try:
-                self._remote_connection = await self.connect_db()
-                if self._remote_connection:
-                    self.update_loading_bar('Подключено.')
-                    print("Reconnected to the database.")
-                    success = self.call('checkuserpassword', self._login, self._password)
-                    return success
-            except Exception as e:
-                print(f"Reconnection attempt {attempt + 1} failed: {e}")
-            await asyncio.sleep(delay)
-        self.update_loading_bar('Не удалось подключиться к БД после нескольких попыток.')
-        print("Failed to reconnect to the database after several attempts.")
-        return False
+        async with self._reconnect_lock:
+            for attempt in range(retries):
+                try:
+                    self._remote_connection = await self.connect_db()
+                    if self._remote_connection:
+                        self.update_loading_bar('Подключено.')
+                        print("Reconnected to the database.")
+                        if self._login and self._password:
+                            query = 'SELECT * FROM "sc_ref".checkuserpassword($1, $2)'
+                            try:
+                                async with self._execute_lock:
+                                    value = await self._remote_connection.fetchval(
+                                        query, self._login, self._password)
+                                return bool(value)
+                            except Exception as e:
+                                print(f"Failed to reauthorize after reconnect: {e}")
+                                return False
+                        return True
+                except Exception as e:
+                    print(f"Reconnection attempt {attempt + 1} failed: {e}")
+                await asyncio.sleep(delay)
+            self.update_loading_bar('Не удалось подключиться к БД после нескольких попыток.')
+            print("Failed to reconnect to the database after several attempts.")
+            return False
 
     def update_loading_bar(self, message):
         if hasattr(self, 'main_window') and self.main_window:
@@ -92,17 +125,24 @@ class Session:
     async def execute(self, procedure_name, *args):
         query = f'SELECT * FROM "sc_ref".{procedure_name}({",".join([f"${i + 1}" for i, _ in enumerate(args)])})'
         try:
+            if self._execute_lock is None:
+                await self._initialize_async_state()
+
             if self._remote_connection is None or self._remote_connection.is_closed():
                 if not await self.reconnect_db():
                     return None
-            result = await self._remote_connection.fetch(query, *args)
+
+            async with self._execute_lock:
+                result = await self._remote_connection.fetch(query, *args)
+
             return QueryResult(result, columns=list(result[0].keys()) if len(result) else None)
         except (asyncpg.exceptions.ConnectionDoesNotExistError, asyncpg.exceptions.ConnectionFailureError):
             print("Connection lost. Attempting to reconnect...")
             self.update_loading_bar("Соединение потеряно. Попытка восстановления")
             if await self.reconnect_db():
                 try:
-                    result = await self._remote_connection.fetch(query, *args)
+                    async with self._execute_lock:
+                        result = await self._remote_connection.fetch(query, *args)
                     return QueryResult(result, columns=list(result[0].keys()) if len(result) else None)
                 except Exception as e:
                     return e
@@ -112,14 +152,12 @@ class Session:
             return e
 
     def call(self, query, *args):
-        if self.loop.is_running():
-            return None
         try:
             if self.main_window:
                 return self.main_window.run_with_progress(
-                    lambda: self.loop.run_until_complete(self.execute(query, *args)))
+                    lambda: self.run_sync(self.execute(query, *args)))
             else:
-                return self.loop.run_until_complete(self.execute(query, *args))
+                return self.run_sync(self.execute(query, *args))
         except Exception as e:
             print(e)
 
@@ -187,9 +225,12 @@ class Session:
         if self.connected():
             # noinspection PyBroadException
             try:
-                self.loop.run_until_complete(self._remote_connection.close())
+                self.run_sync(self._remote_connection.close())
             except Exception:
                 pass
+        self.loop.call_soon_threadsafe(self.loop.stop)
+        self._loop_thread.join()
+        self.loop.close()
 
     def authorize(self, login, password, auth_manually=False):
         self._login = login
