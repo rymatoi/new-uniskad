@@ -6,7 +6,7 @@ from inspect import signature
 import asyncpg
 import typing
 
-from PySide2.QtCore import QThread, Signal
+from PySide2.QtCore import QThread, Signal, QMetaObject, Qt, Q_ARG
 from asyncpg import RaiseError
 from config.config import config
 
@@ -119,8 +119,19 @@ class Session:
             return False
 
     def update_loading_bar(self, message):
-        if hasattr(self, 'main_window') and self.main_window:
-            self.main_window.set_progress_bar_status(message)
+        if not getattr(self, 'main_window', None):
+            return
+
+        main_window = self.main_window
+        if QThread.currentThread() is main_window.thread():
+            main_window.set_progress_bar_status(message)
+        else:
+            QMetaObject.invokeMethod(
+                main_window,
+                "set_progress_bar_status",
+                Qt.QueuedConnection,
+                Q_ARG(str, message),
+            )
 
     async def execute(self, procedure_name, *args):
         query = f'SELECT * FROM "sc_ref".{procedure_name}({",".join([f"${i + 1}" for i, _ in enumerate(args)])})'

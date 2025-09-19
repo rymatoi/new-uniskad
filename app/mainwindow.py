@@ -418,6 +418,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def on_worker_started(self):
         self.set_progress_bar_status(self.progress_bar.current_text)
 
+    @Slot(str)
     def set_progress_bar_status(self, message):
         self.progress_bar.current_text = message
         self.progress_bar.setFormat(message + '..')
