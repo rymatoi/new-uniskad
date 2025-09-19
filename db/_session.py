@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 import threading
 from functools import wraps
 from inspect import signature
@@ -133,33 +134,76 @@ class Session:
     async def reconnect_db(self, retries=5, delay=5):
         logger.warning("Reconnecting to the database (retries=%s, delay=%ss)", retries, delay)
         async with self._reconnect_lock:
+            if self.connected():
+                logger.info("Reconnect skipped: existing connection is still active")
+                return True
+
+            last_error = None
+
             for attempt in range(retries):
+                connection = None
                 try:
                     logger.info("Reconnect attempt %s of %s", attempt + 1, retries)
-                    self._remote_connection = await self.connect_db()
-                    if self._remote_connection:
-                        self.update_loading_bar('Подключено.')
-                        logger.info("Reconnected to the database")
-                        if self._login and self._password:
-                            query = 'SELECT * FROM "sc_ref".checkuserpassword($1, $2)'
-                            try:
-                                async with self._execute_lock:
-                                    value = await self._remote_connection.fetchval(
-                                        query, self._login, self._password)
-                                logger.info(
-                                    "Reauthorization after reconnect returned %s",
-                                    bool(value)
+                    connection = await self.connect_db()
+                    if not connection:
+                        last_error = RuntimeError("connect_db returned no connection")
+                    else:
+                        try:
+                            async with self._execute_lock:
+                                if self.connected():
+                                    logger.info(
+                                        "Another coroutine restored the connection while reconnecting"
+                                    )
+                                    await connection.close()
+                                    connection = None
+                                    return True
+
+                                auth_success = True
+                                if self._login and self._password:
+                                    query = 'SELECT * FROM "sc_ref".checkuserpassword($1, $2)'
+                                    try:
+                                        value = await connection.fetchval(
+                                            query, self._login, self._password
+                                        )
+                                        auth_success = bool(value)
+                                        logger.info(
+                                            "Reauthorization after reconnect returned %s",
+                                            auth_success,
+                                        )
+                                    except Exception:
+                                        auth_success = False
+                                        logger.exception(
+                                            "Failed to reauthorize after reconnect"
+                                        )
+
+                                if auth_success:
+                                    old_connection = self._remote_connection
+                                    self._remote_connection = connection
+                                    self.update_loading_bar('Подключено.')
+                                    logger.info("Reconnected to the database")
+                                    if old_connection and not old_connection.is_closed():
+                                        with contextlib.suppress(Exception):
+                                            await old_connection.close()
+                                    return True
+
+                                last_error = RuntimeError(
+                                    "Reauthorization failed after reconnect"
                                 )
-                                return bool(value)
-                            except Exception as e:
-                                logger.exception("Failed to reauthorize after reconnect")
-                                return False
-                        return True
+                        finally:
+                            if connection and self._remote_connection is not connection:
+                                with contextlib.suppress(Exception):
+                                    await connection.close()
                 except Exception as e:
+                    last_error = e
                     logger.exception("Reconnection attempt %s failed", attempt + 1)
-                await asyncio.sleep(delay)
+
+                if attempt < retries - 1:
+                    await asyncio.sleep(delay)
+
             self.update_loading_bar('Не удалось подключиться к БД после нескольких попыток.')
             logger.error("Failed to reconnect to the database after several attempts")
+            if last_error:
+                logger.debug("Last reconnect error: %s", last_error)
             return False
 
     def update_loading_bar(self, message):
@@ -310,6 +354,8 @@ class Session:
                 self.run_sync(self._remote_connection.close())
             except Exception:
                 logger.exception("Error while closing remote connection")
+            finally:
+                self._remote_connection = None
         self.loop.call_soon_threadsafe(self.loop.stop)
         logger.debug("Stopping event loop thread")
         self._loop_thread.join()
