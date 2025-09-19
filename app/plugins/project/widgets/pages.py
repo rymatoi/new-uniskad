@@ -252,6 +252,12 @@ class ProjectPlotPage(PlotPage):
                 'icon': ':export_excel.png',
                 'text': 'Экспорт в EXCEL',
                 'triggered': self.export_excel
+            },
+            '_toggle_approximation': {
+                'icon': ':curve.png',
+                'text': 'Отображать аппроксимирующую кривую',
+                'toggled': self.toggle_approximation_visibility,
+                'checked': True
             }
         }
 
@@ -264,6 +270,8 @@ class ProjectPlotPage(PlotPage):
             if 'toggled' in props:
                 action.setCheckable(True)
                 action.toggled.connect(props['toggled'])
+            if props.get('checked') is not None and action.isCheckable():
+                action.setChecked(props['checked'])
 
             self.add_toolbar_action(action_name, action)
 
@@ -300,3 +308,6 @@ class ProjectPlotPage(PlotPage):
             painter.setWindow(pixmap.rect())
             painter.drawPixmap(0, 0, pixmap)
             painter.end()
+
+    def toggle_approximation_visibility(self, checked: bool):
+        self.plotView.set_approximation_visible(checked)

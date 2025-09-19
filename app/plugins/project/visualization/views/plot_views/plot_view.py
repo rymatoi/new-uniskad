@@ -10,7 +10,56 @@ class PlotView(BasePlotView):
     DATA_PROCESSOR = PlotProcessor
 
     def __init__(self, item, main_window, parent=None):
+        self._category_visibility = {'approximation': True}
         super().__init__(item, main_window, parent)
+
+    def add_curve(self, x, y, name="Curve", **style):
+        curve = super().add_curve(x, y, name=name, **style)
+        self._apply_curve_visibility(curve)
+        return curve
+
+    def _get_curve_category(self, curve):
+        if hasattr(curve, 'category'):
+            return curve.category
+        if hasattr(curve, 'style_config') and isinstance(curve.style_config, dict):
+            return curve.style_config.get('category', 'base')
+        return 'base'
+
+    def _update_legend_item_visibility(self, curve, visible):
+        legend = getattr(self.plotItem, 'legend', None)
+        if not legend:
+            return
+
+        for sample, label in getattr(legend, 'items', []):
+            related_curve = getattr(sample, 'item', None)
+            if related_curve == curve:
+                if hasattr(sample, 'setVisible'):
+                    sample.setVisible(visible)
+                if hasattr(label, 'setVisible'):
+                    label.setVisible(visible)
+                break
+
+    def _apply_curve_visibility(self, curve):
+        category = self._get_curve_category(curve)
+        visible = self._category_visibility.get(category, True)
+        curve.setVisible(visible)
+        self._update_legend_item_visibility(curve, visible)
+
+    def set_approximation_visible(self, visible: bool) -> None:
+        self._category_visibility['approximation'] = visible
+        active_curves = None
+        if hasattr(self.plotItem, 'listDataItems'):
+            try:
+                active_curves = set(self.plotItem.listDataItems())
+            except Exception:
+                active_curves = None
+
+        for curve in self.curve_items:
+            if active_curves is not None and curve not in active_curves:
+                continue
+            if self._get_curve_category(curve) == 'approximation':
+                curve.setVisible(visible)
+                self._update_legend_item_visibility(curve, visible)
 
     @timing_decorator
     def prepare_curves(self):

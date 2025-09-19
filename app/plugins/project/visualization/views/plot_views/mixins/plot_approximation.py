@@ -47,6 +47,9 @@ class PlotApproximationMixin:
 
             # Создаем новый стиль на основе стиля исходной кривой
             curve_style = GraphConstants.APPROXIMATION_STYLE.copy()
+            curve_style['category'] = 'approximation'
+            curve_style['degree'] = degree
+            curve_style['type'] = 'polynomial'
             
             # Применяем пользовательские настройки стиля, если они указаны
             if color:
@@ -108,6 +111,8 @@ class PlotApproximationMixin:
 
             # Создаем новый стиль
             curve_style = GraphConstants.INTERPOLATION_STYLE.copy()
+            curve_style['category'] = 'interpolation'
+            curve_style['type'] = kind
             
             # Применяем пользовательские настройки стиля, если они указаны
             if color:

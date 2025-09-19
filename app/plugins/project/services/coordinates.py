@@ -65,15 +65,17 @@ class ItemProcessor:
                             degree = int(curve_data['degree'])
                             x_new, y_new = ApproximationService.polynomial_fit(x, y, degree)
                             style = GraphConstants.APPROXIMATION_STYLE.copy()
+                            style['category'] = 'approximation'
                             # Добавляем степень для точного сопоставления
                             style['degree'] = degree
                         else:  # Интерполяция
                             x_new, y_new = Interpolation.quadratic_interpolation(x, y, kind=curve_type)
                             style = GraphConstants.INTERPOLATION_STYLE.copy()
-                        
+                            style['category'] = 'interpolation'
+
                         # Добавляем тип для точного сопоставления
                         style['type'] = curve_type
-                        
+
                         # Используем пользовательские настройки стиля, если они есть
                         if 'color' in curve_data:
                             style['color'] = curve_data['color']

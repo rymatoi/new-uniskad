@@ -58,6 +58,10 @@ class PlotDataMixin:
         self.addItem(curve)
         self.curve_items.append(curve)
         self.selected_points[curve] = set()
+        if hasattr(style, 'get'):
+            curve.category = style.get('category', 'base')
+        else:
+            curve.category = 'base'
         return curve
 
     def clear(self):
