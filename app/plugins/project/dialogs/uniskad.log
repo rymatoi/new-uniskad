@@ -1,0 +1,3 @@
+2023-11-07 15:36:13,473 - [INFO] - config.config - (config.py).__init__(31) - Конфигурационный файл не найден. Создание нового конфигурационного файла.
+2023-11-07 15:36:16,255 - [ERROR] - config.config - (config.py).create(55) - Конфигурационный файл не задан. Выход из программы.
+2023-11-07 15:36:16,389 - [INFO] - db._session - (_session.py).__init__(33) - Attempting to connect to the database.

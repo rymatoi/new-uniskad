@@ -1,0 +1,181 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+    <class>LineStyleDialog</class>
+    <widget class="QDialog" name="LineStyleDialog">
+        <property name="geometry">
+            <rect>
+                <x>0</x>
+                <y>0</y>
+                <width>447</width>
+                <height>226</height>
+            </rect>
+        </property>
+        <property name="windowTitle">
+            <string>Изменение графика</string>
+        </property>
+        <property name="styleSheet">
+            <string notr="true"/>
+        </property>
+        <layout class="QGridLayout" name="gridLayout">
+            <item row="0" column="0">
+                <layout class="QHBoxLayout" name="horizontalLayout_3">
+                    <item>
+                        <layout class="QFormLayout" name="form">
+                            <property name="fieldGrowthPolicy">
+                                <enum>QFormLayout::AllNonFixedFieldsGrow</enum>
+                            </property>
+                            <item row="0" column="0">
+                                <widget class="QLabel" name="colorLabel">
+                                    <property name="text">
+                                        <string>Цвет</string>
+                                    </property>
+                                </widget>
+                            </item>
+                            <item row="0" column="1">
+                                <widget class="ColorButton" name="colorButton">
+                                    <property name="maximumSize">
+                                        <size>
+                                            <width>30</width>
+                                            <height>30</height>
+                                        </size>
+                                    </property>
+                                    <property name="styleSheet">
+                                        <string notr="true">background-color: transparent;</string>
+                                    </property>
+                                    <property name="autoDefault">
+                                        <bool>false</bool>
+                                    </property>
+                                </widget>
+                            </item>
+                            <item row="1" column="0">
+                                <widget class="QLabel" name="lineTypeLabel">
+                                    <property name="text">
+                                        <string>Тип линии</string>
+                                    </property>
+                                </widget>
+                            </item>
+                            <item row="1" column="1">
+                                <widget class="QComboBox" name="lineType">
+                                    <property name="minimumSize">
+                                        <size>
+                                            <width>200</width>
+                                            <height>0</height>
+                                        </size>
+                                    </property>
+                                </widget>
+                            </item>
+                            <item row="2" column="0">
+                                <widget class="QLabel" name="thicknessLabel">
+                                    <property name="text">
+                                        <string>Толщина</string>
+                                    </property>
+                                </widget>
+                            </item>
+                            <item row="2" column="1">
+                                <widget class="QSpinBox" name="thickness">
+                                    <property name="value">
+                                        <number>1</number>
+                                    </property>
+                                </widget>
+                            </item>
+                            <item row="3" column="0">
+                                <widget class="QLabel" name="pointTypeLabel">
+                                    <property name="text">
+                                        <string>Вид точки</string>
+                                    </property>
+                                </widget>
+                            </item>
+                            <item row="3" column="1">
+                                <widget class="QComboBox" name="pointType"/>
+                            </item>
+                            <item row="4" column="0">
+                                <widget class="QLabel" name="pointSizeLabel">
+                                    <property name="text">
+                                        <string>Размер точки</string>
+                                    </property>
+                                </widget>
+                            </item>
+                            <item row="4" column="1">
+                                <widget class="QSpinBox" name="pointSizeSpinBox">
+                                    <property name="value">
+                                        <number>10</number>
+                                    </property>
+                                </widget>
+                            </item>
+                        </layout>
+                    </item>
+                    <item>
+                        <widget class="PlotWidget" name="plotView" native="true">
+                            <property name="minimumSize">
+                                <size>
+                                    <width>120</width>
+                                    <height>0</height>
+                                </size>
+                            </property>
+                        </widget>
+                    </item>
+                </layout>
+            </item>
+            <item row="1" column="0">
+                <layout class="QHBoxLayout" name="horizontalLayout_4">
+                    <item>
+                        <spacer name="horizontalSpacer">
+                            <property name="orientation">
+                                <enum>Qt::Horizontal</enum>
+                            </property>
+                            <property name="sizeHint" stdset="0">
+                                <size>
+                                    <width>40</width>
+                                    <height>20</height>
+                                </size>
+                            </property>
+                        </spacer>
+                    </item>
+                    <item>
+                        <widget class="QPushButton" name="okButton">
+                            <property name="minimumSize">
+                                <size>
+                                    <width>200</width>
+                                    <height>0</height>
+                                </size>
+                            </property>
+                            <property name="text">
+                                <string>Применить</string>
+                            </property>
+                            <property name="default">
+                                <bool>true</bool>
+                            </property>
+                        </widget>
+                    </item>
+                    <item>
+                        <spacer name="horizontalSpacer_2">
+                            <property name="orientation">
+                                <enum>Qt::Horizontal</enum>
+                            </property>
+                            <property name="sizeHint" stdset="0">
+                                <size>
+                                    <width>40</width>
+                                    <height>20</height>
+                                </size>
+                            </property>
+                        </spacer>
+                    </item>
+                </layout>
+            </item>
+        </layout>
+    </widget>
+    <customwidgets>
+        <customwidget>
+            <class>ColorButton</class>
+            <extends>QPushButton</extends>
+            <header>pyqtgraph.h</header>
+        </customwidget>
+        <customwidget>
+            <class>PlotWidget</class>
+            <extends></extends>
+            <header>pyqtgraph.h</header>
+        </customwidget>
+    </customwidgets>
+    <resources/>
+    <connections/>
+</ui>

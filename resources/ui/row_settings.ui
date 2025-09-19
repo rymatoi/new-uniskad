@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+    <class>RowSettingsDialog</class>
+    <widget class="QDialog" name="RowSettingsDialog">
+        <property name="geometry">
+            <rect>
+                <x>0</x>
+                <y>0</y>
+                <width>327</width>
+                <height>186</height>
+            </rect>
+        </property>
+        <property name="windowTitle">
+            <string>Настройка строки</string>
+        </property>
+        <layout class="QGridLayout" name="gridLayout_2">
+            <item row="0" column="0">
+                <layout class="QVBoxLayout" name="verticalLayout">
+                    <item>
+                        <layout class="QFormLayout" name="formLayout_2">
+                            <item row="0" column="0">
+                                <widget class="QLabel" name="label_2">
+                                    <property name="text">
+                                        <string>Название:</string>
+                                    </property>
+                                </widget>
+                            </item>
+                            <item row="0" column="1">
+                                <widget class="QLineEdit" name="nameLineEdit"/>
+                            </item>
+                            <item row="1" column="0">
+                                <widget class="QLabel" name="label">
+                                    <property name="text">
+                                        <string>Количество значащих символов:</string>
+                                    </property>
+                                </widget>
+                            </item>
+                            <item row="1" column="1">
+                                <widget class="QSpinBox" name="accuracySpinBox"/>
+                            </item>
+                        </layout>
+                    </item>
+                    <item>
+                        <widget class="QGroupBox" name="groupBox">
+                            <property name="title">
+                                <string>Пересчет единиц измерения</string>
+                            </property>
+                            <layout class="QGridLayout" name="gridLayout">
+                                <item row="0" column="0">
+                                    <layout class="QFormLayout" name="formLayout_4">
+                                        <item row="0" column="0">
+                                            <widget class="QLabel" name="label_5">
+                                                <property name="text">
+                                                    <string>Из:</string>
+                                                </property>
+                                            </widget>
+                                        </item>
+                                        <item row="0" column="1">
+                                            <widget class="QComboBox" name="fromComboBox_2"/>
+                                        </item>
+                                        <item row="1" column="0">
+                                            <widget class="QLabel" name="label_6">
+                                                <property name="text">
+                                                    <string>В:</string>
+                                                </property>
+                                            </widget>
+                                        </item>
+                                        <item row="1" column="1">
+                                            <widget class="QComboBox" name="toComboBox_2"/>
+                                        </item>
+                                    </layout>
+                                </item>
+                            </layout>
+                        </widget>
+                    </item>
+                    <item>
+                        <layout class="QHBoxLayout" name="horizontalLayout">
+                            <item>
+                                <widget class="QPushButton" name="savePushButton">
+                                    <property name="text">
+                                        <string>Сохранить</string>
+                                    </property>
+                                </widget>
+                            </item>
+                            <item>
+                                <widget class="QPushButton" name="cancelButton">
+                                    <property name="text">
+                                        <string>Отмена</string>
+                                    </property>
+                                </widget>
+                            </item>
+                        </layout>
+                    </item>
+                </layout>
+            </item>
+        </layout>
+    </widget>
+    <resources/>
+    <connections/>
+</ui>

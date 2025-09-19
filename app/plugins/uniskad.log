@@ -1,0 +1,12 @@
+2023-02-21 11:30:10,664 - [INFO] - config.config - (config.py).__init__(31) - Конфигурационный файл не найден. Создание нового конфигурационного файла.
+2023-02-21 11:30:12,420 - [ERROR] - config.config - (config.py).create(55) - Конфигурационный файл не задан. Выход из программы.
+2023-02-21 11:30:12,431 - [INFO] - db._session - (_session.py).__init__(33) - Attempting to connect to the database.
+2023-05-02 16:05:31,584 - [INFO] - config.config - (config.py).__init__(32) - Конфигурационный файл не найден. Создание нового конфигурационного файла.
+2023-05-02 16:05:33,497 - [ERROR] - config.config - (config.py).create(56) - Конфигурационный файл не задан. Выход из программы.
+2023-05-02 16:05:33,514 - [INFO] - db._session - (_session.py).__init__(33) - Attempting to connect to the database.
+2023-05-26 16:01:46,605 - [INFO] - config.config - (config.py).__init__(32) - Конфигурационный файл не найден. Создание нового конфигурационного файла.
+2023-05-26 16:01:49,312 - [ERROR] - config.config - (config.py).create(50) - Конфигурационный файл не задан. Выход из программы.
+2023-05-26 16:01:49,328 - [INFO] - db._session - (_session.py).__init__(32) - Attempting to connect to the database.
+2023-05-29 15:14:11,308 - [INFO] - config.config - (config.py).__init__(32) - Конфигурационный файл не найден. Создание нового конфигурационного файла.
+2023-05-29 15:14:12,695 - [ERROR] - config.config - (config.py).create(50) - Конфигурационный файл не задан. Выход из программы.
+2023-05-29 15:14:12,718 - [INFO] - db._session - (_session.py).__init__(32) - Attempting to connect to the database.

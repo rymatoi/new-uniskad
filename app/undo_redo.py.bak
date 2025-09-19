@@ -1,0 +1,57 @@
+import sys
+
+
+class Event:
+    def __init__(self, old_value, new_value, item, prop):
+        self._item = item
+        self._old_value = old_value
+        self._new_value = new_value
+        self._prop = prop
+        if not hasattr(self._item, 'execute'):
+            print(f'Добавление некорректного элемента в EventStack. {self._item}')
+            sys.exit(-1)
+
+    def undo(self):
+        setattr(self._item, self._prop, self._old_value)
+        self._item.execute()
+
+    def redo(self):
+        setattr(self._item, self._prop, self._new_value)
+        self._item.execute()
+
+
+class EventStack:
+    _history: list
+    _history_position: int
+
+    def __init__(self):
+        self._history = []
+        self._history_position = 0
+
+    @property
+    def history(self):
+        return self._history
+
+    def undo(self):
+        if self._history_position > 0:
+            self._history_position -= 1
+
+            self._history[self._history_position].undo()
+        else:
+            print('nothing to undo')
+
+    def redo(self):
+        if self._history_position + 1 < len(self._history):
+            self._history_position += 1
+
+            self._history[self._history_position].redo()
+
+    def add_event(self, event):
+        if len(self._history) == self._history_position:
+            self._history.append(event)
+            self._history_position += 1
+
+        else:
+            self._history = self._history[:self._history_position]
+            self._history_position += 1
+            self._history.append(event)

@@ -1,0 +1,54 @@
+<RCC>
+    <qresource>
+        <file alias="uniskad.ico">icons/uniskad.ico</file>
+        <file alias="hidden_eye.png">icons/hidden_eye.png</file>
+        <file alias="eye.png">icons/eye.png</file>
+        <file alias="user.png">icons/user.png</file>
+        <file alias="role.png">icons/role.png</file>
+        <file alias="hide.png">icons/hide.png</file>
+        <file alias="settings.png">icons/settings.png</file>
+        <file alias="dock.png">icons/dock.png</file>
+        <file alias="product.png">icons/product.png</file>
+        <file alias="folder.png">icons/folder.png</file>
+        <file alias="model.png">icons/model.png</file>
+        <file alias="assembly.png">icons/assembly.png</file>
+        <file alias="test.png">icons/test.png</file>
+        <file alias="alpha.png">icons/alpha.png</file>
+        <file alias="beta.png">icons/beta.png</file>
+        <file alias="warning-alpha.png">icons/warning-alpha.png</file>
+        <file alias="project.png">icons/project.png</file>
+        <file alias="graph.png">icons/graph.png</file>
+        <file alias="curve.png">icons/curve.png</file>
+        <file alias="test_table.png">icons/test_table.png</file>
+        <file alias="build_curve.png">icons/build_curve.png</file>
+        <file alias="cross.png">icons/cross.png</file>
+        <file alias="a+.png">icons/a+.png</file>
+        <file alias="a-.png">icons/a-.png</file>
+        <file alias="bold.png">icons/bold.png</file>
+        <file alias="italic.png">icons/italic.png</file>
+        <file alias="broken.png">icons/broken.png</file>
+        <file alias="light_off.png">icons/light_off.png</file>
+        <file alias="light_on.png">icons/light_on.png</file>
+        <file alias="refresh.png">icons/refresh.png</file>
+        <file alias="epure.png">icons/epure.png</file>
+        <file alias="font_size.png">icons/font_size.png</file>
+        <file alias="font_text_color.png">icons/font_text_color.png</file>
+        <file alias="bgcolor.png">icons/bgcolor.png</file>
+        <file alias="printer.png">icons/printer.png</file>
+        <file alias="emf.png">icons/emf.png</file>
+        <file alias="export_excel.png">icons/export_excel.png</file>
+        <file alias="a-z.png">icons/a-z.png</file>
+        <file alias="formula.png">icons/formula.png</file>
+        <file alias="export_txt_template.png">icons/export_txt_template.png</file>
+        <file alias="sorting.png">icons/sorting.png</file>
+        <file alias="paste.png">icons/paste.png</file>
+        <file alias="up.png">icons/up.png</file>
+        <file alias="down.png">icons/down.png</file>
+        <file alias="file.png">icons/file.png</file>
+        <file alias="diskette.png">icons/diskette.png</file>
+        <file alias="translation">translation/qt_ru.qm</file>
+        <file alias="xy.png">icons/xy.png</file>
+        <file alias="project_copy.png">icons/project_copy.png</file>
+
+    </qresource>
+</RCC>
