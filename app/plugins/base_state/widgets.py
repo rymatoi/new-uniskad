@@ -1,15 +1,16 @@
 import ast
 import re
 from copy import copy
+from dataclasses import dataclass
 from datetime import datetime
 
 from PySide2 import QtCore, QtWidgets
-from PySide2.QtCore import Qt, QSortFilterProxyModel, QSize, QLocale
-from PySide2.QtGui import QIcon, QCursor, QColor, QFont, QBrush, QKeySequence
+from PySide2.QtCore import Qt, QSortFilterProxyModel, QSize, QLocale, QPersistentModelIndex, QRectF, QModelIndex
+from PySide2.QtGui import QIcon, QCursor, QColor, QFont, QBrush, QKeySequence, QPalette
 from PySide2.QtWidgets import QTreeView, QMenu, QColorDialog, QInputDialog, QDockWidget, \
     QHBoxLayout, QToolButton, QWidget, QLabel, QAbstractItemView, QAction, \
     QFontDialog, QComboBox, QCompleter, QTableWidget, QTableWidgetItem, QVBoxLayout, QTreeWidget, QTreeWidgetItem, \
-    QApplication, QLineEdit
+    QApplication, QLineEdit, QStyledItemDelegate, QDialog, QCheckBox, QDialogButtonBox
 from openpyxl.workbook import Workbook
 from app import app_logger, _menu, basic_funcs
 from app._eval_expr import eval_expr
@@ -20,6 +21,81 @@ from db import sp, session
 
 logger = app_logger.get_logger(__name__)
 
+
+@dataclass
+class SearchOptions:
+    case_sensitive: bool = False
+    whole_words: bool = False
+
+
+class _TreeSearchDelegate(QStyledItemDelegate):
+    """Делегат, подсвечивающий фрагменты текста, совпадающие с фильтром."""
+
+    def __init__(self, tree_view):
+        super().__init__(tree_view)
+        self._tree_view = tree_view
+
+    def paint(self, painter, option, index):
+        tree_view = self._tree_view
+        if tree_view is None or not tree_view.has_active_filter():
+            super().paint(painter, option, index)
+            return
+
+        opt = QtWidgets.QStyleOptionViewItem(option)
+        self.initStyleOption(opt, index)
+
+        text = opt.text
+        if not text:
+            super().paint(painter, option, index)
+            return
+
+        style = opt.widget.style() if opt.widget else QApplication.style()
+        text_rect = style.subElementRect(QtWidgets.QStyle.SE_ItemViewItemText, opt, opt.widget)
+        text_rect = style.visualRect(opt.direction, opt.rect, text_rect)
+        metrics = opt.fontMetrics
+        displayed_text = metrics.elidedText(text, opt.textElideMode, text_rect.width())
+        match_ranges = tree_view.match_ranges_in_text(displayed_text)
+
+        if not match_ranges:
+            super().paint(painter, option, index)
+            return
+
+        saved_text = opt.text
+        opt.text = ''
+        style.drawControl(QtWidgets.QStyle.CE_ItemViewItem, opt, painter, opt.widget)
+        opt.text = saved_text
+
+        painter.save()
+        painter.setClipRect(text_rect)
+
+        text_width = metrics.horizontalAdvance(displayed_text)
+        text_size = QtCore.QSize(text_width, metrics.height())
+        aligned_rect = QtWidgets.QStyle.alignedRect(
+            opt.direction,
+            opt.displayAlignment,
+            text_size,
+            text_rect
+        )
+
+        highlight_brush = tree_view.highlight_brush(option)
+        for start, length in match_ranges:
+            if length <= 0:
+                continue
+            left = metrics.horizontalAdvance(displayed_text[:start])
+            width = metrics.horizontalAdvance(displayed_text[start:start + length])
+            highlight_rect = QRectF(
+                aligned_rect.x() + left,
+                aligned_rect.y(),
+                width,
+                aligned_rect.height()
+            )
+            painter.fillRect(highlight_rect, highlight_brush)
+
+        palette_role = QPalette.HighlightedText if option.state & QtWidgets.QStyle.State_Selected else QPalette.Text
+        painter.setPen(opt.palette.color(palette_role))
+        painter.setFont(opt.font)
+        painter.drawText(aligned_rect, Qt.AlignLeft | Qt.AlignVCenter, displayed_text)
+        painter.restore()
 
 class Tab(QDockWidget):
     def __init__(self, index, parent, main_window=None):
@@ -63,6 +139,7 @@ class TreeView(QTreeView):
     DISABLE_MENU = False
     DOUBLE_CLICK_OPEN = True
     HIDE_REMOVED_ITEMS = True
+    DEFAULT_HIGHLIGHT_COLOR = QColor(255, 232, 128, 170)
 
     def __init__(self, parent, main_window=None):
         super().__init__(parent)
@@ -96,12 +173,21 @@ class TreeView(QTreeView):
         self._opened_tabs = {}
 
         self._filter_text = ''
+        self._filter_regex = None
+        self._search_options = SearchOptions()
+        self._expanded_before_filter = set()
+        self._highlight_color = QColor(TreeView.DEFAULT_HIGHLIGHT_COLOR)
+        self._highlight_brush = QBrush(self._highlight_color)
+
         self._model = None
 
         self.setContextMenuPolicy(Qt.CustomContextMenu)
         self.__create_connections()
         icon_size = QSize(16, 16)
         self.setIconSize(icon_size)
+
+        self._search_delegate = _TreeSearchDelegate(self)
+        self.setItemDelegate(self._search_delegate)
 
     def init_dock_widget(self, dock_widget):
         self.dock_widget = dock_widget
@@ -165,18 +251,20 @@ class TreeView(QTreeView):
     def _reapply_filter(self):
         if not self.model():
             return
-        if self._filter_text:
+        if self.has_active_filter():
             self._apply_filter_to_all()
         else:
             self._refresh_without_filter()
+        self.viewport().update()
 
     def refresh(self):
         if not self.model():
             return
-        if self._filter_text:
+        if self.has_active_filter():
             self._apply_filter_to_all()
         else:
             self._refresh_without_filter()
+        self.viewport().update()
 
     def _refresh_without_filter(self):
         for row in range(self.model().rowCount()):
@@ -188,10 +276,17 @@ class TreeView(QTreeView):
                 self.setItemVisibility(self.model(), index, hidden)
 
     def filter_items(self, text: str):
-        normalized = text.lower().strip()
-        if normalized == self._filter_text:
+        trimmed = text.strip()
+        if trimmed == self._filter_text:
             return
-        self._filter_text = normalized
+        previously_active = self.has_active_filter()
+        self._filter_text = trimmed
+        self._update_filter_pattern()
+        currently_active = self.has_active_filter()
+        if currently_active and not previously_active:
+            self._remember_expanded_state()
+        elif previously_active and not currently_active:
+            self._restore_expanded_state()
         self.refresh()
 
     def _apply_filter_to_all(self):
@@ -205,7 +300,7 @@ class TreeView(QTreeView):
     def _apply_filter(self, index):
         model = self.model()
         item = index.internalPointer()
-        matches = self._item_matches_filter(item)
+        matches = self._item_matches_filter(item, index.column())
         child_visible = False
         for i in range(model.rowCount(index)):
             child_index = model.index(i, 0, index)
@@ -220,13 +315,201 @@ class TreeView(QTreeView):
             self.expand(index)
         return visible or matches
 
-    def _item_matches_filter(self, item):
-        if not self._filter_text:
+    def _item_matches_filter(self, item, column=0):
+        if not self.has_active_filter():
             return True
-        value = item.data()
-        if not value:
+        value = item.data(column)
+        if value is None:
             return False
-        return self._filter_text in str(value).lower()
+        return bool(self._match_in_text(str(value)))
+
+    def _update_filter_pattern(self):
+        if not self._filter_text:
+            self._filter_regex = None
+            return
+        pattern = re.escape(self._filter_text)
+        if self._search_options.whole_words:
+            pattern = rf'\b{pattern}\b'
+        flags = 0
+        if not self._search_options.case_sensitive:
+            flags |= re.IGNORECASE
+        self._filter_regex = re.compile(pattern, flags)
+
+    def _match_in_text(self, text: str):
+        if not self._filter_regex:
+            return []
+        if text is None:
+            return []
+        try:
+            return [
+                (match.start(), match.end() - match.start())
+                for match in self._filter_regex.finditer(str(text))
+            ]
+        except re.error:
+            return []
+
+    def match_ranges_in_text(self, text: str):
+        return self._match_in_text(text)
+
+    def has_active_filter(self) -> bool:
+        return self._filter_regex is not None
+
+    def _collect_expanded_indexes(self):
+        model = self.model()
+        if model is None:
+            return set()
+        expanded = set()
+        stack = [QModelIndex()]
+        while stack:
+            parent_index = stack.pop()
+            for row in range(model.rowCount(parent_index)):
+                child_index = model.index(row, 0, parent_index)
+                if not child_index.isValid():
+                    continue
+                if self.isExpanded(child_index):
+                    expanded.add(QPersistentModelIndex(child_index))
+                stack.append(child_index)
+        return expanded
+
+    def _remember_expanded_state(self):
+        if self._expanded_before_filter or not self.model():
+            return
+        self._expanded_before_filter = self._collect_expanded_indexes()
+
+    def _restore_expanded_state(self):
+        if not self.model():
+            self._expanded_before_filter.clear()
+            return
+        self.collapseAll()
+        for persistent in list(self._expanded_before_filter):
+            if persistent.isValid():
+                self.setExpanded(QModelIndex(persistent), True)
+        self._expanded_before_filter.clear()
+
+    def highlight_brush(self, option=None):
+        if option and option.state & QtWidgets.QStyle.State_Selected:
+            color = QColor(self._highlight_color)
+            color.setAlpha(max(30, int(color.alpha() * 0.6)))
+            return QBrush(color)
+        return QBrush(self._highlight_brush)
+
+    def highlight_color(self):
+        return QColor(self._highlight_color)
+
+    def set_highlight_color(self, color):
+        if not isinstance(color, QColor):
+            color = QColor(color)
+        if not color.isValid():
+            return
+        if color.alpha() == 255 and self._highlight_color.alpha() != 255:
+            color.setAlpha(self._highlight_color.alpha())
+        if color == self._highlight_color:
+            return
+        self._highlight_color = QColor(color)
+        self._highlight_brush = QBrush(self._highlight_color)
+        self.viewport().update()
+
+    def search_options(self):
+        return SearchOptions(
+            case_sensitive=self._search_options.case_sensitive,
+            whole_words=self._search_options.whole_words
+        )
+
+    def set_search_options(self, options: SearchOptions):
+        if not isinstance(options, SearchOptions):
+            return
+        if (self._search_options.case_sensitive == options.case_sensitive and
+                self._search_options.whole_words == options.whole_words):
+            return
+        self._search_options = SearchOptions(
+            case_sensitive=options.case_sensitive,
+            whole_words=options.whole_words
+        )
+        self._update_filter_pattern()
+        if self.has_active_filter():
+            self.refresh()
+        else:
+            self.viewport().update()
+
+
+class SearchSettingsDialog(QDialog):
+    """Диалог с настройками текстового поиска в дереве."""
+
+    def __init__(self, options: SearchOptions, highlight_color: QColor, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle('Настройки поиска')
+        self.setModal(True)
+
+        self._default_color = QColor(TreeView.DEFAULT_HIGHLIGHT_COLOR)
+        self._color = QColor(highlight_color if highlight_color and highlight_color.isValid() else self._default_color)
+        if self._color.alpha() == 255:
+            self._color.setAlpha(self._default_color.alpha())
+
+        layout = QVBoxLayout(self)
+
+        self.case_checkbox = QCheckBox('Учитывать регистр', self)
+        self.case_checkbox.setChecked(options.case_sensitive)
+        layout.addWidget(self.case_checkbox)
+
+        self.whole_words_checkbox = QCheckBox('Совпадение целого слова', self)
+        self.whole_words_checkbox.setChecked(options.whole_words)
+        layout.addWidget(self.whole_words_checkbox)
+
+        color_layout = QHBoxLayout()
+        color_label = QLabel('Цвет подсветки:', self)
+        color_layout.addWidget(color_label)
+
+        self.color_preview = QLabel(self)
+        self.color_preview.setFixedSize(48, 18)
+        self.color_preview.setFrameShape(QtWidgets.QFrame.Box)
+        self.color_preview.setFrameShadow(QtWidgets.QFrame.Sunken)
+        self.color_preview.setAutoFillBackground(True)
+        color_layout.addWidget(self.color_preview)
+
+        self.color_button = QToolButton(self)
+        self.color_button.setText('Выбрать…')
+        self.color_button.clicked.connect(self._choose_color)
+        color_layout.addWidget(self.color_button)
+        color_layout.addStretch(1)
+        layout.addLayout(color_layout)
+
+        button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel | QDialogButtonBox.Reset, self)
+        button_box.accepted.connect(self.accept)
+        button_box.rejected.connect(self.reject)
+        reset_button = button_box.button(QDialogButtonBox.Reset)
+        reset_button.clicked.connect(self._reset_defaults)
+        layout.addWidget(button_box)
+
+        self._update_color_preview()
+
+    def _choose_color(self):
+        color = QColorDialog.getColor(self._color, self, 'Выбор цвета подсветки')
+        if color.isValid():
+            if color.alpha() == 255:
+                color.setAlpha(self._color.alpha())
+            self._color = QColor(color)
+            self._update_color_preview()
+
+    def _reset_defaults(self):
+        self.case_checkbox.setChecked(False)
+        self.whole_words_checkbox.setChecked(False)
+        self._color = QColor(self._default_color)
+        self._update_color_preview()
+
+    def _update_color_preview(self):
+        palette = self.color_preview.palette()
+        palette.setColor(QPalette.Window, self._color)
+        self.color_preview.setPalette(palette)
+        self.color_preview.setToolTip(self._color.name(QColor.HexArgb))
+
+    def get_options(self):
+        return (
+            SearchOptions(
+                case_sensitive=self.case_checkbox.isChecked(),
+                whole_words=self.whole_words_checkbox.isChecked()
+            ),
+            QColor(self._color)
+        )
 
     def setItemVisibility(self, model, index, hidden):
         self.setRowHidden(index.row(), index.parent(), hidden)
@@ -615,6 +898,11 @@ class TreeDockWidgetContainer(QWidget):
         self.clear_button.setToolTip('Очистить поиск')
         self.clear_button.clicked.connect(lambda: self.search_edit.setText(''))
 
+        self.options_button = QToolButton(self)
+        self.options_button.setText('⚙')
+        self.options_button.setToolTip('Настройки поиска')
+        self.options_button.clicked.connect(self._open_search_settings)
+
         self.sort_button = QToolButton(self)
         self.sort_button.setToolTip('Изменить порядок сортировки')
         self.sort_button.setCheckable(True)
@@ -623,12 +911,20 @@ class TreeDockWidgetContainer(QWidget):
 
         controls_layout.addWidget(self.search_edit, 1)
         controls_layout.addWidget(self.clear_button, 0)
+        controls_layout.addWidget(self.options_button, 0)
         controls_layout.addWidget(self.sort_button, 0)
 
         layout.addLayout(controls_layout)
         layout.addWidget(self.tree_view, 1)
 
         self._setup_tree()
+
+    def _open_search_settings(self):
+        dialog = SearchSettingsDialog(self.tree_view.search_options(), self.tree_view.highlight_color(), self)
+        if dialog.exec_() == QDialog.Accepted:
+            options, color = dialog.get_options()
+            self.tree_view.set_search_options(options)
+            self.tree_view.set_highlight_color(color)
 
     def _setup_tree(self):
         self.tree_view.setSortingEnabled(True)
