@@ -114,6 +114,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.progress_bar = QProgressBar()
         self.progress_bar.setRange(0, 0)  # Indeterminate mode
         self.progress_bar.setVisible(False)
+        self._current_progress_message = ''
 
         self.status_label = QLabel()
 
@@ -416,11 +417,15 @@ class MainWindow(QtWidgets.QMainWindow):
 
     @Slot()
     def on_worker_started(self):
-        self.set_progress_bar_status(self.progress_bar.current_text)
+        if not self._current_progress_message:
+            self._current_progress_message = 'Загрузка...'
+        self.progress_bar.setRange(0, 0)
+        self.set_progress_bar_status(self._current_progress_message)
+        self.progress_bar.setVisible(True)
 
     @Slot(str)
     def set_progress_bar_status(self, message):
-        self.progress_bar.current_text = message
+        self._current_progress_message = message
         self.progress_bar.setFormat(message + '..')
 
     @Slot()
@@ -429,18 +434,20 @@ class MainWindow(QtWidgets.QMainWindow):
         self.progress_bar.setValue(100)
 
     def run_with_progress(self, func, progress_text="Загрузка..."):
-        self.worker = Worker(func)
-        self.worker.result_ready.connect(self.handle_result)
-        self.worker.started.connect(self.on_worker_started)
-        self.worker.finished.connect(self.on_worker_finished)
+        self.result = None
+        self._current_progress_message = progress_text or self._current_progress_message
+        worker = Worker(func)
+        worker.setParent(self)
+        worker.result_ready.connect(self.handle_result)
+        worker.started.connect(self.on_worker_started)
+        worker.finished.connect(self.on_worker_finished)
+        worker.finished.connect(worker.deleteLater)
 
         # self.status_label.setText(progress_text)
-        self.progress_bar.setVisible(True)
-
-        self.worker.start()
-        self.event_loop = QEventLoop()
-        self.worker.finished.connect(self.event_loop.quit)
-        self.event_loop.exec_()
+        event_loop = QEventLoop()
+        worker.finished.connect(event_loop.quit)
+        worker.start()
+        event_loop.exec_()
 
         # self.status_label.clear()
         self.progress_bar.setVisible(False)

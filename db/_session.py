@@ -7,7 +7,7 @@ from inspect import signature
 import asyncpg
 import typing
 
-from PySide2.QtCore import QObject, QThread, Signal
+from PySide2.QtCore import QObject, QThread, Signal, Qt
 from asyncpg import RaiseError
 from config.config import config
 
@@ -48,9 +48,15 @@ class Worker(QThread):
 
     def run(self):
         self.started.emit()
-        result = self.func(*self.args, **self.kwargs)
-        self.result_ready.emit(result)
-        self.finished.emit()
+        try:
+            result = self.func(*self.args, **self.kwargs)
+        except Exception as exc:  # noqa: BLE001 - want to propagate any failure to the UI thread safely
+            logger.exception("Worker task raised an exception")
+            self.result_ready.emit(exc)
+        else:
+            self.result_ready.emit(result)
+        finally:
+            self.finished.emit()
 
 
 class _ProgressEmitter(QObject):
@@ -72,7 +78,8 @@ class Session:
         self.main_window = None
         self._login = None
         self._password = None
-        self._progress_emitter = _ProgressEmitter()
+        self._progress_emitter = None
+        self._last_progress_message = None
 
         logger.info("Session initialized. Event loop thread: %s", self._loop_thread.name)
 
@@ -99,6 +106,12 @@ class Session:
         if not asyncio.iscoroutine(coro):
             raise TypeError("run_sync expected a coroutine object")
 
+        if threading.current_thread() is self._loop_thread:
+            raise RuntimeError("run_sync cannot be called from the session event loop thread")
+
+        if not self.loop.is_running():
+            raise RuntimeError("Session event loop is not running")
+
         logger.debug(
             "Scheduling coroutine %s on event loop from thread %s",
             getattr(coro, "__name__", repr(coro)),
@@ -117,7 +130,12 @@ class Session:
 
     def init_main_window(self, mw):
         self.main_window = mw
-        self._progress_emitter.progress.connect(mw.set_progress_bar_status)
+        if self._progress_emitter is None:
+            self._progress_emitter = _ProgressEmitter()
+        self._progress_emitter.moveToThread(mw.thread())
+        self._progress_emitter.progress.connect(mw.set_progress_bar_status, Qt.QueuedConnection)
+        if self._last_progress_message:
+            self._progress_emitter.progress.emit(self._last_progress_message)
         logger.debug("Main window initialized for session progress updates")
 
     async def connect_db(self):
@@ -207,15 +225,12 @@ class Session:
             return False
 
     def update_loading_bar(self, message):
-        if not getattr(self, 'main_window', None):
-            logger.debug("Progress update skipped (main window not ready): %s", message)
+        self._last_progress_message = message
+        if not getattr(self, 'main_window', None) or self._progress_emitter is None:
+            logger.debug("Progress update queued (main window not ready): %s", message)
             return
 
-        main_window = self.main_window
-        if QThread.currentThread() is main_window.thread():
-            main_window.set_progress_bar_status(message)
-        else:
-            self._progress_emitter.progress.emit(message)
+        self._progress_emitter.progress.emit(message)
         logger.info("Progress bar message: %s", message)
 
     async def execute(self, procedure_name, *args):
@@ -356,10 +371,13 @@ class Session:
                 logger.exception("Error while closing remote connection")
             finally:
                 self._remote_connection = None
-        self.loop.call_soon_threadsafe(self.loop.stop)
-        logger.debug("Stopping event loop thread")
-        self._loop_thread.join()
-        logger.debug("Event loop thread joined")
+        if self.loop.is_running():
+            self.loop.call_soon_threadsafe(self.loop.stop)
+            logger.debug("Stopping event loop thread")
+            self._loop_thread.join()
+            logger.debug("Event loop thread joined")
+        else:
+            logger.debug("Event loop already stopped")
         self.loop.close()
         logger.info("Session closed")
 
