@@ -9,7 +9,7 @@ from PySide2.QtGui import QIcon, QCursor, QColor, QFont, QBrush, QKeySequence
 from PySide2.QtWidgets import QTreeView, QMenu, QColorDialog, QInputDialog, QDockWidget, \
     QHBoxLayout, QToolButton, QWidget, QLabel, QAbstractItemView, QAction, QLineEdit, QShortcut, \
     QFontDialog, QComboBox, QCompleter, QTableWidget, QTableWidgetItem, QVBoxLayout, QTreeWidget, QTreeWidgetItem, \
-    QApplication, QStyle
+    QApplication, QStyle, QSizePolicy
 from openpyxl.workbook import Workbook
 from app import app_logger, _menu, basic_funcs
 from app._eval_expr import eval_expr
@@ -99,6 +99,7 @@ class TreeView(QTreeView):
         self._search_results = []
         self._search_expanded_state = None
         self._search_current_index = None
+        self._search_pattern = ''
         self._sort_snapshot = None
         self._is_sorted = False
         self._sort_order = None
@@ -135,6 +136,7 @@ class TreeView(QTreeView):
         self._search_results = []
         self._search_expanded_state = None
         self._search_current_index = None
+        self._search_pattern = ''
         self._sort_snapshot = None
         self._is_sorted = False
         self._sort_order = None
@@ -170,6 +172,7 @@ class TreeView(QTreeView):
         if self._search_expanded_state is None:
             self._search_expanded_state = self._capture_expanded_state()
         self._search_text = normalized
+        self._search_pattern = pattern
         self._search_results = []
         self._search_current_index = None
         for row in range(model.rowCount()):
@@ -186,6 +189,7 @@ class TreeView(QTreeView):
         self._search_text = ''
         self._search_results = []
         self._search_current_index = None
+        self._search_pattern = ''
         self._clear_highlight()
         if self._search_expanded_state is not None:
             self._restore_expanded_state()
@@ -195,6 +199,7 @@ class TreeView(QTreeView):
         return bool(self._search_text)
 
     def _ensure_first_match_visible(self):
+        self._cleanup_search_results()
         if not self._search_results:
             self._search_current_index = None
             return
@@ -209,11 +214,63 @@ class TreeView(QTreeView):
                             return
         self._focus_search_result(0)
 
+    def _matches_search_pattern(self, index):
+        if not index.isValid() or not self._search_pattern:
+            return False
+        node = index.internalPointer()
+        if not node:
+            return False
+        data = node.data()
+        node_text = str(data).casefold() if data is not None else ''
+        return self._search_pattern in node_text
+
+    def _cleanup_search_results(self):
+        if not self._search_results:
+            return
+        current_persistent = None
+        if self._search_current_index is not None and 0 <= self._search_current_index < len(self._search_results):
+            candidate = self._search_results[self._search_current_index]
+            if candidate.isValid():
+                current_persistent = candidate
+        valid_results = []
+        new_current_index = None
+        pattern = self._search_pattern
+        for persistent in self._search_results:
+            if not persistent.isValid():
+                continue
+            index = QtCore.QModelIndex(persistent)
+            if self.isRowHidden(index.row(), index.parent()):
+                continue
+            node = index.internalPointer()
+            if pattern:
+                if not self._matches_search_pattern(index):
+                    continue
+            elif not getattr(node, 'search_highlight', False):
+                continue
+            valid_results.append(persistent)
+            if current_persistent is not None and persistent == current_persistent:
+                new_current_index = len(valid_results) - 1
+        self._search_results = valid_results
+        if not valid_results:
+            self._search_current_index = None
+            return
+        if new_current_index is not None:
+            self._search_current_index = new_current_index
+        elif self._search_current_index is not None:
+            self._search_current_index = min(self._search_current_index, len(valid_results) - 1)
+        else:
+            self._search_current_index = None
+
     def _focus_search_result(self, start_index):
+        self._cleanup_search_results()
         if not self._search_results:
             self._search_current_index = None
             return False
         total = len(self._search_results)
+        if total == 0:
+            self._search_current_index = None
+            return False
+        start_index %= total
         selection_model = self.selectionModel()
         for offset in range(total):
             idx = (start_index + offset) % total
@@ -233,16 +290,28 @@ class TreeView(QTreeView):
         return False
 
     def next_search_result(self):
+        self._cleanup_search_results()
         if not self._search_results:
             return
         if self._search_current_index is None:
             start = 0
         else:
-            start = (self._search_current_index + 1) % len(self._search_results)
+            start = self._search_current_index + 1
+        self._focus_search_result(start)
+
+    def previous_search_result(self):
+        self._cleanup_search_results()
+        if not self._search_results:
+            return
+        if self._search_current_index is None:
+            start = len(self._search_results) - 1
+        else:
+            start = self._search_current_index - 1
         self._focus_search_result(start)
 
     def has_search_results(self):
-        return any(persistent.isValid() for persistent in self._search_results)
+        self._cleanup_search_results()
+        return bool(self._search_results)
 
     def _apply_search_recursive(self, index, pattern):
         model = self.model()
@@ -755,9 +824,15 @@ class DockWidget(QDockWidget):
         self.search_line = QLineEdit()
         self.search_line.setPlaceholderText('Поиск...')
         self.search_line.setClearButtonEnabled(True)
-        self.search_line.setMinimumWidth(160)
-        self.search_line.setMaximumWidth(240)
         self.search_line.setToolTip('Поиск по дереву')
+        self.search_line.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+
+        self.search_prev_button = QToolButton()
+        self.search_prev_button.setIcon(self.style().standardIcon(QStyle.SP_ArrowBack))
+        self.search_prev_button.setAutoRaise(True)
+        self.search_prev_button.setToolTip('Предыдущее совпадение')
+        self.search_prev_button.clicked.connect(self._on_search_prev)
+        self.search_prev_button.setEnabled(False)
 
         self.search_next_button = QToolButton()
         self.search_next_button.setIcon(self.style().standardIcon(QStyle.SP_ArrowForward))
@@ -839,8 +914,8 @@ class DockWidget(QDockWidget):
         controls_layout = QHBoxLayout()
         controls_layout.setContentsMargins(0, 0, 0, 0)
         controls_layout.setSpacing(2)
-        controls_layout.addStretch()
-        controls_layout.addWidget(self.search_line)
+        controls_layout.addWidget(self.search_line, 1)
+        controls_layout.addWidget(self.search_prev_button)
         controls_layout.addWidget(self.search_next_button)
         controls_layout.addWidget(self.sort_button)
 
@@ -879,13 +954,15 @@ class DockWidget(QDockWidget):
         self._update_search_controls()
 
     def _on_search_text_changed(self, text):
-        if text.strip():
+        trimmed = text.strip()
+        if trimmed:
             self._search_timer.start(200)
+            self.search_prev_button.setEnabled(False)
             self.search_next_button.setEnabled(False)
         else:
             self._search_timer.stop()
             self._run_search()
-        if not text.strip():
+        if not trimmed:
             self._update_search_controls()
 
     def _run_search(self):
@@ -923,6 +1000,12 @@ class DockWidget(QDockWidget):
         self.search_line.setFocus()
         self.search_line.selectAll()
 
+    def _on_search_prev(self):
+        tree = self._tree()
+        if not tree:
+            return
+        tree.previous_search_result()
+
     def _on_search_next(self):
         tree = self._tree()
         if not tree:
@@ -941,6 +1024,7 @@ class DockWidget(QDockWidget):
         has_tree = tree is not None
         text = self.search_line.text().strip()
         has_results = bool(has_tree and text and tree.has_search_results())
+        self.search_prev_button.setEnabled(has_results)
         self.search_next_button.setEnabled(has_results)
         self.sort_button.setEnabled(has_tree)
 
