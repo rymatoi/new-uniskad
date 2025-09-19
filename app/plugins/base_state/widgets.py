@@ -4,12 +4,12 @@ from copy import copy
 from datetime import datetime
 
 from PySide2 import QtCore, QtWidgets
-from PySide2.QtCore import Qt, QSortFilterProxyModel, QSize, QLocale
+from PySide2.QtCore import Qt, QSortFilterProxyModel, QSize, QLocale, QTimer, QPersistentModelIndex
 from PySide2.QtGui import QIcon, QCursor, QColor, QFont, QBrush, QKeySequence
 from PySide2.QtWidgets import QTreeView, QMenu, QColorDialog, QInputDialog, QDockWidget, \
-    QHBoxLayout, QToolButton, QWidget, QLabel, QAbstractItemView, QAction, \
+    QHBoxLayout, QToolButton, QWidget, QLabel, QAbstractItemView, QAction, QLineEdit, QShortcut, \
     QFontDialog, QComboBox, QCompleter, QTableWidget, QTableWidgetItem, QVBoxLayout, QTreeWidget, QTreeWidgetItem, \
-    QApplication
+    QApplication, QStyle, QSizePolicy
 from openpyxl.workbook import Workbook
 from app import app_logger, _menu, basic_funcs
 from app._eval_expr import eval_expr
@@ -95,6 +95,15 @@ class TreeView(QTreeView):
 
         self._opened_tabs = {}
 
+        self._search_text = ''
+        self._search_results = []
+        self._search_expanded_state = None
+        self._search_current_index = None
+        self._search_pattern = ''
+        self._sort_snapshot = None
+        self._is_sorted = False
+        self._sort_order = None
+
         self.setContextMenuPolicy(Qt.CustomContextMenu)
         self.__create_connections()
         icon_size = QSize(16, 16)
@@ -120,6 +129,17 @@ class TreeView(QTreeView):
                 self.model().font_size = font_size
         self.resizeColumnToContents(0)
         self.refresh()
+        self._reset_tree_state()
+
+    def _reset_tree_state(self):
+        self._search_text = ''
+        self._search_results = []
+        self._search_expanded_state = None
+        self._search_current_index = None
+        self._search_pattern = ''
+        self._sort_snapshot = None
+        self._is_sorted = False
+        self._sort_order = None
 
     def refresh(self):
         for row in range(self.model().rowCount()):
@@ -139,6 +159,302 @@ class TreeView(QTreeView):
                 self.setItemVisibility(model, childIndex, False)
             else:
                 self.setItemVisibility(model, childIndex, hidden)
+
+    def apply_search(self, text):
+        model = self.model()
+        if model is None:
+            return
+        normalized = text.strip()
+        if not normalized:
+            self.clear_search()
+            return
+        pattern = normalized.casefold()
+        if self._search_expanded_state is None:
+            self._search_expanded_state = self._capture_expanded_state()
+        self._search_text = normalized
+        self._search_pattern = pattern
+        self._search_results = []
+        self._search_current_index = None
+        for row in range(model.rowCount()):
+            index = model.index(row, 0)
+            self._apply_search_recursive(index, pattern)
+        self._ensure_first_match_visible()
+
+    def clear_search(self):
+        model = self.model()
+        if model is None:
+            return
+        if not (self._search_text or self._search_results or self._search_expanded_state):
+            return
+        self._search_text = ''
+        self._search_results = []
+        self._search_current_index = None
+        self._search_pattern = ''
+        self._clear_highlight()
+        if self._search_expanded_state is not None:
+            self._restore_expanded_state()
+        self.viewport().update()
+
+    def has_active_search(self):
+        return bool(self._search_text)
+
+    def _ensure_first_match_visible(self):
+        self._cleanup_search_results()
+        if not self._search_results:
+            self._search_current_index = None
+            return
+        selection_model = self.selectionModel()
+        if selection_model:
+            current_index = selection_model.currentIndex()
+            if current_index.isValid():
+                persistent_current = QPersistentModelIndex(current_index)
+                for idx, persistent in enumerate(self._search_results):
+                    if persistent.isValid() and persistent == persistent_current:
+                        if self._focus_search_result(idx):
+                            return
+        self._focus_search_result(0)
+
+    def _matches_search_pattern(self, index):
+        if not index.isValid() or not self._search_pattern:
+            return False
+        node = index.internalPointer()
+        if not node:
+            return False
+        data = node.data()
+        node_text = str(data).casefold() if data is not None else ''
+        return self._search_pattern in node_text
+
+    def _cleanup_search_results(self):
+        if not self._search_results:
+            return
+        current_persistent = None
+        if self._search_current_index is not None and 0 <= self._search_current_index < len(self._search_results):
+            candidate = self._search_results[self._search_current_index]
+            if candidate.isValid():
+                current_persistent = candidate
+        valid_results = []
+        new_current_index = None
+        pattern = self._search_pattern
+        for persistent in self._search_results:
+            if not persistent.isValid():
+                continue
+            index = QtCore.QModelIndex(persistent)
+            if self.isRowHidden(index.row(), index.parent()):
+                continue
+            node = index.internalPointer()
+            if pattern:
+                if not self._matches_search_pattern(index):
+                    continue
+            elif not getattr(node, 'search_highlight', False):
+                continue
+            valid_results.append(persistent)
+            if current_persistent is not None and persistent == current_persistent:
+                new_current_index = len(valid_results) - 1
+        self._search_results = valid_results
+        if not valid_results:
+            self._search_current_index = None
+            return
+        if new_current_index is not None:
+            self._search_current_index = new_current_index
+        elif self._search_current_index is not None:
+            self._search_current_index = min(self._search_current_index, len(valid_results) - 1)
+        else:
+            self._search_current_index = None
+
+    def _focus_search_result(self, start_index):
+        self._cleanup_search_results()
+        if not self._search_results:
+            self._search_current_index = None
+            return False
+        total = len(self._search_results)
+        if total == 0:
+            self._search_current_index = None
+            return False
+        start_index %= total
+        selection_model = self.selectionModel()
+        for offset in range(total):
+            idx = (start_index + offset) % total
+            persistent = self._search_results[idx]
+            if not persistent.isValid():
+                continue
+            index = QtCore.QModelIndex(persistent)
+            if selection_model:
+                selection_model.setCurrentIndex(
+                    index,
+                    QtCore.QItemSelectionModel.ClearAndSelect | QtCore.QItemSelectionModel.Rows
+                )
+            self.scrollTo(index)
+            self._search_current_index = idx
+            return True
+        self._search_current_index = None
+        return False
+
+    def next_search_result(self):
+        self._cleanup_search_results()
+        if not self._search_results:
+            return
+        if self._search_current_index is None:
+            start = 0
+        else:
+            start = self._search_current_index + 1
+        self._focus_search_result(start)
+
+    def previous_search_result(self):
+        self._cleanup_search_results()
+        if not self._search_results:
+            return
+        if self._search_current_index is None:
+            start = len(self._search_results) - 1
+        else:
+            start = self._search_current_index - 1
+        self._focus_search_result(start)
+
+    def has_search_results(self):
+        self._cleanup_search_results()
+        return bool(self._search_results)
+
+    def _apply_search_recursive(self, index, pattern):
+        model = self.model()
+        node = index.internalPointer()
+        node_text = ''
+        if node:
+            data = node.data()
+            node_text = str(data).casefold() if data is not None else ''
+        match = bool(pattern) and pattern in node_text
+        child_match = False
+        for row in range(model.rowCount(index)):
+            child_index = model.index(row, 0, index)
+            if self._apply_search_recursive(child_index, pattern):
+                child_match = True
+        self._set_node_highlight(index, match)
+        if match:
+            self._search_results.append(QPersistentModelIndex(index))
+        if match or child_match:
+            self.expand(index)
+            return True
+        self.collapse(index)
+        return False
+
+    def _set_node_highlight(self, index, highlight):
+        node = index.internalPointer()
+        if not node or getattr(node, 'search_highlight', False) == highlight:
+            return
+        node.search_highlight = highlight
+        self.model().dataChanged.emit(index, index, [Qt.BackgroundRole])
+
+    def _clear_highlight(self):
+        model = self.model()
+        if model is None:
+            return
+        for index in self._iter_indexes():
+            self._set_node_highlight(index, False)
+
+    def _iter_indexes(self, parent_index=QtCore.QModelIndex()):
+        model = self.model()
+        if model is None:
+            return
+        for row in range(model.rowCount(parent_index)):
+            index = model.index(row, 0, parent_index)
+            yield index
+            yield from self._iter_indexes(index)
+
+    def _capture_expanded_state(self):
+        expanded = []
+        model = self.model()
+        if model is None:
+            return expanded
+
+        def recurse(parent_index):
+            for row in range(model.rowCount(parent_index)):
+                index = model.index(row, 0, parent_index)
+                if self.isExpanded(index):
+                    expanded.append(QPersistentModelIndex(index))
+                recurse(index)
+
+        recurse(QtCore.QModelIndex())
+        return expanded
+
+    def _restore_expanded_state(self):
+        if not self._search_expanded_state:
+            self._search_expanded_state = None
+            return
+        self.collapseAll()
+        for persistent in self._search_expanded_state:
+            if persistent.isValid():
+                self.expand(persistent)
+        self._search_expanded_state = None
+
+    def sort_items(self, order=Qt.AscendingOrder):
+        model = self.model()
+        if model is None:
+            return
+        if not self._is_sorted:
+            self._sort_snapshot = self._capture_sort_snapshot()
+        self._is_sorted = True
+        self._sort_order = order
+        model.layoutAboutToBeChanged.emit()
+        self._sort_node(model._root, order == Qt.AscendingOrder)
+        model.layoutChanged.emit()
+        self.refresh()
+
+    def reset_sort(self):
+        model = self.model()
+        if model is None or not self._is_sorted or not self._sort_snapshot:
+            return
+        model.layoutAboutToBeChanged.emit()
+        self._restore_sort_snapshot(model._root, self._sort_snapshot)
+        model.layoutChanged.emit()
+        self._is_sorted = False
+        self._sort_order = None
+        self._sort_snapshot = None
+        self.refresh()
+
+    def has_active_sort(self):
+        return self._is_sorted
+
+    def current_sort_order(self):
+        return self._sort_order
+
+    def _capture_sort_snapshot(self):
+        order = {}
+        model = self.model()
+        if model is None:
+            return order
+
+        def recurse(node):
+            children = getattr(node, '_children', [])
+            if not children:
+                return
+            order[id(node)] = [id(child) for child in children]
+            for child in children:
+                recurse(child)
+
+        recurse(model._root)
+        return order
+
+    def _sort_node(self, node, ascending):
+        children = getattr(node, '_children', [])
+        if not children:
+            return
+
+        def sort_key(child):
+            name = child.data()
+            return (0 if child.is_folder() else 1, str(name).casefold())
+
+        children.sort(key=sort_key, reverse=not ascending)
+        for child in children:
+            self._sort_node(child, ascending)
+
+    def _restore_sort_snapshot(self, node, snapshot):
+        children = getattr(node, '_children', [])
+        if not children:
+            return
+        order_ids = snapshot.get(id(node))
+        if order_ids:
+            index_map = {child_id: position for position, child_id in enumerate(order_ids)}
+            children.sort(key=lambda child: index_map.get(id(child), len(order_ids)))
+        for child in children:
+            self._restore_sort_snapshot(child, snapshot)
 
     def get_parent(self, item):
         """Поиск первого элемента типа 'не папка' и возвращение этого элемента."""
@@ -495,7 +811,9 @@ class DockWidget(QDockWidget):
         self.plugin_name = plugin_name
         self.available_actions = []
         self._parent = parent
-        layout = QHBoxLayout()
+        main_layout = QVBoxLayout()
+        main_layout.setContentsMargins(4, 2, 4, 2)
+        main_layout.setSpacing(2)
         self.menu_name = menu_name
 
         self.title_label = QLabel()
@@ -503,11 +821,58 @@ class DockWidget(QDockWidget):
 
         self.settings_menu = []
 
+        self.search_line = QLineEdit()
+        self.search_line.setPlaceholderText('Поиск...')
+        self.search_line.setClearButtonEnabled(True)
+        self.search_line.setToolTip('Поиск по дереву')
+        self.search_line.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+
+        self.search_prev_button = QToolButton()
+        self.search_prev_button.setIcon(self.style().standardIcon(QStyle.SP_ArrowBack))
+        self.search_prev_button.setAutoRaise(True)
+        self.search_prev_button.setToolTip('Предыдущее совпадение')
+        self.search_prev_button.clicked.connect(self._on_search_prev)
+        self.search_prev_button.setEnabled(False)
+
+        self.search_next_button = QToolButton()
+        self.search_next_button.setIcon(self.style().standardIcon(QStyle.SP_ArrowForward))
+        self.search_next_button.setAutoRaise(True)
+        self.search_next_button.setToolTip('Следующее совпадение')
+        self.search_next_button.clicked.connect(self._on_search_next)
+        self.search_next_button.setEnabled(False)
+
+        self._search_timer = QTimer(self)
+        self._search_timer.setSingleShot(True)
+        self._search_timer.setInterval(200)
+        self.search_line.textChanged.connect(self._on_search_text_changed)
+        self.search_line.returnPressed.connect(self._run_search)
+        self._search_timer.timeout.connect(self._run_search)
+
+        self._search_shortcut = QShortcut(QKeySequence.Find, self)
+        self._search_shortcut.activated.connect(self._focus_search)
+
         self.dock_button = QToolButton()
         self.dock_button.setIcon(QIcon(':/dock.png'))
         self.dock_button.setText('Вернуть на окно')
         self.dock_button.clicked.connect(self.dock_)
         self.dock_button.hide()
+
+        self.sort_button = QToolButton()
+        self.sort_button.setIcon(QIcon(':/sorting.png'))
+        self.sort_button.setToolTip('Сортировка')
+        self.sort_button.setPopupMode(QToolButton.InstantPopup)
+        self.sort_button.setAutoRaise(True)
+
+        self.sort_menu = QMenu(self)
+        self.sort_by_asc_action = self.sort_menu.addAction('По имени (А→Я)')
+        self.sort_by_desc_action = self.sort_menu.addAction('По имени (Я→А)')
+        self.sort_menu.addSeparator()
+        self.sort_reset_action = self.sort_menu.addAction('Без сортировки')
+        self.sort_button.setMenu(self.sort_menu)
+        self.sort_by_asc_action.triggered.connect(lambda: self._sort_tree(Qt.AscendingOrder))
+        self.sort_by_desc_action.triggered.connect(lambda: self._sort_tree(Qt.DescendingOrder))
+        self.sort_reset_action.triggered.connect(self._reset_sort)
+        self.sort_reset_action.setEnabled(False)
 
         settings_button = QToolButton()
         settings_button.setIcon(QIcon(':/settings.png'))
@@ -534,18 +899,31 @@ class DockWidget(QDockWidget):
         hide_button.setText('Закрыть')
         hide_button.clicked.connect(self.hide_)
 
-        layout.addWidget(self.title_label)
+        header_layout = QHBoxLayout()
+        header_layout.setContentsMargins(0, 0, 0, 0)
+        header_layout.setSpacing(2)
+        header_layout.addWidget(self.title_label)
+        header_layout.addStretch()
+        header_layout.addWidget(save_button)
+        header_layout.addWidget(up_button)
+        header_layout.addWidget(down_button)
+        header_layout.addWidget(self.dock_button)
+        header_layout.addWidget(settings_button)
+        header_layout.addWidget(hide_button)
 
-        layout.addStretch()
+        controls_layout = QHBoxLayout()
+        controls_layout.setContentsMargins(0, 0, 0, 0)
+        controls_layout.setSpacing(2)
+        controls_layout.addWidget(self.search_line, 1)
+        controls_layout.addWidget(self.search_prev_button)
+        controls_layout.addWidget(self.search_next_button)
+        controls_layout.addWidget(self.sort_button)
 
-        layout.addWidget(save_button)
-        layout.addWidget(up_button)
-        layout.addWidget(down_button)
-        layout.addWidget(self.dock_button)
-        layout.addWidget(settings_button)
-        layout.addWidget(hide_button)
+        main_layout.addLayout(header_layout)
+        main_layout.addLayout(controls_layout)
+
         widget = QWidget()
-        widget.setLayout(layout)
+        widget.setLayout(main_layout)
 
         objectName = widget.objectName() if widget.objectName() != "" else str(id(widget))
         widget.setObjectName(objectName)
@@ -553,6 +931,102 @@ class DockWidget(QDockWidget):
 
         self.setTitleBarWidget(widget)
         self.topLevelChanged.connect(lambda: self.dock_button.setHidden(not self.isFloating()))
+        self._update_sort_actions()
+        self._update_search_controls()
+
+    def setWidget(self, widget):
+        super().setWidget(widget)
+        self._on_tree_changed(widget)
+
+    def _tree(self):
+        widget = self.widget()
+        if isinstance(widget, TreeView):
+            return widget
+        return None
+
+    def _on_tree_changed(self, widget):
+        if isinstance(widget, TreeView):
+            if self.search_line.text().strip():
+                widget.apply_search(self.search_line.text())
+            else:
+                widget.clear_search()
+        self._update_sort_actions()
+        self._update_search_controls()
+
+    def _on_search_text_changed(self, text):
+        trimmed = text.strip()
+        if trimmed:
+            self._search_timer.start(200)
+            self.search_prev_button.setEnabled(False)
+            self.search_next_button.setEnabled(False)
+        else:
+            self._search_timer.stop()
+            self._run_search()
+        if not trimmed:
+            self._update_search_controls()
+
+    def _run_search(self):
+        tree = self._tree()
+        if not tree:
+            return
+        text = self.search_line.text()
+        if text.strip():
+            tree.apply_search(text)
+        else:
+            tree.clear_search()
+        self._update_search_controls()
+
+    def _sort_tree(self, order):
+        tree = self._tree()
+        if not tree:
+            return
+        tree.sort_items(order)
+        self._update_sort_actions()
+        if self.search_line.text().strip():
+            tree.apply_search(self.search_line.text())
+        self._update_search_controls()
+
+    def _reset_sort(self):
+        tree = self._tree()
+        if not tree:
+            return
+        tree.reset_sort()
+        self._update_sort_actions()
+        if self.search_line.text().strip():
+            tree.apply_search(self.search_line.text())
+        self._update_search_controls()
+
+    def _focus_search(self):
+        self.search_line.setFocus()
+        self.search_line.selectAll()
+
+    def _on_search_prev(self):
+        tree = self._tree()
+        if not tree:
+            return
+        tree.previous_search_result()
+
+    def _on_search_next(self):
+        tree = self._tree()
+        if not tree:
+            return
+        tree.next_search_result()
+
+    def _update_sort_actions(self):
+        has_sort = False
+        tree = self._tree()
+        if tree:
+            has_sort = tree.has_active_sort()
+        self.sort_reset_action.setEnabled(has_sort)
+
+    def _update_search_controls(self):
+        tree = self._tree()
+        has_tree = tree is not None
+        text = self.search_line.text().strip()
+        has_results = bool(has_tree and text and tree.has_search_results())
+        self.search_prev_button.setEnabled(has_results)
+        self.search_next_button.setEnabled(has_results)
+        self.sort_button.setEnabled(has_tree)
 
     def update_npps(self, root):
         update_data = []

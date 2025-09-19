@@ -43,6 +43,7 @@ class Node(object):
         self._checked_count = 0
 
         self.name = None
+        self.search_highlight = False
 
     @staticmethod
     def internal_type():
@@ -441,6 +442,17 @@ class TreeModel(QAbstractItemModel):
             return node.data()
 
         if role == Qt.BackgroundColorRole:
+            if getattr(node, 'search_highlight', False):
+                highlight = QColor('#fff59d')
+                if node.font_bgcolor:
+                    base_color = QColor(node.font_bgcolor)
+                    mixed = QColor(
+                        (base_color.red() + highlight.red()) // 2,
+                        (base_color.green() + highlight.green()) // 2,
+                        (base_color.blue() + highlight.blue()) // 2,
+                    )
+                    return mixed
+                return highlight
             if node.font_bgcolor:
                 return QColor(node.font_bgcolor)
             else:
