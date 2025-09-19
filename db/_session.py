@@ -6,7 +6,7 @@ from inspect import signature
 import asyncpg
 import typing
 
-from PySide2.QtCore import QThread, Signal, QMetaObject, Qt, Q_ARG
+from PySide2.QtCore import QObject, QThread, Signal
 from asyncpg import RaiseError
 from config.config import config
 
@@ -48,6 +48,10 @@ class Worker(QThread):
         self.finished.emit()
 
 
+class _ProgressEmitter(QObject):
+    progress = Signal(str)
+
+
 class Session:
     def __init__(self, **dsn):
         self.dsn = dsn
@@ -63,6 +67,7 @@ class Session:
         self.main_window = None
         self._login = None
         self._password = None
+        self._progress_emitter = _ProgressEmitter()
 
         self.run_sync(self._initialize_async_state())
 
@@ -82,6 +87,7 @@ class Session:
 
     def init_main_window(self, mw):
         self.main_window = mw
+        self._progress_emitter.progress.connect(mw.set_progress_bar_status)
 
     async def connect_db(self):
         try:
@@ -126,12 +132,7 @@ class Session:
         if QThread.currentThread() is main_window.thread():
             main_window.set_progress_bar_status(message)
         else:
-            QMetaObject.invokeMethod(
-                main_window,
-                "set_progress_bar_status",
-                Qt.QueuedConnection,
-                Q_ARG(str, message),
-            )
+            self._progress_emitter.progress.emit(message)
 
     async def execute(self, procedure_name, *args):
         query = f'SELECT * FROM "sc_ref".{procedure_name}({",".join([f"${i + 1}" for i, _ in enumerate(args)])})'
