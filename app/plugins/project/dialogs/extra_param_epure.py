@@ -3,6 +3,7 @@ from PySide2.QtWidgets import QTreeWidgetItem
 
 from app.plugins.base_state.widgets import ExtendedComboBox
 from app.plugins.project import utils
+from app.plugins.project.utils_ import collect_project_params, collect_cell_values
 from db import sp
 from dialogs.base import BaseDialog
 from resources.ui.ui_py.ui_extra_param_epure import Ui_ExtraParamEoure
@@ -24,7 +25,7 @@ class ExtraParamEpureDialog(BaseDialog):
 
         self.selected = extra_param_values
 
-        self.param_list = utils.collect_project_params(sp.get_project_test_params(project_id))
+        self.param_list = collect_project_params(sp.get_project_test_params(project_id))
         self.param_values_dict = {}
         self.current_param = extra_param
         self.create_connections()  # создаем привязки
@@ -54,7 +55,7 @@ class ExtraParamEpureDialog(BaseDialog):
         self.current_param = text
 
         if text not in self.param_values_dict:
-            z_data = utils.collect_cell_values(
+            z_data = collect_cell_values(
                 sp.get_x_curves(self.project_id, [test._data.project_id for test in self.test_nodes],
                                 text))
             self.param_values_dict[text] = []

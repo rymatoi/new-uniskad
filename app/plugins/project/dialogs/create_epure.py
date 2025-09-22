@@ -11,6 +11,7 @@ from app.plugins.project.dialogs.OY_setup import OYSetupDialog
 from app.plugins.project.dialogs.extra_param_epure import ExtraParamEpureDialog
 from app.plugins.project.dialogs.select_project_test import ProjectTestSelectionDialog
 from app.plugins.project.dialogs.select_test_data import TestDataSelectionDialog
+from app.plugins.project.utils_ import collect_project_params
 from db import sp
 from db.tables import PROJECT_TABLE
 from dialogs.base import BaseDialog
@@ -164,7 +165,7 @@ class CreateEpureDialog(BaseDialog):
                 self.selected_params.pop(index.row())
 
     def add_parameters(self):
-        self.parameters = utils.collect_project_params(sp.get_project_test_params(self.project_id))
+        self.parameters = collect_project_params(sp.get_project_test_params(self.project_id))
         dialog = TestDataSelectionDialog(list(self.parameters.keys()))
         if dialog.exec_():
             params = [RowParam(param) for param in dialog.res]
