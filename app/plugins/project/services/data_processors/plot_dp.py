@@ -45,50 +45,50 @@ class PlotProcessor(DataProcessor):
     def get_custom_curves(self):
         """Получение данных для кривых"""
         curves_data = ItemProcessor.get_other_data(self.plot_data, self.other_data, self.test_nodes)
-        
+
         # Создаем копию списка кривых для итерации
         remaining_curves = list(self.other_data)
-        
+
         for test_id, x, y, style in curves_data:
             # Извлекаем параметры кривой из стиля для более точного сопоставления
             curve_name = style.get('name', '')
             curve_type = style.get('type', '')
             curve_degree = style.get('degree', None)
-            
+
             # Ищем наиболее подходящую кривую из оставшихся
             best_match = None
             best_match_index = -1
-            
+
             for i, curve in enumerate(remaining_curves):
                 # Преобразуем значения из JSON, если необходимо
                 curve_data = json.loads(curve.values) if isinstance(curve.values, str) else curve.values
-                
+
                 # Проверяем базовое соответствие по test_id и имени
                 if curve_data.get('test_id') != test_id or curve_data.get('name') != curve_name:
                     continue
-                
+
                 # Проверяем дополнительные параметры для более точного сопоставления
                 curve_matches = True
-                
+
                 # Проверяем тип кривой, если он указан
                 if curve_type and 'type' in curve_data and curve_data.get('type') != curve_type:
                     curve_matches = False
-                
+
                 # Для аппроксимации проверяем степень
                 if curve_degree is not None and 'degree' in curve_data and curve_data.get('degree') != curve_degree:
                     curve_matches = False
-                
+
                 if curve_matches:
                     best_match = curve
                     best_match_index = i
                     break
-            
+
             # Если нашли подходящую кривую, присваиваем ID и удаляем из оставшихся
             if best_match:
                 style['custom_curve_id'] = best_match.id
                 # Удаляем из списка оставшихся, чтобы не использовать эту кривую повторно
                 remaining_curves.pop(best_match_index)
-                
+
             yield test_id, x, y, style
 
     def register_curve(self, test_id: int, curve: CurveItem):
@@ -125,19 +125,19 @@ class PlotProcessor(DataProcessor):
             "test_id": test_id,
             "degree": degree
         }
-        
+
         # Добавляем параметры стиля, если они указаны
         if color:
             values["color"] = color
         if line_width is not None:
             values["line_width"] = line_width
-            
+
         custom_curve = self.data_manager.save_approximation(test_id, name, degree, values)
-        
+
         # Обновляем кеш
         if custom_curve:
             self.other_data.append(custom_curve)
-            
+
         return custom_curve.id if custom_curve else None
 
     def save_interpolation(self, test_id, name, interp_type, color=None, line_width=None):
@@ -158,19 +158,19 @@ class PlotProcessor(DataProcessor):
             "type": interp_type,
             "test_id": test_id
         }
-        
+
         # Добавляем параметры стиля, если они указаны
         if color:
             values["color"] = color
         if line_width is not None:
             values["line_width"] = line_width
-            
+
         custom_curve = self.data_manager.save_interpolation(test_id, name, interp_type, values)
-        
+
         # Обновляем кеш
         if custom_curve:
             self.other_data.append(custom_curve)
-            
+
         return custom_curve.id if custom_curve else None
 
     def remove_curve(self, curve_id):
@@ -183,13 +183,13 @@ class PlotProcessor(DataProcessor):
             bool: True если удаление успешно, False в противном случае
         """
         result = self.data_manager.remove_custom_curve(curve_id)
-        
+
         # Если удаление успешно, обновляем кеш
         if result:
             self.remove_curve_from_cache(curve_id)
-            
+
         return result
-        
+
     def remove_curve_from_cache(self, curve_id):
         """Удаляет кривую из кеша
         

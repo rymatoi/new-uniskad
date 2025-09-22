@@ -24,6 +24,12 @@ class GraphConstants:
         'symbol_size': 8
     }
 
+    # Настройки построения эпюр
+    EPURE_INTERPOLATION_MULTIPLIER = 25
+    EPURE_INTERPOLATION_MIN_POINTS = 64
+    EPURE_INTERPOLATION_MAX_POINTS = 512
+    EPURE_DIRECT_DRAW_THRESHOLD = 3
+
     APPROXIMATION_STYLE = {
         'color': '#1f77b4',
         'width': 2,

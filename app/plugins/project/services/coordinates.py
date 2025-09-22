@@ -3,6 +3,8 @@ from collections import defaultdict
 from itertools import groupby
 import json
 
+import numpy as np
+
 from app.plugins.project.core.constants import GraphConstants
 from app.plugins.project.core.exceptions import InvalidCurveDataError, InvalidPointValueError
 from app.plugins.project.services.data_processors.test_dp import TestProcessor
@@ -99,28 +101,52 @@ class ItemProcessor:
             curve_values = []
             # Группируем и обрабатываем данные за один проход
             for _, group in groupby(values, key=lambda x: x[0]):
+                y_values = None
+                x_values = None
+                curve_segment = None
                 try:
-                    # Создаем список точек с индексом и сразу извлекаем значения
-                    points = [
-                        (idx + 1, ItemProcessor.get_point_value(item[1]))
-                        for idx, item in enumerate(group)
-                    ]
+                    y_values = np.fromiter(
+                        (ItemProcessor.get_point_value(item[1]) for item in group),
+                        dtype=float
+                    )
 
-                    if not points:
+                    if y_values.size == 0:
                         raise InvalidCurveDataError("Empty group")
 
-                    # Разделяем координаты
-                    x, y = zip(*points)
+                    x_values = np.arange(1, y_values.size + 1, dtype=float)
 
-                    i_x, i_y = Interpolation.quadratic_interpolation(x, y, 1000)
-
-                    scatter_values.append((y, x))
-                    curve_values.append((i_y, i_x))
+                    if y_values.size < GraphConstants.EPURE_DIRECT_DRAW_THRESHOLD:
+                        curve_segment = (y_values, x_values)
+                    else:
+                        num_points = ItemProcessor._calculate_epure_point_count(y_values.size)
+                        i_x, i_y = Interpolation.quadratic_interpolation(
+                            x_values,
+                            y_values,
+                            num_points=num_points
+                        )
+                        curve_segment = (i_y, i_x)
 
                 except (InvalidCurveDataError, ValueError, IndexError) as e:
                     print(f'Не удалось построить эпюру для испытания №{test_id}: {str(e)}')
+
+                if curve_segment is not None and y_values is not None and x_values is not None:
+                    scatter_values.append((y_values, x_values))
+                    curve_values.append(curve_segment)
             if scatter_values and curve_values:
                 yield scatter_values, curve_values, style
+
+    @staticmethod
+    def _calculate_epure_point_count(point_count: int) -> int:
+        """Определяет количество точек интерполяции для эпюры."""
+        if point_count <= 0:
+            return 0
+
+        points = int(point_count * GraphConstants.EPURE_INTERPOLATION_MULTIPLIER)
+        points = max(points, GraphConstants.EPURE_INTERPOLATION_MIN_POINTS)
+        points = min(points, GraphConstants.EPURE_INTERPOLATION_MAX_POINTS)
+
+        # Гарантируем минимум две точки для корректного построения кривой
+        return max(points, 2)
 
     @staticmethod
     def get_item_id(item):
