@@ -402,6 +402,11 @@ class MainWindow(QtWidgets.QMainWindow):
     def closeEvent(self, event: QCloseEvent):
         """Выполнение действий до закрытия главного окна."""
         self.save_windows_state()
+        for dock in self.findChildren(DockWidget):
+            try:
+                dock.save_state()
+            except Exception:
+                logger.exception("Не удалось сохранить состояние док-виджета при закрытии окна")
         sp.session.close()
         logger.info("Выход из программы.")
         super().closeEvent(event)

@@ -4,7 +4,7 @@ from copy import copy
 from datetime import datetime
 
 from PySide2 import QtCore, QtWidgets
-from PySide2.QtCore import Qt, QSortFilterProxyModel, QSize, QLocale, QTimer, QPersistentModelIndex
+from PySide2.QtCore import Qt, QSortFilterProxyModel, QSize, QLocale, QTimer, QPersistentModelIndex, QItemSelectionModel
 from PySide2.QtGui import QIcon, QCursor, QColor, QFont, QBrush, QKeySequence
 from PySide2.QtWidgets import QTreeView, QMenu, QColorDialog, QInputDialog, QDockWidget, \
     QHBoxLayout, QToolButton, QWidget, QLabel, QAbstractItemView, QAction, QLineEdit, QShortcut, \
@@ -130,6 +130,76 @@ class TreeView(QTreeView):
         self.resizeColumnToContents(0)
         self.refresh()
         self._reset_tree_state()
+
+    def _resolve_drop_target(self, event) -> tuple:
+        model = self.model()
+        if model is None:
+            return QtCore.QModelIndex(), 0
+
+        drop_position = self.dropIndicatorPosition()
+        index = self.indexAt(event.pos())
+
+        if drop_position == QAbstractItemView.OnViewport or not index.isValid():
+            return QtCore.QModelIndex(), model.rowCount(QtCore.QModelIndex())
+
+        if drop_position == QAbstractItemView.OnItem:
+            return index, model.rowCount(index)
+
+        parent_index = index.parent()
+        row = index.row()
+        if drop_position == QAbstractItemView.BelowItem:
+            row += 1
+        return parent_index, row
+
+    def dragMoveEvent(self, event):
+        model = self.model()
+        if model is None:
+            event.ignore()
+            return
+
+        indexes = self.selectionModel().selectedRows()
+        parent_index, row = self._resolve_drop_target(event)
+
+        if indexes and model.can_drop_indexes(indexes, parent_index, row):
+            event.setDropAction(Qt.MoveAction)
+            event.accept()
+        else:
+            event.ignore()
+
+        if event.isAccepted():
+            super().dragMoveEvent(event)
+
+    def dropEvent(self, event):
+        model = self.model()
+        if model is None:
+            event.ignore()
+            return
+
+        selection_model = self.selectionModel()
+        indexes = selection_model.selectedRows()
+        if not indexes:
+            event.ignore()
+            return
+
+        parent_index, row = self._resolve_drop_target(event)
+        success, new_indexes = model.move_indexes(indexes, parent_index, row)
+
+        if not success:
+            event.ignore()
+            return
+
+        event.setDropAction(Qt.MoveAction)
+        event.accept()
+
+        selection_model.clearSelection()
+        for index in new_indexes:
+            selection_model.select(index, QItemSelectionModel.Select | QItemSelectionModel.Rows)
+
+        if new_indexes:
+            self.setCurrentIndex(new_indexes[0])
+
+        if hasattr(model, 'update_external_graphs') and callable(getattr(model, 'update_external_graphs', None)):
+            model.update_external_graphs()
 
     def _reset_tree_state(self):
         self._search_text = ''
@@ -1125,11 +1195,18 @@ class DockWidget(QDockWidget):
             self.widget().refresh()
 
     def hide_(self):
+        self.save_state()
         getattr(self._parent, self.menu_name).setChecked(False)
         self.hide()
 
     def dock_(self):
         self.setFloating(False)
+
+    def closeEvent(self, event):
+        try:
+            self.save_state()
+        finally:
+            super().closeEvent(event)
 
     def refresh(self):
         pass
