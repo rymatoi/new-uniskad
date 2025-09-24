@@ -1,5 +1,6 @@
 import json
 from copy import copy
+from datetime import datetime
 
 from PySide2.QtGui import QIcon, Qt
 
@@ -53,12 +54,23 @@ class ProjectRoot(Node):
         self.graph_x_comment = None
         self.graph_y_comment = None
 
+    _project_types_cache = None
+
     @staticmethod
     def internal_type():
         return 'root'
 
     def columnCount(self):
         return 1
+
+    @classmethod
+    def get_project_type_id(cls, type_name):
+        if cls._project_types_cache is None:
+            cls._project_types_cache = {
+                project_type.project_type: project_type.id_project_type
+                for project_type in sp.get_projecttypes_list()
+            }
+        return cls._project_types_cache.get(type_name)
 
     @staticmethod
     def container_types():
@@ -158,6 +170,43 @@ class FolderNode(ProjectRoot):
     def internal_actions():
         """Список действий с данным элементом (корень дерева)"""
         return []
+
+    @staticmethod
+    def add(up_node_id, parent):
+        folder_name = basic_funcs.get_text('Создание элемента', 'Название: ', '')
+        if not folder_name:
+            return
+        folder_name = folder_name.strip()
+        if not folder_name:
+            return
+
+        folder_type_id = ProjectRoot.get_project_type_id('folder')
+        if folder_type_id is None:
+            basic_funcs.error('Ошибка', 'Не удалось определить тип "folder".')
+            return
+
+        parent_data = getattr(parent, '_data', None)
+        project_author = getattr(parent_data, 'project_author', None)
+        project_owner = getattr(parent_data, 'project_owner', None)
+
+        record = (
+            None,
+            None,
+            up_node_id,
+            folder_type_id,
+            'name',
+            folder_name,
+            project_author,
+            project_owner,
+            datetime.now(),
+            0,
+            False,
+        )
+
+        new_folder = sp.new_update_project_from_record(record)
+        if new_folder:
+            new_folder.type_ = 'folder'
+            return FolderNode(new_folder)
 
     def get_icon(self, column=0):
         if self.icon:

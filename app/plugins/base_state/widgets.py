@@ -271,11 +271,7 @@ class TreeView(QTreeView):
         parent_node = model.nodeFromIndex(parent_index)
         if parent_node in (None, model._root):
             return True
-        allowed_children = list(parent_node.container_types())
-        if parent_node.is_folder():
-            actual_parent = self.get_parent(parent_node)
-            if actual_parent is not None:
-                allowed_children = list(actual_parent.container_types())
+        allowed_children = self._effective_container_types(parent_node)
         folder_cls = None
         if hasattr(model, 'item_types'):
             folder_cls = model.item_types.get('folder')
@@ -654,6 +650,34 @@ class TreeView(QTreeView):
             parent = parent.parent()
         return parent
 
+    def _container_owner(self, item):
+        """Возвращает узел, определяющий допустимые дочерние типы для item."""
+        if not item:
+            return None
+        if item.is_folder():
+            parent = self.get_parent(item)
+            if parent is not None:
+                return parent
+        return item
+
+    def _effective_container_types(self, item):
+        owner = self._container_owner(item)
+        if owner is None:
+            return []
+        return list(owner.container_types())
+
+    def _iter_addable_child_types(self, item):
+        seen = set()
+        for child in self._effective_container_types(item):
+            type_getter = getattr(child, 'internal_type', None)
+            child_type = type_getter() if callable(type_getter) else child
+            if not child_type or child_type == ANY_CHILD_TYPE:
+                continue
+            if child_type in seen:
+                continue
+            seen.add(child_type)
+            yield child_type
+
     def get_node_actions(self, item, menu_list):
         '''Обращается к модели и запрашивает массив действий для элемента item из списка menu_list.
         menu_list - все возможные действия для текущего виджета.
@@ -662,14 +686,15 @@ class TreeView(QTreeView):
         # соответственно, мы не знаем, какой набор internal_actions нам нужен, поэтому мы ищем родительский элемент 'не папка'
         # и запрашиваем internal_actions для родительского элемента, а затем добавляем self_internal_actions.
 
-        if item.is_folder():
-            parent = self.get_parent(item)
-            return [menu for menu in menu_list if
-                    menu.name in list(self.model().action_types[type(parent)]) + list(
-                        self.model().self_action_types[type(item)])]
-        return [menu for menu in menu_list if
-                menu.name in list(self.model().action_types[type(item)]) + list(
-                    self.model().self_action_types[type(item)])]
+        model = self.model()
+        if not model:
+            return []
+        owner = self._container_owner(item)
+        action_names = set()
+        if owner is not None:
+            action_names.update(model.action_types.get(type(owner), ()))
+        action_names.update(model.self_action_types.get(type(item), ()))
+        return [menu for menu in menu_list if menu.name in action_names]
 
     def get_base_actions(self, item, menu_list):
         return [menu for menu in menu_list if menu.name not in item.exclude_from_base_actions]
@@ -753,16 +778,7 @@ class TreeView(QTreeView):
         self._connect_func('_move_top', self.move_node, 'top', index)
         self._connect_func('_move_bottom', self.move_node, 'bottom', index)
 
-        container_types = list(item.container_types())
-        if item.is_folder():
-            parent = self.get_parent(item)
-            if parent is not None:
-                container_types = list(parent.container_types())
-        for child in container_types:
-            type_getter = getattr(child, 'internal_type', None)
-            child_type = type_getter() if callable(type_getter) else child
-            if child_type == ANY_CHILD_TYPE:
-                continue
+        for child_type in self._iter_addable_child_types(item):
             self._connect_func(f'_add_{child_type}', self.add_item, child_type, index)
 
     def move_node(self, side, index):
