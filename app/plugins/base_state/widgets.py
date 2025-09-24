@@ -4,7 +4,7 @@ from copy import copy
 from datetime import datetime
 
 from PySide2 import QtCore, QtWidgets
-from PySide2.QtCore import Qt, QSortFilterProxyModel, QSize, QLocale, QTimer, QPersistentModelIndex
+from PySide2.QtCore import Qt, QSortFilterProxyModel, QSize, QLocale, QTimer, QPersistentModelIndex, QModelIndex
 from PySide2.QtGui import QIcon, QCursor, QColor, QFont, QBrush, QKeySequence
 from PySide2.QtWidgets import QTreeView, QMenu, QColorDialog, QInputDialog, QDockWidget, \
     QHBoxLayout, QToolButton, QWidget, QLabel, QAbstractItemView, QAction, QLineEdit, QShortcut, \
@@ -149,6 +149,128 @@ class TreeView(QTreeView):
                 self.setItemVisibility(self.model(), index, False)
             else:
                 self.setItemVisibility(self.model(), index, hidden)
+
+    def _collect_selected_nodes(self):
+        model = self.model()
+        if model is None:
+            return []
+        unique_nodes = []
+        for index in self.selectedIndexes():
+            if index.column() != 0:
+                continue
+            node = index.internalPointer()
+            if not node or node in unique_nodes:
+                continue
+            unique_nodes.append(node)
+        if not unique_nodes:
+            return []
+        unique_set = set(unique_nodes)
+        result = []
+        for node in unique_nodes:
+            ancestor = node.parent()
+            skip = False
+            while ancestor:
+                if ancestor in unique_set:
+                    skip = True
+                    break
+                ancestor = ancestor.parent()
+            if not skip:
+                result.append(node)
+        return result
+
+    def _index_for_node(self, node):
+        model = self.model()
+        if model is None or node is None:
+            return QModelIndex()
+        root_node = model.nodeFromIndex(QModelIndex())
+        if node is root_node:
+            return QModelIndex()
+        parent_index = self._index_for_node(node.parent())
+        return model.index(node.row(), 0, parent_index)
+
+    def _determine_drop_target(self, event, nodes):
+        model = self.model()
+        if model is None:
+            return None, None
+        drop_position = self.dropIndicatorPosition()
+        index = self.indexAt(event.pos())
+        root_node = model.nodeFromIndex(QModelIndex())
+        if drop_position == QAbstractItemView.OnViewport or not index.isValid():
+            return root_node, root_node.childCount()
+        item = index.internalPointer()
+        if drop_position == QAbstractItemView.OnItem:
+            if item and model.can_accept_drop(item, nodes):
+                return item, item.childCount()
+            parent_index = index.parent()
+            parent_item = model.nodeFromIndex(parent_index)
+            if parent_item is None:
+                parent_item = root_node
+            row = index.row() + 1
+            return parent_item, row
+        if drop_position in (QAbstractItemView.AboveItem, QAbstractItemView.BelowItem):
+            parent_index = index.parent()
+            parent_item = model.nodeFromIndex(parent_index)
+            if parent_item is None:
+                parent_item = root_node
+            row = index.row()
+            if drop_position == QAbstractItemView.BelowItem:
+                row += 1
+            return parent_item, row
+        return root_node, root_node.childCount()
+
+    def _restore_selection(self, nodes, parent_item):
+        model = self.model()
+        if model is None:
+            return
+        selection_model = self.selectionModel()
+        if not selection_model:
+            return
+        selection_model.clearSelection()
+        parent_index = self._index_for_node(parent_item)
+        sorted_nodes = sorted(nodes, key=lambda node: node.row())
+        for node in sorted_nodes:
+            index = model.index(node.row(), 0, parent_index)
+            selection_model.select(index, QtCore.QItemSelectionModel.Select | QtCore.QItemSelectionModel.Rows)
+        if sorted_nodes:
+            first_index = model.index(sorted_nodes[0].row(), 0, parent_index)
+            self.setCurrentIndex(first_index)
+
+    def dragEnterEvent(self, event):
+        model = self.model()
+        if model and getattr(model, 'supports_drag_drop', False):
+            event.acceptProposedAction()
+        else:
+            super().dragEnterEvent(event)
+
+    def dragMoveEvent(self, event):
+        model = self.model()
+        if model and getattr(model, 'supports_drag_drop', False):
+            event.acceptProposedAction()
+        else:
+            super().dragMoveEvent(event)
+
+    def dropEvent(self, event):
+        model = self.model()
+        if model is None or not getattr(model, 'supports_drag_drop', False):
+            super().dropEvent(event)
+            return
+        nodes = self._collect_selected_nodes()
+        if not nodes:
+            event.ignore()
+            return
+        parent_item, row = self._determine_drop_target(event, nodes)
+        if parent_item is None or row is None:
+            event.ignore()
+            return
+        if not model.can_accept_drop(parent_item, nodes):
+            event.ignore()
+            return
+        if model.move_nodes(nodes, parent_item, row):
+            self._restore_selection(nodes, parent_item)
+            event.acceptProposedAction()
+            self.viewport().update()
+        else:
+            event.ignore()
 
     def setItemVisibility(self, model, index, hidden):
         self.setRowHidden(index.row(), index.parent(), hidden)

@@ -331,6 +331,7 @@ class TestNode(WorkDataNode):
 
 class WorkDataTreeModel(TreeModel):
     """Дерево справочника изделий"""
+    supports_drag_drop = True
 
     def __init__(self):
         super().__init__()

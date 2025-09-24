@@ -814,6 +814,7 @@ class ParamNode(Node):
 
 class ProjectTreeModel(TreeModel):
     """Дерево справочника изделий"""
+    supports_drag_drop = True
 
     def __init__(self):
         super().__init__()

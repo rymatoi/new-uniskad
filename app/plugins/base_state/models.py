@@ -1,15 +1,24 @@
 from copy import copy
 from typing import List
+
 import PySide2
 from PySide2.QtCore import QAbstractItemModel, QPointF, Signal
 from PySide2.QtGui import QIcon, QFont, QColor, QPainter, QPen, QPixmap
 
 from PySide2.QtCore import Qt, QModelIndex
 
+from app import app_logger
+from config.config import PROG_ID
+from db import sp
+from db.tables import PRODUCT, PROJECT_TABLE, SPRAV_NAMES
+
 replace_dict = {
     'True': True,
     'False': False
 }
+
+
+logger = app_logger.get_logger(__name__)
 
 
 class Node(object):
@@ -198,6 +207,12 @@ class TreeModel(QAbstractItemModel):
     itemChecked = Signal(object)
     headers = ["Название"]
     CHECKABLE = False
+    supports_drag_drop = False
+    _parent_update_map = {
+        'Product': (sp.new_update_product_from_record, PRODUCT),
+        'Project': (sp.new_update_project_from_record, PROJECT_TABLE),
+        'SpravName': (sp.update_sprav_names_record, SPRAV_NAMES),
+    }
 
     def __init__(self, parent_widget=None):
         super().__init__()
@@ -543,6 +558,154 @@ class TreeModel(QAbstractItemModel):
         self.layoutAboutToBeChanged.emit()
         self.layoutChanged.emit()
 
+    def _node_path(self, node):
+        path = []
+        current = node
+        while current and current is not self._root:
+            path.append(current.row())
+            current = current.parent()
+        path.reverse()
+        return tuple(path)
+
+    def _sort_nodes_by_path(self, nodes):
+        return sorted(nodes, key=self._node_path)
+
+    def _get_parent_id_value(self, parent_item):
+        if parent_item is self._root:
+            return self.root_id
+        data = getattr(parent_item, '_data', None)
+        if data is None:
+            return None
+        return getattr(data, 'id', None)
+
+    def can_accept_drop(self, parent_item, nodes):
+        target = parent_item or self._root
+        if target is self._root:
+            container_types = target.container_types()
+        else:
+            container_types = target.container_types()
+        if nodes:
+            if not container_types:
+                return False
+            allowed_types = tuple(container_types)
+        else:
+            allowed_types = tuple(container_types) if container_types else tuple()
+        for node in nodes:
+            ancestor = target
+            while ancestor:
+                if ancestor is node:
+                    return False
+                ancestor = ancestor.parent()
+            if allowed_types and not isinstance(node, allowed_types):
+                return False
+        if not nodes:
+            return bool(container_types)
+        return True
+
+    def _resolve_parent_updater(self, data):
+        data_type = type(data).__name__
+        if data_type in self._parent_update_map:
+            func, table = self._parent_update_map[data_type]
+            return lambda payload: func(payload.table_fit(table))
+        if data_type == 'Role':
+            return lambda payload: sp.new_upd_uniskadrole((
+                PROG_ID,
+                payload.id,
+                payload.id_up,
+                payload.rolename,
+                payload.descr,
+                payload.deleted,
+                False
+            ))
+        return None
+
+    def _update_node_parent_in_db(self, node, new_parent_id):
+        data = getattr(node, '_data', None)
+        if data is None or not hasattr(data, 'set_val'):
+            return True
+        current_parent_id = getattr(data, 'id_up', None)
+        if current_parent_id == new_parent_id:
+            return True
+        updater = self._resolve_parent_updater(data)
+        if updater is None:
+            logger.warning('Не найден обработчик обновления родителя для типа %s', type(data).__name__)
+            return False
+        payload = copy(data)
+        try:
+            payload.set_val('id_up', new_parent_id)
+        except AttributeError:
+            logger.exception('Не удалось установить новое значение id_up для узла %s', getattr(data, 'id', None))
+            return False
+        try:
+            result = updater(payload)
+        except Exception:
+            logger.exception('Ошибка при обновлении родителя для узла %s', getattr(data, 'id', None))
+            return False
+        if result is False:
+            logger.error('База данных отклонила изменение родителя для узла %s', getattr(data, 'id', None))
+            return False
+        if hasattr(result, 'set_val'):
+            node._data = result
+        else:
+            try:
+                node._data.set_val('id_up', new_parent_id)
+            except AttributeError:
+                logger.exception('Не удалось обновить локальные данные узла %s', getattr(data, 'id', None))
+                return False
+        return True
+
+    def move_nodes(self, nodes, target_parent, position=None):
+        if not nodes:
+            return False
+        target = target_parent or self._root
+        sorted_nodes = self._sort_nodes_by_path(nodes)
+        if not self.can_accept_drop(target, sorted_nodes):
+            return False
+
+        node_parents = {node: node.parent() for node in sorted_nodes}
+        node_rows = {node: node.row() for node in sorted_nodes}
+        original_parent_ids = {}
+        for node in sorted_nodes:
+            data = getattr(node, '_data', None)
+            if data is not None:
+                original_parent_ids[node] = getattr(data, 'id_up', None)
+            else:
+                original_parent_ids[node] = None
+
+        new_parent_id = self._get_parent_id_value(target)
+        updated_nodes = []
+        for node in sorted_nodes:
+            if not self._update_node_parent_in_db(node, new_parent_id):
+                for updated in reversed(updated_nodes):
+                    self._update_node_parent_in_db(updated, original_parent_ids.get(updated))
+                return False
+            updated_nodes.append(node)
+
+        if position is None or position < 0:
+            position = target.childCount()
+        else:
+            shift = sum(1 for node in sorted_nodes if node_parents[node] is target and node_rows[node] < position)
+            position = max(0, position - shift)
+            position = min(position, target.childCount())
+
+        parents_to_rows = {}
+        for node in sorted_nodes:
+            parents_to_rows.setdefault(node_parents[node], []).append(node_rows[node])
+
+        self.layoutAboutToBeChanged.emit()
+        for parent_item, rows in parents_to_rows.items():
+            for row in sorted(rows, reverse=True):
+                if 0 <= row < parent_item.childCount():
+                    parent_item.removeChild(row)
+        for offset, node in enumerate(sorted_nodes):
+            node._parent = target
+            insert_row = position + offset
+            if insert_row > target.childCount():
+                insert_row = target.childCount()
+            target._children.insert(insert_row, node)
+        self.layoutChanged.emit()
+        return True
+
     def setData(self, index: "QModelIndex", value: "Any", role: int = ...) -> bool:
         """Изменяет данные на интерфейсе"""
         if index.column() == 0 and role == Qt.CheckStateRole:
@@ -589,10 +752,22 @@ class TreeModel(QAbstractItemModel):
         defaultFlags = super().flags(index)
         if self.CHECKABLE:
             defaultFlags |= Qt.ItemIsUserCheckable
-        if index.isValid():
-            return Qt.ItemIsDragEnabled | Qt.ItemIsDropEnabled | Qt.ItemIsSelectable | Qt.ItemIsEnabled | defaultFlags
+
+        flags = Qt.ItemIsSelectable | Qt.ItemIsEnabled | defaultFlags
+        if getattr(self, 'supports_drag_drop', False):
+            if index.isValid():
+                flags |= Qt.ItemIsDragEnabled
+                node = index.internalPointer()
+                if node and node.container_types():
+                    flags |= Qt.ItemIsDropEnabled
+            else:
+                flags |= Qt.ItemIsDropEnabled
         else:
-            Qt.ItemIsDropEnabled | defaultFlags
+            if index.isValid():
+                flags |= Qt.ItemIsDragEnabled | Qt.ItemIsDropEnabled
+            else:
+                flags |= Qt.ItemIsDropEnabled
+        return flags
 
     def removeRows(self, row: int, count: int, parent: PySide2.QtCore.QModelIndex = ...) -> bool:
         parent_ = self.nodeFromIndex(parent)
