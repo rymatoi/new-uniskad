@@ -22,6 +22,7 @@ class Node(object):
     exclude_from_base_actions = []  # _open, _customize
     has_customization = False
     scheme = None
+    inherit_actions_from_parent = True
 
     def __init__(self, data, parent_widget=None):
         self.parent_widget = parent_widget
@@ -68,6 +69,11 @@ class Node(object):
     def container_types():
         """Возможные дочерние элементы узла."""
         return []
+
+    @classmethod
+    def creatable_types(cls):
+        """Возвращает типы элементов, которые можно создавать через контекстное меню."""
+        return list(cls.container_types())
 
     def is_checked(self):
         """Условие наличия галочки"""
@@ -269,7 +275,7 @@ class TreeModel(QAbstractItemModel):
             self.self_action_types.setdefault(v, set())
             for action in v.internal_actions():
                 self.action_types[v].add(f'_{action}')
-                for child_node in v.container_types():
+                for child_node in v.creatable_types():
                     if child_node == ANY_CHILD_TYPE:
                         continue
                     if hasattr(child_node, 'internal_type') and callable(child_node.internal_type):

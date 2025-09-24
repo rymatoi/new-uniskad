@@ -152,6 +152,7 @@ class ProjectNode(ProjectRoot):
 
 
 class FolderNode(ProjectRoot):
+    inherit_actions_from_parent = False
 
     @staticmethod
     def internal_type():
@@ -169,7 +170,11 @@ class FolderNode(ProjectRoot):
     @staticmethod
     def internal_actions():
         """Список действий с данным элементом (корень дерева)"""
-        return []
+        return ['add']
+
+    @classmethod
+    def creatable_types(cls):
+        return [cls]
 
     @staticmethod
     def add(up_node_id, parent):

@@ -660,15 +660,32 @@ class TreeView(QTreeView):
                 return parent
         return item
 
+    def _action_owner(self, item):
+        """Возвращает узел, на основе которого определяется набор действий для item."""
+        if not item:
+            return None
+        inherit = getattr(item, 'inherit_actions_from_parent', True)
+        if inherit and item.is_folder():
+            parent = self.get_parent(item)
+            if parent is not None:
+                return parent
+        return item
+
     def _effective_container_types(self, item):
         owner = self._container_owner(item)
         if owner is None:
             return []
         return list(owner.container_types())
 
+    def _effective_creatable_types(self, item):
+        owner = self._action_owner(item)
+        if owner is None:
+            return []
+        return list(owner.creatable_types())
+
     def _iter_addable_child_types(self, item):
         seen = set()
-        for child in self._effective_container_types(item):
+        for child in self._effective_creatable_types(item):
             type_getter = getattr(child, 'internal_type', None)
             child_type = type_getter() if callable(type_getter) else child
             if not child_type or child_type == ANY_CHILD_TYPE:
@@ -689,7 +706,7 @@ class TreeView(QTreeView):
         model = self.model()
         if not model:
             return []
-        owner = self._container_owner(item)
+        owner = self._action_owner(item)
         action_names = set()
         if owner is not None:
             action_names.update(model.action_types.get(type(owner), ()))
