@@ -830,8 +830,14 @@ class PlotView(pg.PlotWidget):
                 curve.init_style()
 
     def collect_tests(self):
-        test_folder = \
-            [child for child in self.item.parent().parent().children if child.internal_type() == 'product_folder'][0]
+        root = self.item.parent()
+        if root:
+            root = root.parent()
+        if not root:
+            return []
+        test_folder = root.find_child_by_internal_type('product_folder')
+        if not test_folder:
+            return []
         return self._inspect_children(test_folder, False)
 
     def _inspect_children(self, root, root_deleted):
@@ -852,9 +858,11 @@ class PlotView(pg.PlotWidget):
 
     def _find_parent_item(self, test, type_):
         parent = test.parent()
-        while parent.internal_type() != 'product_folder':
+        while parent is not None:
             if parent.internal_type() == type_:
                 return parent
+            if parent.internal_type() == 'product_folder':
+                break
             parent = parent.parent()
         return None
 

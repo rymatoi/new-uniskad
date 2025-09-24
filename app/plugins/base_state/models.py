@@ -1,6 +1,6 @@
 from collections import defaultdict
 from copy import copy
-from typing import List
+from typing import List, Optional
 import PySide2
 from PySide2.QtCore import QAbstractItemModel, QPointF, Signal, QPersistentModelIndex
 from PySide2.QtGui import QIcon, QFont, QColor, QPainter, QPen, QPixmap
@@ -59,6 +59,28 @@ class Node(object):
     @property
     def children(self):
         return self._children
+
+    def find_child_by_internal_type(self, internal_type: str) -> Optional["Node"]:
+        """Возвращает первого дочернего элемента с указанным типом или None."""
+        for child in self.children:
+            try:
+                if child.internal_type() == internal_type:
+                    return child
+            except AttributeError:
+                continue
+        return None
+
+    def find_parent_by_internal_type(self, internal_type: str) -> Optional["Node"]:
+        """Возвращает первого родителя с указанным типом или None."""
+        parent = self.parent()
+        while parent is not None:
+            try:
+                if parent.internal_type() == internal_type:
+                    return parent
+            except AttributeError:
+                pass
+            parent = parent.parent()
+        return None
 
     @staticmethod
     def is_folder():

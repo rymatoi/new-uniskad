@@ -117,7 +117,9 @@ class CreateEpureDialog(BaseDialog):
                 self.ui.paramValuesLineEdit.setText(str(self.extra_param_values))
 
     def collect_tests(self):
-        test_folder = [child for child in self.project_item.children if child.internal_type() == 'product_folder'][0]
+        test_folder = self.project_item.find_child_by_internal_type('product_folder')
+        if not test_folder:
+            return []
         return self._inspect_children(test_folder, False)
 
     def _inspect_children(self, root, root_deleted):

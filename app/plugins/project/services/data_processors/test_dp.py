@@ -5,11 +5,14 @@ class TestProcessor:
     @staticmethod
     @lru_cache(maxsize=None)
     def collect_tests(item):
-        parent = item.parent().parent()
-        test_folder = next(
-            child for child in parent.children
-            if child.internal_type() == 'product_folder'
-        )
+        root = item.parent()
+        if root:
+            root = root.parent()
+        if not root:
+            return {}
+        test_folder = root.find_child_by_internal_type('product_folder')
+        if not test_folder:
+            return {}
         return TestProcessor._inspect_children(test_folder)
 
     @staticmethod
