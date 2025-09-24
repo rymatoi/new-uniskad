@@ -1,7 +1,8 @@
+from collections import defaultdict
 from copy import copy
 from typing import List
 import PySide2
-from PySide2.QtCore import QAbstractItemModel, QPointF, Signal
+from PySide2.QtCore import QAbstractItemModel, QPointF, Signal, QPersistentModelIndex
 from PySide2.QtGui import QIcon, QFont, QColor, QPainter, QPen, QPixmap
 
 from PySide2.QtCore import Qt, QModelIndex
@@ -10,6 +11,9 @@ replace_dict = {
     'True': True,
     'False': False
 }
+
+
+ANY_CHILD_TYPE = 'any'
 
 
 class Node(object):
@@ -143,6 +147,20 @@ class Node(object):
         pass
         # info('Изменение элемента', 'Изменение данного элемента из дерева не предусмотрено.')
 
+    def set_parent_id(self, new_parent_id):
+        """Обновляет идентификатор родителя в объекте данных узла."""
+        if not getattr(self, "_data", None):
+            return
+        for attr in ("id_up", "project_id_up", "id_up_prod", "id_role_up", "id_permanent_name"):
+            if hasattr(self._data, "set_val"):
+                try:
+                    self._data.set_val(attr, new_parent_id)
+                except AttributeError:
+                    if hasattr(self._data, attr):
+                        setattr(self._data, attr, new_parent_id)
+            elif hasattr(self._data, attr):
+                setattr(self._data, attr, new_parent_id)
+
     @staticmethod
     def add(up_node_id, parent):
         pass
@@ -252,7 +270,15 @@ class TreeModel(QAbstractItemModel):
             for action in v.internal_actions():
                 self.action_types[v].add(f'_{action}')
                 for child_node in v.container_types():
-                    self.action_types[v].add(f'_{action}_{child_node.internal_type()}')
+                    if child_node == ANY_CHILD_TYPE:
+                        continue
+                    if hasattr(child_node, 'internal_type') and callable(child_node.internal_type):
+                        child_type = child_node.internal_type()
+                    else:
+                        child_type = child_node
+                    if child_type == ANY_CHILD_TYPE or not child_type:
+                        continue
+                    self.action_types[v].add(f'_{action}_{child_type}')
             for action in v.self_internal_actions():
                 self.self_action_types[v].add(f'_{action}')
                 self.self_action_types[v].add(f'_{action}_{v.internal_type()}')
@@ -522,26 +548,100 @@ class TreeModel(QAbstractItemModel):
                 return node.is_checked()
 
     def moveItem(self, sourceIndex, destinationIndex):
-        sourceRow = sourceIndex.row()
-        destinationRow = destinationIndex.row()
+        if not (sourceIndex.isValid() and destinationIndex.isValid()):
+            return None
+
         parentIndex = sourceIndex.parent()
+        if parentIndex != destinationIndex.parent():
+            return None
 
-        # Get items at source and destination positions
-        sourceParentItem = parentIndex.internalPointer()
-        sourceItem = sourceParentItem.child(sourceRow)
+        new_indexes = self.move_indexes([sourceIndex], parentIndex, destinationIndex.row())
+        if not new_indexes:
+            return None
 
-        # Remove item from source position
-        sourceParentItem.removeChild(sourceRow)
+        new_index = QModelIndex(new_indexes[0])
+        if self.view:
+            self.view.setCurrentIndex(new_index)
+            selection_model = self.view.selectionModel()
+            if selection_model:
+                selection_model.select(new_index, selection_model.ClearAndSelect)
+        return new_index
 
-        # Insert item at destination position
-        sourceParentItem.insertChildren(destinationRow, [sourceItem])
-        self.view.setCurrentIndex(destinationIndex)
-        selection_model = self.view.selectionModel()
-        selection_model.select(destinationIndex, selection_model.ClearAndSelect)
+    def _get_node_id(self, node):
+        if node is None:
+            return None
+        if node is self._root:
+            return self.root_id
+        data = getattr(node, '_data', None)
+        if data is None:
+            return None
+        for attr in ('id', 'project_id', 'id_prod', 'id_role', 'id_name', 'id_record'):
+            if hasattr(data, attr):
+                value = getattr(data, attr)
+                if value is not None:
+                    return value
+        return None
 
-        # Emit dataChanged signal to update the view
-        self.layoutAboutToBeChanged.emit()
-        self.layoutChanged.emit()
+    def _set_node_parent_id(self, node, parent_node):
+        if node is None:
+            return
+        parent_id = self._get_node_id(parent_node)
+        if parent_id is None:
+            return
+        node.set_parent_id(parent_id)
+
+    def move_indexes(self, indexes, new_parent_index, insert_row):
+        if not indexes:
+            return []
+
+        parent_node = self.nodeFromIndex(new_parent_index)
+        parent_persistent = QPersistentModelIndex(new_parent_index) if new_parent_index.isValid() else None
+
+        def index_path(idx):
+            path = []
+            current = idx
+            while current.isValid():
+                path.append(current.row())
+                current = current.parent()
+            path.reverse()
+            return tuple(path)
+
+        sorted_indexes = sorted((idx for idx in indexes if idx.isValid()), key=index_path)
+
+        entries = []
+        for idx in sorted_indexes:
+            parent_index = idx.parent()
+            parent_q = parent_index if parent_index.isValid() else QModelIndex()
+            entries.append({
+                'node': idx.internalPointer(),
+                'parent_index': parent_q,
+                'parent_node': self.nodeFromIndex(parent_index),
+                'row': idx.row(),
+            })
+
+        removal_groups = defaultdict(list)
+        for entry in entries:
+            removal_groups[id(entry['parent_node'])].append(entry)
+
+        for group in removal_groups.values():
+            group.sort(key=lambda x: x['row'], reverse=True)
+            parent_index = group[0]['parent_index']
+            for entry in group:
+                self.removeRows(entry['row'], 1, parent_index)
+
+        new_indexes = []
+        parent_index_for_insert = QModelIndex(parent_persistent) if parent_persistent else QModelIndex()
+        current_row = insert_row
+        for entry in entries:
+            node = entry['node']
+            self.insertRows(current_row, [node], parent_index_for_insert)
+            self._set_node_parent_id(node, parent_node)
+            inserted_index = self.index(current_row, 0, parent_index_for_insert)
+            new_indexes.append(QPersistentModelIndex(inserted_index))
+            current_row += 1
+            parent_index_for_insert = QModelIndex(parent_persistent) if parent_persistent else QModelIndex()
+
+        return new_indexes
 
     def setData(self, index: "QModelIndex", value: "Any", role: int = ...) -> bool:
         """Изменяет данные на интерфейсе"""

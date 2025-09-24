@@ -4,7 +4,7 @@ from copy import copy
 from PySide2.QtGui import QIcon, Qt
 
 from app import basic_funcs
-from app.plugins.base_state.models import TreeModel, Node
+from app.plugins.base_state.models import TreeModel, Node, ANY_CHILD_TYPE
 from app.plugins.project import utils
 from app.plugins.project.dialogs.create_epure import CreateEpureDialog
 from app.plugins.project.dialogs.create_graph import CreateGraphDialog
@@ -12,6 +12,7 @@ from app.plugins.project.dialogs.edit_epure import EditEpureDialog
 from app.plugins.project.dialogs.select_test import TestSelectionDialog
 from app.plugins.project.dialogs.select_test_data import TestDataSelectionDialog
 from app.plugins.project.dialogs.test_edit import EditProjectItemDialog
+from app.plugins.project.utils_ import get_next_default_combination
 from app.plugins.work_data.models import ProductNode, ModelNode, AssemblyNode
 from db import sp
 from db.tables import PROJECT_TABLE, PROJECT_DATA
@@ -62,12 +63,12 @@ class ProjectRoot(Node):
     @staticmethod
     def container_types():
         """Возвращает типы возможных дочерних элементов"""
-        return []
+        return [FolderNode]
 
     @staticmethod
     def internal_actions():
         """Список действий с данным элементом (корень дерева)"""
-        return []
+        return ['add']
 
     @staticmethod
     def update(item, prop_name, prop_value):
@@ -121,7 +122,7 @@ class ProjectNode(ProjectRoot):
     @staticmethod
     def container_types():
         """Возвращает типы возможных дочерних элементов"""
-        return [TestNode]
+        return [TestNode, FolderNode]
 
     @staticmethod
     def internal_actions():
@@ -147,7 +148,7 @@ class FolderNode(ProjectRoot):
     @staticmethod
     def container_types():
         """Возвращает типы возможных дочерних элементов"""
-        return []
+        return [ANY_CHILD_TYPE]
 
     @staticmethod
     def internal_actions():
@@ -170,7 +171,7 @@ class ProductFolderNode(ProjectRoot):
     @staticmethod
     def container_types():
         """Возвращает типы возможных дочерних элементов"""
-        return [TestNode, FileNode]
+        return [TestNode, FileNode, FolderNode]
 
     @staticmethod
     def internal_actions():
@@ -193,7 +194,7 @@ class GraphFolderNode(ProjectRoot):
     @staticmethod
     def container_types():
         """Возвращает типы возможных дочерних элементов"""
-        return [GraphNode, FileNode]
+        return [GraphNode, FileNode, FolderNode]
 
     @staticmethod
     def internal_actions():
@@ -216,7 +217,7 @@ class EpureFolderNode(ProjectRoot):
     @staticmethod
     def container_types():
         """Возвращает типы возможных дочерних элементов"""
-        return [EpureNode, FileNode]
+        return [EpureNode, FileNode, FolderNode]
 
     @staticmethod
     def internal_actions():
@@ -236,12 +237,12 @@ class WDAssemblyNode(AssemblyNode, ProjectRoot):
     @staticmethod
     def container_types():
         """Возвращает типы возможных дочерних элементов"""
-        return []
+        return [FolderNode]
 
     @staticmethod
     def internal_actions():
         """Список действий с данным элементом (корень дерева)"""
-        return ['remove']
+        return ['add', 'remove']
 
     @staticmethod
     def remove(item, final=False):
@@ -288,12 +289,12 @@ class WDModelNode(ModelNode, ProjectRoot):
     @staticmethod
     def container_types():
         """Возвращает типы возможных дочерних элементов"""
-        return []
+        return [FolderNode]
 
     @staticmethod
     def internal_actions():
         """Список действий с данным элементом (корень дерева)"""
-        return ['remove']
+        return ['add', 'remove']
 
     @staticmethod
     def remove(item, final=False):
@@ -340,12 +341,12 @@ class WDProductNode(ProductNode, ProjectRoot):
     @staticmethod
     def container_types():
         """Возвращает типы возможных дочерних элементов"""
-        return []
+        return [FolderNode]
 
     @staticmethod
     def internal_actions():
         """Список действий с данным элементом (корень дерева)"""
-        return ['remove']
+        return ['add', 'remove']
 
     @staticmethod
     def remove(item, final=False):
@@ -401,7 +402,7 @@ class TestNode(ProjectRoot):
     @staticmethod
     def container_types():
         """Возвращает типы возможных дочерних элементов"""
-        return []
+        return [FolderNode]
 
     @staticmethod
     def internal_actions():
@@ -491,7 +492,7 @@ class TestNode(ProjectRoot):
 
                 if product.internal_type() == 'test':
                     next_default_value += 1
-                    line_style, color, symbol = utils.get_next_default_combination(next_default_value)
+                    line_style, color, symbol = get_next_default_combination(next_default_value)
                     test_prop_data = copy(product_data)
                     test_prop_data.project_prop = 'test_id'
                     test_prop_data.project_prop_value = str(product_data.id)
