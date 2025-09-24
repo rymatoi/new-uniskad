@@ -146,6 +146,10 @@ class FolderNode(ProjectRoot):
         return 'folder'
 
     @staticmethod
+    def is_folder():
+        return True
+
+    @staticmethod
     def container_types():
         """Возвращает типы возможных дочерних элементов"""
         return [ANY_CHILD_TYPE]

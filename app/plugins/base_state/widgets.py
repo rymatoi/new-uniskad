@@ -272,6 +272,10 @@ class TreeView(QTreeView):
         if parent_node in (None, model._root):
             return True
         allowed_children = list(parent_node.container_types())
+        if parent_node.is_folder():
+            actual_parent = self.get_parent(parent_node)
+            if actual_parent is not None:
+                allowed_children = list(actual_parent.container_types())
         folder_cls = None
         if hasattr(model, 'item_types'):
             folder_cls = model.item_types.get('folder')
@@ -646,7 +650,7 @@ class TreeView(QTreeView):
     def get_parent(self, item):
         """Поиск первого элемента типа 'не папка' и возвращение этого элемента."""
         parent = item.parent()
-        while parent.is_folder():
+        while parent and parent.is_folder():
             parent = parent.parent()
         return parent
 
@@ -749,7 +753,12 @@ class TreeView(QTreeView):
         self._connect_func('_move_top', self.move_node, 'top', index)
         self._connect_func('_move_bottom', self.move_node, 'bottom', index)
 
-        for child in item.container_types():
+        container_types = list(item.container_types())
+        if item.is_folder():
+            parent = self.get_parent(item)
+            if parent is not None:
+                container_types = list(parent.container_types())
+        for child in container_types:
             type_getter = getattr(child, 'internal_type', None)
             child_type = type_getter() if callable(type_getter) else child
             if child_type == ANY_CHILD_TYPE:
