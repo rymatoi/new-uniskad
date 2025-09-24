@@ -4,7 +4,7 @@ from copy import copy
 from datetime import datetime
 
 from PySide2 import QtCore, QtWidgets
-from PySide2.QtCore import Qt, QSortFilterProxyModel, QSize, QLocale, QTimer, QPersistentModelIndex
+from PySide2.QtCore import Qt, QSortFilterProxyModel, QSize, QLocale, QTimer, QPersistentModelIndex, QModelIndex
 from PySide2.QtGui import QIcon, QCursor, QColor, QFont, QBrush, QKeySequence
 from PySide2.QtWidgets import QTreeView, QMenu, QColorDialog, QInputDialog, QDockWidget, \
     QHBoxLayout, QToolButton, QWidget, QLabel, QAbstractItemView, QAction, QLineEdit, QShortcut, \
@@ -109,6 +109,14 @@ class TreeView(QTreeView):
         icon_size = QSize(16, 16)
         self.setIconSize(icon_size)
 
+    def _auto_save_tree(self):
+        if not self.dock_widget:
+            return
+        try:
+            self.dock_widget.save_state()
+        except Exception:
+            logger.exception('Не удалось автоматически сохранить состояние дерева.')
+
     def init_dock_widget(self, dock_widget):
         self.dock_widget = dock_widget
         self.dock_widget.init_settings()
@@ -159,6 +167,168 @@ class TreeView(QTreeView):
                 self.setItemVisibility(model, childIndex, False)
             else:
                 self.setItemVisibility(model, childIndex, hidden)
+
+    def _index_sort_key(self, index):
+        path = []
+        current = index
+        while current.isValid():
+            path.append(current.row())
+            current = current.parent()
+        path.reverse()
+        return tuple(path)
+
+    def _filter_movable_indexes(self, indexes):
+        unique = []
+        seen_nodes = set()
+        for index in indexes:
+            if not index.isValid():
+                continue
+            node = index.internalPointer()
+            if node is None:
+                continue
+            if node in seen_nodes:
+                continue
+            seen_nodes.add(node)
+            unique.append(index)
+        unique.sort(key=self._index_sort_key)
+        top_indexes = []
+        selected_nodes = {idx.internalPointer() for idx in unique}
+        for index in unique:
+            parent = index.parent()
+            skip = False
+            while parent.isValid():
+                if parent.internalPointer() in selected_nodes:
+                    skip = True
+                    break
+                parent = parent.parent()
+            if not skip:
+                top_indexes.append(index)
+        return top_indexes
+
+    def _drop_target_info(self, target_index, drop_position):
+        model = self.model()
+        if drop_position == QAbstractItemView.OnViewport or not target_index.isValid():
+            parent_index = QModelIndex()
+            row = model.rowCount(parent_index)
+            return parent_index, row
+        if drop_position == QAbstractItemView.OnItem:
+            parent_index = target_index
+            row = model.rowCount(target_index)
+            return parent_index, row
+        if drop_position == QAbstractItemView.AboveItem:
+            parent_index = target_index.parent()
+            row = target_index.row()
+            return parent_index, row
+        if drop_position == QAbstractItemView.BelowItem:
+            parent_index = target_index.parent()
+            row = target_index.row() + 1
+            return parent_index, row
+        return None, None
+
+    def _is_index_ancestor(self, ancestor_index, candidate_index):
+        current = candidate_index
+        while current.isValid():
+            if current == ancestor_index:
+                return True
+            current = current.parent()
+        return False
+
+    def _would_create_cycle(self, indexes, parent_index):
+        if not parent_index.isValid():
+            return False
+        for index in indexes:
+            if self._is_index_ancestor(index, parent_index):
+                return True
+        return False
+
+    def _node_allowed_in_parent(self, node, allowed_children):
+        node_cls = node.__class__
+        node_type = node.internal_type() if hasattr(node, 'internal_type') else None
+        for child_cls in allowed_children:
+            try:
+                if issubclass(node_cls, child_cls):
+                    return True
+            except TypeError:
+                pass
+            if node_type and hasattr(child_cls, 'internal_type') and node_type == child_cls.internal_type():
+                return True
+        return False
+
+    def _parent_accepts_nodes(self, parent_index, indexes):
+        model = self.model()
+        parent_node = model.nodeFromIndex(parent_index)
+        if parent_node in (None, model._root):
+            return True
+        allowed_children = list(parent_node.container_types())
+        nodes = [idx.internalPointer() for idx in indexes]
+        if not allowed_children:
+            return all(node.parent() is parent_node for node in nodes)
+        for node in nodes:
+            if not self._node_allowed_in_parent(node, allowed_children):
+                return False
+        return True
+
+    def _select_persistent_indexes(self, persistent_indexes):
+        selection_model = self.selectionModel()
+        if not selection_model:
+            return
+        selection_model.clearSelection()
+        last_index = None
+        for persistent in persistent_indexes:
+            if not persistent.isValid():
+                continue
+            index = QModelIndex(persistent)
+            selection_model.select(index, QtCore.QItemSelectionModel.Select | QtCore.QItemSelectionModel.Rows)
+            last_index = index
+        if last_index:
+            self.setCurrentIndex(last_index)
+
+    def dropEvent(self, event):
+        model = self.model()
+        if model is None or event.source() is not self:
+            event.ignore()
+            return
+
+        selection_model = self.selectionModel()
+        if not selection_model:
+            event.ignore()
+            return
+
+        selected_indexes = selection_model.selectedRows(0)
+        movable_indexes = self._filter_movable_indexes(selected_indexes)
+        if not movable_indexes:
+            event.ignore()
+            return
+
+        drop_position = self.dropIndicatorPosition()
+        target_index = self.indexAt(event.pos())
+        parent_index, insert_row = self._drop_target_info(target_index, drop_position)
+        if parent_index is None:
+            event.ignore()
+            return
+
+        if self._would_create_cycle(movable_indexes, parent_index):
+            basic_funcs.info('Перемещение', 'Нельзя переместить элемент в собственный дочерний элемент.')
+            event.ignore()
+            return
+
+        if not self._parent_accepts_nodes(parent_index, movable_indexes):
+            basic_funcs.info('Перемещение', 'Выбранный родитель не поддерживает типы перемещаемых элементов.')
+            event.ignore()
+            return
+
+        new_indexes = model.move_indexes(movable_indexes, parent_index, max(insert_row, 0))
+        if not new_indexes:
+            event.ignore()
+            return
+
+        event.setDropAction(Qt.MoveAction)
+        event.accept()
+
+        self._select_persistent_indexes(new_indexes)
+        if parent_index.isValid() and drop_position == QAbstractItemView.OnItem:
+            self.expand(parent_index)
+        self._auto_save_tree()
 
     def apply_search(self, text):
         model = self.model()
@@ -578,7 +748,10 @@ class TreeView(QTreeView):
             if row > 0 and index.parent().isValid():
                 destination_index = self.model().index(row - 1, index.column(), index.parent())
                 hidden_state = self.model().data(destination_index, Qt.UserRole)
-                self.model().moveItem(index, destination_index)
+                new_index = self.model().moveItem(index, destination_index)
+                if new_index:
+                    self.setItemVisibility(self.model(), new_index, hidden_state)
+                    self._auto_save_tree()
 
         elif side == 'down':
             row = index.row()
@@ -586,9 +759,10 @@ class TreeView(QTreeView):
             if row < self.model().rowCount(parent_index) - 1 and parent_index.isValid():
                 destination_index = self.model().index(row + 1, index.column(), parent_index)
                 hidden_state = self.model().data(destination_index, Qt.UserRole)
-                self.model().moveItem(index, destination_index)
-        if destination_index:
-            self.setItemVisibility(self.model(), index, hidden_state)
+                new_index = self.model().moveItem(index, destination_index)
+                if new_index:
+                    self.setItemVisibility(self.model(), new_index, hidden_state)
+                    self._auto_save_tree()
 
     def customize_node(self, index):
         item = index.internalPointer()
@@ -1125,8 +1299,19 @@ class DockWidget(QDockWidget):
             self.widget().refresh()
 
     def hide_(self):
+        try:
+            self.save_state()
+        except Exception:
+            logger.exception('Не удалось сохранить состояние дерева перед закрытием док-панели.')
         getattr(self._parent, self.menu_name).setChecked(False)
         self.hide()
+
+    def closeEvent(self, event):
+        try:
+            self.save_state()
+        except Exception:
+            logger.exception('Не удалось сохранить состояние дерева при закрытии док-панели.')
+        super().closeEvent(event)
 
     def dock_(self):
         self.setFloating(False)

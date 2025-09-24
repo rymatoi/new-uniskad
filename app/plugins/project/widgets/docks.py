@@ -13,5 +13,12 @@ class ProjectDockWidget(DockWidget):
 
     def save_state(self):
         tree = self.widget()
-        update_data = self.update_npps(tree.model()._root)
+        if not tree or not hasattr(tree, 'model'):
+            return
+        model = tree.model()
+        if model is None:
+            return
+        update_data = self.update_npps(model._root)
+        if not update_data:
+            return
         sp.new_update_project_from_record_array(update_data)
