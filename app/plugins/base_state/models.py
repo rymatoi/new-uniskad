@@ -1,10 +1,30 @@
 from copy import copy
-from typing import List
+from typing import Callable, Dict, Iterable, List, Optional, Sequence, Set, Tuple
+
 import PySide2
 from PySide2.QtCore import QAbstractItemModel, QPointF, Signal
 from PySide2.QtGui import QIcon, QFont, QColor, QPainter, QPen, QPixmap
 
 from PySide2.QtCore import Qt, QModelIndex
+
+from db import sp
+from db.tables import PRODUCT, PROJECT_TABLE
+
+
+def _save_product_records(records: Sequence[Tuple]):
+    for record in records:
+        sp.new_update_product_from_record(record)
+
+
+def _save_project_records(records: Sequence[Tuple]):
+    if records:
+        sp.new_update_project_from_record_array(records)
+
+
+SCHEME_SAVE_HANDLERS: Dict[Tuple[str, ...], Callable[[Sequence[Tuple]], None]] = {
+    PRODUCT: _save_product_records,
+    PROJECT_TABLE: _save_project_records,
+}
 
 replace_dict = {
     'True': True,
@@ -543,6 +563,154 @@ class TreeModel(QAbstractItemModel):
         self.layoutAboutToBeChanged.emit()
         self.layoutChanged.emit()
 
+    # --- Drag and drop helpers -------------------------------------------------
+
+    def _node_path(self, node: Node) -> Tuple[int, ...]:
+        path: List[int] = []
+        current = node
+        while current and current is not self._root:
+            path.append(current.row())
+            current = current.parent()
+        return tuple(reversed(path))
+
+    def _prepare_nodes(self, indexes: Sequence[QModelIndex]) -> List[Node]:
+        unique: Dict[int, Node] = {}
+        for index in indexes:
+            if not index.isValid() or index.column() != 0:
+                continue
+            node = index.internalPointer()
+            unique.setdefault(id(node), node)
+        nodes = list(unique.values())
+        return self._filter_top_nodes(nodes)
+
+    def _filter_top_nodes(self, nodes: Sequence[Node]) -> List[Node]:
+        top_level: List[Node] = []
+        for node in nodes:
+            if not any(self._is_descendant(other, node) for other in nodes if other is not node):
+                top_level.append(node)
+        return top_level
+
+    def _is_descendant(self, ancestor: Node, candidate: Node) -> bool:
+        current = candidate
+        while current and current is not self._root:
+            if current is ancestor:
+                return True
+            current = current.parent()
+        return False
+
+    def _set_parent_id(self, node: Node, parent: Node) -> None:
+        if not getattr(node, '_data', None):
+            return
+        parent_id = self.root_id if parent is self._root else getattr(parent._data, 'id', self.root_id)
+        node._data.set_val('id_up', parent_id)
+
+    def _validate_move(self, nodes: Sequence[Node], target_parent: Node) -> bool:
+        if not nodes:
+            return False
+        parent_node = target_parent or self._root
+
+        for node in nodes:
+            if parent_node is node or self._is_descendant(node, parent_node):
+                return False
+
+        allowed_types = tuple(parent_node.container_types()) if hasattr(parent_node, 'container_types') else tuple()
+        same_parent = all(node.parent() is parent_node for node in nodes)
+
+        if not allowed_types and not same_parent and parent_node is not self._root:
+            return False
+
+        if allowed_types:
+            for node in nodes:
+                if node.parent() is parent_node:
+                    continue
+                if not isinstance(node, allowed_types):
+                    return False
+
+        return True
+
+    def _persist_structure_changes(self, parents: Iterable[Node]) -> None:
+        processed: Set[int] = set()
+        for parent in parents:
+            if parent is None or id(parent) in processed:
+                continue
+            processed.add(id(parent))
+
+            updates: Dict[Tuple[str, ...], List[Tuple]] = {}
+            for position, child in enumerate(parent.children):
+                if hasattr(child._data, 'npp'):
+                    child._data.npp = position
+                scheme = getattr(child, 'scheme', None)
+                if scheme and scheme in SCHEME_SAVE_HANDLERS:
+                    updates.setdefault(scheme, []).append(child._data.table_fit(scheme))
+
+            for scheme, records in updates.items():
+                if records:
+                    saver = SCHEME_SAVE_HANDLERS.get(scheme)
+                    if saver:
+                        saver(records)
+
+    def can_drop_indexes(self, indexes: Sequence[QModelIndex], parent_index: QModelIndex, row: int) -> bool:
+        nodes = self._prepare_nodes(indexes)
+        target_parent = self.nodeFromIndex(parent_index)
+        return self._validate_move(nodes, target_parent)
+
+    def move_indexes(self, indexes: Sequence[QModelIndex], parent_index: QModelIndex, row: Optional[int]) -> Tuple[bool, List[QModelIndex]]:
+        nodes = self._prepare_nodes(indexes)
+        target_parent = self.nodeFromIndex(parent_index)
+
+        if not self._validate_move(nodes, target_parent):
+            return False, []
+
+        move_data = []
+        for node in nodes:
+            move_data.append({
+                'node': node,
+                'old_parent': node.parent(),
+                'old_row': node.row(),
+                'sort_key': self._node_path(node),
+            })
+
+        move_data.sort(key=lambda item: item['sort_key'])
+
+        insert_row = row if row is not None else target_parent.childCount()
+        insert_row = max(0, insert_row)
+
+        # Adjust insertion point for moves within the same parent
+        adjusted_row = insert_row
+        for item in move_data:
+            if item['old_parent'] is target_parent and item['old_row'] < insert_row:
+                adjusted_row -= 1
+
+        self.layoutAboutToBeChanged.emit()
+
+        # Remove nodes from their old parents
+        removal_map: Dict[Node, List[Dict[str, object]]] = {}
+        for item in move_data:
+            parent = item['old_parent']
+            removal_map.setdefault(parent, []).append(item)
+
+        for parent, children in removal_map.items():
+            for item in sorted(children, key=lambda data: data['old_row'], reverse=True):
+                parent.removeChild(item['old_row'])
+
+        current_row = min(adjusted_row, target_parent.childCount())
+        for item in move_data:
+            target_parent.insertChildren(current_row, [item['node']])
+            current_row += 1
+
+        self.layoutChanged.emit()
+
+        # Update parent ids and persist structure
+        for item in move_data:
+            self._set_parent_id(item['node'], target_parent)
+
+        affected_parents = {item['old_parent'] for item in move_data if item['old_parent']}
+        affected_parents.add(target_parent)
+        self._persist_structure_changes(affected_parents)
+
+        new_indexes = [self.createIndex(item['node'].row(), 0, item['node']) for item in move_data]
+        return True, new_indexes
+
     def setData(self, index: "QModelIndex", value: "Any", role: int = ...) -> bool:
         """Изменяет данные на интерфейсе"""
         if index.column() == 0 and role == Qt.CheckStateRole:
@@ -592,7 +760,7 @@ class TreeModel(QAbstractItemModel):
         if index.isValid():
             return Qt.ItemIsDragEnabled | Qt.ItemIsDropEnabled | Qt.ItemIsSelectable | Qt.ItemIsEnabled | defaultFlags
         else:
-            Qt.ItemIsDropEnabled | defaultFlags
+            return Qt.ItemIsDropEnabled | defaultFlags
 
     def removeRows(self, row: int, count: int, parent: PySide2.QtCore.QModelIndex = ...) -> bool:
         parent_ = self.nodeFromIndex(parent)
