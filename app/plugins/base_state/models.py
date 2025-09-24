@@ -13,6 +13,9 @@ replace_dict = {
 }
 
 
+ANY_CHILD_TYPE = 'any'
+
+
 class Node(object):
     """Базовая модель узла"""
 
@@ -267,7 +270,15 @@ class TreeModel(QAbstractItemModel):
             for action in v.internal_actions():
                 self.action_types[v].add(f'_{action}')
                 for child_node in v.container_types():
-                    self.action_types[v].add(f'_{action}_{child_node.internal_type()}')
+                    if child_node == ANY_CHILD_TYPE:
+                        continue
+                    if hasattr(child_node, 'internal_type') and callable(child_node.internal_type):
+                        child_type = child_node.internal_type()
+                    else:
+                        child_type = child_node
+                    if child_type == ANY_CHILD_TYPE or not child_type:
+                        continue
+                    self.action_types[v].add(f'_{action}_{child_type}')
             for action in v.self_internal_actions():
                 self.self_action_types[v].add(f'_{action}')
                 self.self_action_types[v].add(f'_{action}_{v.internal_type()}')

@@ -15,7 +15,7 @@ from app import app_logger, _menu, basic_funcs
 from app._eval_expr import eval_expr
 from app.basic_funcs import timing_decorator
 from app.formula import FormulaDelegate
-from app.plugins.base_state.models import Node
+from app.plugins.base_state.models import Node, ANY_CHILD_TYPE
 from db import sp, session
 
 logger = app_logger.get_logger(__name__)
@@ -248,12 +248,21 @@ class TreeView(QTreeView):
         node_cls = node.__class__
         node_type = node.internal_type() if hasattr(node, 'internal_type') else None
         for child_cls in allowed_children:
+            if child_cls == ANY_CHILD_TYPE:
+                return True
+            child_type = None
+            if hasattr(child_cls, 'internal_type') and callable(child_cls.internal_type):
+                child_type = child_cls.internal_type()
+            elif child_cls is not None and not isinstance(child_cls, type):
+                child_type = child_cls
+            if child_type == ANY_CHILD_TYPE:
+                return True
             try:
-                if issubclass(node_cls, child_cls):
+                if isinstance(child_cls, type) and issubclass(node_cls, child_cls):
                     return True
             except TypeError:
                 pass
-            if node_type and hasattr(child_cls, 'internal_type') and node_type == child_cls.internal_type():
+            if node_type and child_type and node_type == child_type:
                 return True
         return False
 
@@ -263,6 +272,11 @@ class TreeView(QTreeView):
         if parent_node in (None, model._root):
             return True
         allowed_children = list(parent_node.container_types())
+        folder_cls = None
+        if hasattr(model, 'item_types'):
+            folder_cls = model.item_types.get('folder')
+        if folder_cls and folder_cls not in allowed_children:
+            allowed_children.append(folder_cls)
         nodes = [idx.internalPointer() for idx in indexes]
         if not allowed_children:
             return all(node.parent() is parent_node for node in nodes)
@@ -736,8 +750,11 @@ class TreeView(QTreeView):
         self._connect_func('_move_bottom', self.move_node, 'bottom', index)
 
         for child in item.container_types():
-            type_ = child.internal_type()
-            self._connect_func(f'_add_{type_}', self.add_item, type_, index)
+            type_getter = getattr(child, 'internal_type', None)
+            child_type = type_getter() if callable(type_getter) else child
+            if child_type == ANY_CHILD_TYPE:
+                continue
+            self._connect_func(f'_add_{child_type}', self.add_item, child_type, index)
 
     def move_node(self, side, index):
         item = index.internalPointer()
