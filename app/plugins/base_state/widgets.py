@@ -68,6 +68,7 @@ class TreeView(QTreeView):
         super().__init__(parent)
         self.main_window = main_window
         self.dock_widget = None
+        self._pending_save = False
 
         self.setSelectionMode(QTreeView.ExtendedSelection)  # Позволяет выделять несколько элементов
         self.setSelectionBehavior(QTreeView.SelectItems)  # Выделение элементов, а не строк
@@ -109,13 +110,14 @@ class TreeView(QTreeView):
         icon_size = QSize(16, 16)
         self.setIconSize(icon_size)
 
-    def _auto_save_tree(self):
-        if not self.dock_widget:
-            return
-        try:
-            self.dock_widget.save_state()
-        except Exception:
-            logger.exception('Не удалось автоматически сохранить состояние дерева.')
+    def mark_pending_save(self):
+        self._pending_save = True
+
+    def clear_pending_save(self):
+        self._pending_save = False
+
+    def has_pending_save(self):
+        return self._pending_save
 
     def init_dock_widget(self, dock_widget):
         self.dock_widget = dock_widget
@@ -127,6 +129,7 @@ class TreeView(QTreeView):
 
     def setModel(self, model: QtCore.QAbstractItemModel) -> None:
         super(TreeView, self).setModel(model)
+        self.clear_pending_save()
         model.set_view(self)
         self.model().font_name = 'Times New Roman'
         self.model().font_size = 14
@@ -328,7 +331,7 @@ class TreeView(QTreeView):
         self._select_persistent_indexes(new_indexes)
         if parent_index.isValid() and drop_position == QAbstractItemView.OnItem:
             self.expand(parent_index)
-        self._auto_save_tree()
+        self.mark_pending_save()
 
     def apply_search(self, text):
         model = self.model()
@@ -751,7 +754,7 @@ class TreeView(QTreeView):
                 new_index = self.model().moveItem(index, destination_index)
                 if new_index:
                     self.setItemVisibility(self.model(), new_index, hidden_state)
-                    self._auto_save_tree()
+                    self.mark_pending_save()
 
         elif side == 'down':
             row = index.row()
@@ -762,7 +765,7 @@ class TreeView(QTreeView):
                 new_index = self.model().moveItem(index, destination_index)
                 if new_index:
                     self.setItemVisibility(self.model(), new_index, hidden_state)
-                    self._auto_save_tree()
+                    self.mark_pending_save()
 
     def customize_node(self, index):
         item = index.internalPointer()
@@ -1231,9 +1234,11 @@ class DockWidget(QDockWidget):
                         break
 
         if next_non_deleted_item and next_non_deleted_item.isValid():
-            tree.model().moveItem(index, next_non_deleted_item)
-            if tree.HIDE_REMOVED_ITEMS:
+            new_index = tree.model().moveItem(index, next_non_deleted_item)
+            if new_index and tree.HIDE_REMOVED_ITEMS:
                 self.hide_hidden_children(tree, tree.model(), index.parent())
+            if new_index and hasattr(tree, 'mark_pending_save'):
+                tree.mark_pending_save()
 
     def move_down(self):
         tree = self.widget()
@@ -1253,9 +1258,11 @@ class DockWidget(QDockWidget):
                         break
 
         if next_non_deleted_item:
-            tree.model().moveItem(index, next_non_deleted_item)
-            if tree.HIDE_REMOVED_ITEMS:
+            new_index = tree.model().moveItem(index, next_non_deleted_item)
+            if new_index and tree.HIDE_REMOVED_ITEMS:
                 self.hide_hidden_children(tree, tree.model(), index.parent())
+            if new_index and hasattr(tree, 'mark_pending_save'):
+                tree.mark_pending_save()
 
     def hide_hidden_children(self, tree, model, parent):
         if not parent.isValid():
