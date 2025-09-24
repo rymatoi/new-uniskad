@@ -315,9 +315,11 @@ class WDAssemblyNode(AssemblyNode, ProjectRoot):
                 return self
 
             root = parent.parent()
-            graph_folder = [folder for folder in root.children if folder.internal_type() == 'graph_folder']
-            if len(graph_folder) == 1:
-                return tuple([child for child in graph_folder[0].children if child._data.deleted is False] + [self])
+            graph_nodes = []
+            for folder in utils.collect_nodes_by_internal_type(root, {'graph_folder'}):
+                graph_nodes.extend(utils.collect_active_descendants(folder))
+            if graph_nodes:
+                return tuple(graph_nodes + [self])
             return self
 
     @staticmethod
@@ -374,9 +376,11 @@ class WDModelNode(ModelNode, ProjectRoot):
                 return self
 
             root = parent.parent()
-            graph_folder = [folder for folder in root.children if folder.internal_type() == 'graph_folder']
-            if len(graph_folder) == 1:
-                return tuple([child for child in graph_folder[0].children if child._data.deleted is False] + [self])
+            graph_nodes = []
+            for folder in utils.collect_nodes_by_internal_type(root, {'graph_folder'}):
+                graph_nodes.extend(utils.collect_active_descendants(folder))
+            if graph_nodes:
+                return tuple(graph_nodes + [self])
             return self
 
     @staticmethod
@@ -426,9 +430,11 @@ class WDProductNode(ProductNode, ProjectRoot):
                 return self
 
             root = parent.parent()
-            graph_folder = [folder for folder in root.children if folder.internal_type() == 'graph_folder']
-            if len(graph_folder) == 1:
-                return tuple([child for child in graph_folder[0].children if child._data.deleted is False] + [self])
+            graph_nodes = []
+            for folder in utils.collect_nodes_by_internal_type(root, {'graph_folder'}):
+                graph_nodes.extend(utils.collect_active_descendants(folder))
+            if graph_nodes:
+                return tuple(graph_nodes + [self])
             return self
 
     @staticmethod
@@ -479,11 +485,12 @@ class TestNode(ProjectRoot):
                 return self
 
             root = parent.parent()
-            graph_folder = [folder for folder in root.children if folder.internal_type() == 'graph_folder']
-            epure_folder = [folder for folder in root.children if folder.internal_type() == 'epure_folder']
-            if len(graph_folder) == 1 and len(epure_folder) == 1:
-                return tuple([child for child in graph_folder[0].children + epure_folder[0].children if
-                              child._data.deleted is False] + [self])
+            related_nodes = []
+            for folder_type in ('graph_folder', 'epure_folder'):
+                for folder in utils.collect_nodes_by_internal_type(root, {folder_type}):
+                    related_nodes.extend(utils.collect_active_descendants(folder))
+            if related_nodes:
+                return tuple(related_nodes + [self])
             return self
 
     @staticmethod
@@ -881,9 +888,13 @@ class ProjectTreeModel(TreeModel):
 
     def update_external_graphs(self):
         root = self._root
-        graph_folder = [folder for folder in root.children if folder.internal_type() == 'graph_folder']
-        epure_folder = [folder for folder in root.children if folder.internal_type() == 'epure_folder']
-        if len(graph_folder) == 1 and len(epure_folder) == 1:
-            self.view.update_external_nodes(
-                tuple([child for child in graph_folder[0].children + epure_folder[0].children if
-                       child._data.deleted is False]))
+        if not getattr(self, 'view', None):
+            return
+
+        related_nodes = []
+        for folder_type in ('graph_folder', 'epure_folder'):
+            for folder in utils.collect_nodes_by_internal_type(root, {folder_type}):
+                related_nodes.extend(utils.collect_active_descendants(folder))
+
+        if related_nodes:
+            self.view.update_external_nodes(tuple(related_nodes))

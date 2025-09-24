@@ -117,24 +117,7 @@ class CreateEpureDialog(BaseDialog):
                 self.ui.paramValuesLineEdit.setText(str(self.extra_param_values))
 
     def collect_tests(self):
-        test_folder = [child for child in self.project_item.children if child.internal_type() == 'product_folder'][0]
-        return self._inspect_children(test_folder, False)
-
-    def _inspect_children(self, root, root_deleted):
-        test_nodes = []
-        for child in root.children:
-            if child.internal_type() == 'test':
-                if hasattr(child._data, 'deleted') and (
-                        child._data.deleted == 'False' or child._data.deleted is False) and root_deleted is False:
-                    test_nodes.append(child)
-            else:
-                if root_deleted:
-                    test_nodes += self._inspect_children(child, True)
-                elif child._data.deleted is True:
-                    test_nodes += self._inspect_children(child, True)
-                else:
-                    test_nodes += self._inspect_children(child, False)
-        return test_nodes
+        return utils.collect_nodes_by_internal_type(self.project_item, {'test'})
 
     def setup_oy(self):
         dialog = OYSetupDialog(self.selected_params)
