@@ -9,8 +9,8 @@ from app.plugins.base_state.widgets import ExtendedComboBox
 from app.plugins.project import utils
 from app.plugins.project.dialogs.OY_setup import OYSetupDialog
 from app.plugins.project.dialogs.extra_param_epure import ExtraParamEpureDialog
-from app.plugins.project.dialogs.select_project_test import ProjectTestSelectionDialog
 from app.plugins.project.dialogs.select_test_data import TestDataSelectionDialog
+from app.plugins.project.utils.tree import find_nodes_by_type, get_tree_root
 from app.plugins.project.utils_ import collect_project_params
 from db import sp
 from db.tables import PROJECT_TABLE
@@ -117,24 +117,10 @@ class CreateEpureDialog(BaseDialog):
                 self.ui.paramValuesLineEdit.setText(str(self.extra_param_values))
 
     def collect_tests(self):
-        test_folder = [child for child in self.project_item.children if child.internal_type() == 'product_folder'][0]
-        return self._inspect_children(test_folder, False)
-
-    def _inspect_children(self, root, root_deleted):
-        test_nodes = []
-        for child in root.children:
-            if child.internal_type() == 'test':
-                if hasattr(child._data, 'deleted') and (
-                        child._data.deleted == 'False' or child._data.deleted is False) and root_deleted is False:
-                    test_nodes.append(child)
-            else:
-                if root_deleted:
-                    test_nodes += self._inspect_children(child, True)
-                elif child._data.deleted is True:
-                    test_nodes += self._inspect_children(child, True)
-                else:
-                    test_nodes += self._inspect_children(child, False)
-        return test_nodes
+        project_root = get_tree_root(self.project_item)
+        if project_root is None:
+            return []
+        return find_nodes_by_type(project_root, 'test', skip_root=True)
 
     def setup_oy(self):
         dialog = OYSetupDialog(self.selected_params)

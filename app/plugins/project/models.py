@@ -7,6 +7,7 @@ from PySide2.QtGui import QIcon, Qt
 from app import basic_funcs
 from app.plugins.base_state.models import TreeModel, Node, ANY_CHILD_TYPE
 from app.plugins.project import utils
+from app.plugins.project.utils.tree import find_nodes_by_type, get_tree_root
 from app.plugins.project.dialogs.create_epure import CreateEpureDialog
 from app.plugins.project.dialogs.create_graph import CreateGraphDialog
 from app.plugins.project.dialogs.edit_epure import EditEpureDialog
@@ -307,17 +308,13 @@ class WDAssemblyNode(AssemblyNode, ProjectRoot):
     def customize(self, ):
         dialog = EditProjectItemDialog(self)
         if dialog.exec_():
-            parent = self.parent()
-            while parent.internal_type() != 'product_folder':
-                parent = parent.parent()
-
-            if parent is None:
+            project_root = get_tree_root(self)
+            if project_root is None:
                 return self
 
-            root = parent.parent()
-            graph_folder = [folder for folder in root.children if folder.internal_type() == 'graph_folder']
-            if len(graph_folder) == 1:
-                return tuple([child for child in graph_folder[0].children if child._data.deleted is False] + [self])
+            graph_nodes = find_nodes_by_type(project_root, 'graph', skip_root=True)
+            if graph_nodes:
+                return tuple(graph_nodes + [self])
             return self
 
     @staticmethod
@@ -366,17 +363,13 @@ class WDModelNode(ModelNode, ProjectRoot):
     def customize(self, ):
         dialog = EditProjectItemDialog(self)
         if dialog.exec_():
-            parent = self.parent()
-            while parent.internal_type() != 'product_folder':
-                parent = parent.parent()
-
-            if parent is None:
+            project_root = get_tree_root(self)
+            if project_root is None:
                 return self
 
-            root = parent.parent()
-            graph_folder = [folder for folder in root.children if folder.internal_type() == 'graph_folder']
-            if len(graph_folder) == 1:
-                return tuple([child for child in graph_folder[0].children if child._data.deleted is False] + [self])
+            graph_nodes = find_nodes_by_type(project_root, 'graph', skip_root=True)
+            if graph_nodes:
+                return tuple(graph_nodes + [self])
             return self
 
     @staticmethod
@@ -418,17 +411,13 @@ class WDProductNode(ProductNode, ProjectRoot):
     def customize(self, ):
         dialog = EditProjectItemDialog(self)
         if dialog.exec_():
-            parent = self.parent()
-            while parent.internal_type() != 'product_folder':
-                parent = parent.parent()
-
-            if parent is None:
+            project_root = get_tree_root(self)
+            if project_root is None:
                 return self
 
-            root = parent.parent()
-            graph_folder = [folder for folder in root.children if folder.internal_type() == 'graph_folder']
-            if len(graph_folder) == 1:
-                return tuple([child for child in graph_folder[0].children if child._data.deleted is False] + [self])
+            graph_nodes = find_nodes_by_type(project_root, 'graph', skip_root=True)
+            if graph_nodes:
+                return tuple(graph_nodes + [self])
             return self
 
     @staticmethod
@@ -471,19 +460,13 @@ class TestNode(ProjectRoot):
     def customize(self, ):
         dialog = EditProjectItemDialog(self)
         if dialog.exec_():
-            parent = self.parent()
-            while parent.internal_type() != 'product_folder':
-                parent = parent.parent()
-
-            if parent is None:
+            project_root = get_tree_root(self)
+            if project_root is None:
                 return self
 
-            root = parent.parent()
-            graph_folder = [folder for folder in root.children if folder.internal_type() == 'graph_folder']
-            epure_folder = [folder for folder in root.children if folder.internal_type() == 'epure_folder']
-            if len(graph_folder) == 1 and len(epure_folder) == 1:
-                return tuple([child for child in graph_folder[0].children + epure_folder[0].children if
-                              child._data.deleted is False] + [self])
+            dependent_nodes = find_nodes_by_type(project_root, ['graph', 'epure'], skip_root=True)
+            if dependent_nodes:
+                return tuple(dependent_nodes + [self])
             return self
 
     @staticmethod
@@ -881,9 +864,9 @@ class ProjectTreeModel(TreeModel):
 
     def update_external_graphs(self):
         root = self._root
-        graph_folder = [folder for folder in root.children if folder.internal_type() == 'graph_folder']
-        epure_folder = [folder for folder in root.children if folder.internal_type() == 'epure_folder']
-        if len(graph_folder) == 1 and len(epure_folder) == 1:
-            self.view.update_external_nodes(
-                tuple([child for child in graph_folder[0].children + epure_folder[0].children if
-                       child._data.deleted is False]))
+        if root is None:
+            return
+
+        dependent_nodes = find_nodes_by_type(root, ['graph', 'epure'], skip_root=True)
+        if dependent_nodes:
+            self.view.update_external_nodes(tuple(dependent_nodes))

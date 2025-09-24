@@ -17,6 +17,7 @@ from app import _menu, app_logger, basic_funcs
 from app.basic_funcs import to_float, to_bool, float_to_excel, excel_to_float, timing_decorator
 from app.history_manager.events import LegendPositionChangeEvent
 from app.plugins.project import utils, utils_
+from app.plugins.project.utils.tree import find_first_ancestor_by_type, find_nodes_by_type, get_tree_root
 from app.plugins.project.dialogs.create_approx import ApproxDialog
 from app.plugins.project.dialogs.create_interpolation import InterpDialog
 from app.plugins.project.dialogs.edit_line import EditLineDialog
@@ -830,33 +831,13 @@ class PlotView(pg.PlotWidget):
                 curve.init_style()
 
     def collect_tests(self):
-        test_folder = \
-            [child for child in self.item.parent().parent().children if child.internal_type() == 'product_folder'][0]
-        return self._inspect_children(test_folder, False)
-
-    def _inspect_children(self, root, root_deleted):
-        test_nodes = []
-        for child in root.children:
-            if child.internal_type() == 'test':
-                if hasattr(child._data, 'deleted') and (
-                        child._data.deleted == 'False' or child._data.deleted is False) and root_deleted is False:
-                    test_nodes.append(child)
-            else:
-                if root_deleted:
-                    test_nodes += self._inspect_children(child, True)
-                elif child._data.deleted is True:
-                    test_nodes += self._inspect_children(child, True)
-                else:
-                    test_nodes += self._inspect_children(child, False)
-        return test_nodes
+        project_root = get_tree_root(self.item)
+        if project_root is None:
+            return []
+        return find_nodes_by_type(project_root, 'test', skip_root=True)
 
     def _find_parent_item(self, test, type_):
-        parent = test.parent()
-        while parent.internal_type() != 'product_folder':
-            if parent.internal_type() == type_:
-                return parent
-            parent = parent.parent()
-        return None
+        return find_first_ancestor_by_type(test, type_)
 
     def _setup_constraint_data(self, constraints_data):
         class ParamConstraint:

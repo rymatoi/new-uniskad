@@ -1,16 +1,20 @@
 from functools import lru_cache
 
+from app.plugins.project.utils.tree import find_nodes_by_type, get_tree_root, is_node_deleted
+
 
 class TestProcessor:
     @staticmethod
     @lru_cache(maxsize=None)
     def collect_tests(item):
-        parent = item.parent().parent()
-        test_folder = next(
-            child for child in parent.children
-            if child.internal_type() == 'product_folder'
-        )
-        return TestProcessor._inspect_children(test_folder)
+        project_root = get_tree_root(item)
+        if project_root is None:
+            return {}
+        tests = {}
+        for test_node in find_nodes_by_type(project_root, 'test', skip_root=True):
+            if TestProcessor._is_item_active(test_node) and TestProcessor._is_item_displayable(test_node):
+                tests[test_node._data.project_id] = test_node
+        return tests
 
     @staticmethod
     def get_item_style(item):  # TODO надо будет учитывать настройки отображений по условиям
@@ -25,24 +29,8 @@ class TestProcessor:
         }
 
     @staticmethod
-    def _inspect_children(root, parent_deleted=False):
-        test_dict = {}
-        for child in root.children:
-            if child.internal_type() == 'test':
-                if not parent_deleted and TestProcessor._is_item_active(
-                        child) and TestProcessor._is_item_displayable(child):
-                    test_dict[child._data.project_id] = child
-            else:
-                child_deleted = parent_deleted or TestProcessor._is_item_deleted(child)
-                test_dict.update(TestProcessor._inspect_children(child, child_deleted))
-        return test_dict
-
-    @staticmethod
     def _is_item_deleted(item):
-        deleted = getattr(item._data, 'deleted', False)
-        if isinstance(deleted, str):
-            return deleted.lower() == 'true'
-        return bool(deleted)
+        return is_node_deleted(item)
 
     @staticmethod
     def _is_item_active(item):
