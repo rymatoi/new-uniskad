@@ -10,10 +10,21 @@ class TestProcessor:
             root = root.parent()
         if not root:
             return {}
-        test_folder = root.find_child_by_internal_type('product_folder')
-        if not test_folder:
-            return {}
-        return TestProcessor._inspect_children(test_folder)
+        test_roots = []
+        if getattr(root, 'internal_type', lambda: None)() == 'product_folder':
+            test_roots.append((root, TestProcessor._is_item_deleted(root)))
+
+        if hasattr(root, 'find_descendants_by_internal_type'):
+            for folder in root.find_descendants_by_internal_type('product_folder'):
+                test_roots.append((folder, TestProcessor._is_item_deleted(folder)))
+
+        if not test_roots:
+            test_roots.append((root, TestProcessor._is_item_deleted(root)))
+
+        collected = {}
+        for folder, folder_deleted in test_roots:
+            collected.update(TestProcessor._inspect_children(folder, folder_deleted))
+        return collected
 
     @staticmethod
     def get_item_style(item):  # TODO надо будет учитывать настройки отображений по условиям

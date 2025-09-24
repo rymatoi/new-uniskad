@@ -1,6 +1,6 @@
 from collections import defaultdict
 from copy import copy
-from typing import List, Optional
+from typing import Iterable, List, Optional
 import PySide2
 from PySide2.QtCore import QAbstractItemModel, QPointF, Signal, QPersistentModelIndex
 from PySide2.QtGui import QIcon, QFont, QColor, QPainter, QPen, QPixmap
@@ -81,6 +81,24 @@ class Node(object):
                 pass
             parent = parent.parent()
         return None
+
+    def iter_descendants(self) -> Iterable["Node"]:
+        """Итератор по всем дочерним элементам узла (включая вложенные)."""
+        for child in self.children:
+            yield child
+            if hasattr(child, "iter_descendants"):
+                yield from child.iter_descendants()
+
+    def find_descendants_by_internal_type(self, internal_type: str) -> List["Node"]:
+        """Возвращает список всех дочерних элементов указанного типа."""
+        matches = []
+        for descendant in self.iter_descendants():
+            try:
+                if descendant.internal_type() == internal_type:
+                    matches.append(descendant)
+            except AttributeError:
+                continue
+        return matches
 
     @staticmethod
     def is_folder():

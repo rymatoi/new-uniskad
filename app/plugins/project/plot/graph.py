@@ -835,10 +835,34 @@ class PlotView(pg.PlotWidget):
             root = root.parent()
         if not root:
             return []
-        test_folder = root.find_child_by_internal_type('product_folder')
-        if not test_folder:
-            return []
-        return self._inspect_children(test_folder, False)
+        def is_deleted(node):
+            deleted = getattr(getattr(node, '_data', None), 'deleted', False)
+            if isinstance(deleted, str):
+                return deleted.lower() == 'true'
+            return bool(deleted)
+
+        test_roots = []
+        if getattr(root, 'internal_type', lambda: None)() == 'product_folder':
+            test_roots.append((root, is_deleted(root)))
+
+        if hasattr(root, 'find_descendants_by_internal_type'):
+            for folder in root.find_descendants_by_internal_type('product_folder'):
+                test_roots.append((folder, is_deleted(folder)))
+
+        if not test_roots:
+            test_roots.append((root, is_deleted(root)))
+
+        collected = []
+        seen_ids = set()
+        for folder, folder_deleted in test_roots:
+            for test in self._inspect_children(folder, folder_deleted):
+                project_id = getattr(getattr(test, '_data', None), 'project_id', None)
+                if project_id in seen_ids:
+                    continue
+                collected.append(test)
+                if project_id is not None:
+                    seen_ids.add(project_id)
+        return collected
 
     def _inspect_children(self, root, root_deleted):
         test_nodes = []

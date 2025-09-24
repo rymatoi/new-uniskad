@@ -117,10 +117,38 @@ class CreateEpureDialog(BaseDialog):
                 self.ui.paramValuesLineEdit.setText(str(self.extra_param_values))
 
     def collect_tests(self):
-        test_folder = self.project_item.find_child_by_internal_type('product_folder')
-        if not test_folder:
+        def is_deleted(node):
+            deleted = getattr(getattr(node, '_data', None), 'deleted', False)
+            if isinstance(deleted, str):
+                return deleted.lower() == 'true'
+            return bool(deleted)
+
+        project_item = self.project_item
+        if project_item is None:
             return []
-        return self._inspect_children(test_folder, False)
+
+        test_roots = []
+        if getattr(project_item, 'internal_type', lambda: None)() == 'product_folder':
+            test_roots.append((project_item, is_deleted(project_item)))
+
+        if hasattr(project_item, 'find_descendants_by_internal_type'):
+            for folder in project_item.find_descendants_by_internal_type('product_folder'):
+                test_roots.append((folder, is_deleted(folder)))
+
+        if not test_roots:
+            test_roots.append((project_item, is_deleted(project_item)))
+
+        collected = []
+        seen_ids = set()
+        for folder, folder_deleted in test_roots:
+            for test in self._inspect_children(folder, folder_deleted):
+                project_id = getattr(getattr(test, '_data', None), 'project_id', None)
+                if project_id in seen_ids:
+                    continue
+                collected.append(test)
+                if project_id is not None:
+                    seen_ids.add(project_id)
+        return collected
 
     def _inspect_children(self, root, root_deleted):
         test_nodes = []
