@@ -6,128 +6,195 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>613</width>
-    <height>496</height>
+    <width>720</width>
+    <height>560</height>
    </rect>
+  </property>
+  <property name="minimumSize">
+   <size>
+    <width>640</width>
+    <height>500</height>
+   </size>
   </property>
   <property name="windowTitle">
    <string>Создание полей</string>
   </property>
-  <layout class="QGridLayout" name="gridLayout">
-   <item row="0" column="0">
-    <layout class="QVBoxLayout" name="verticalLayout_3">
-     <item>
-      <layout class="QHBoxLayout" name="horizontalLayout_5">
-       <item>
-        <widget class="QLabel" name="label_4">
-         <property name="text">
-          <string>Название:</string>
-         </property>
-        </widget>
-       </item>
-       <item>
-        <widget class="QLineEdit" name="nameLineEdit"/>
-       </item>
-      </layout>
+  <layout class="QVBoxLayout" name="mainLayout">
+   <item>
+    <layout class="QFormLayout" name="headerFormLayout">
+     <property name="fieldGrowthPolicy">
+      <enum>QFormLayout::ExpandingFieldsGrow</enum>
+     </property>
+     <item row="0" column="0">
+      <widget class="QLabel" name="label_4">
+       <property name="text">
+        <string>Название:</string>
+       </property>
+      </widget>
      </item>
-     <item>
-      <layout class="QHBoxLayout" name="horizontalLayout">
-       <item>
-        <layout class="QVBoxLayout" name="verticalLayout">
-         <item>
-          <widget class="QLabel" name="label">
-           <property name="text">
-            <string>Добавить параметр ось X</string>
-           </property>
-          </widget>
-         </item>
-         <item>
-          <widget class="QTreeView" name="paramsTreeView"/>
-         </item>
-        </layout>
-       </item>
-       <item>
-        <layout class="QVBoxLayout" name="verticalLayout_2">
-         <item>
-          <widget class="QPushButton" name="addParamPushButton">
-           <property name="text">
-            <string>Добавить ..</string>
-           </property>
-          </widget>
-         </item>
-         <item>
-          <widget class="QPushButton" name="removeParamPushButton">
-           <property name="text">
-            <string>Удалить</string>
-           </property>
-          </widget>
-         </item>
-         <item>
-          <spacer name="verticalSpacer">
-           <property name="orientation">
-            <enum>Qt::Vertical</enum>
-           </property>
-           <property name="sizeHint" stdset="0">
-            <size>
-             <width>20</width>
-             <height>40</height>
-            </size>
-           </property>
-          </spacer>
-         </item>
-        </layout>
-       </item>
-      </layout>
+     <item row="0" column="1">
+      <widget class="QLineEdit" name="nameLineEdit">
+       <property name="placeholderText">
+        <string>Введите название создаваемого поля</string>
+       </property>
+      </widget>
      </item>
-     <item>
-      <layout class="QVBoxLayout" name="verticalLayout_4">
-       <item>
-        <widget class="QLabel" name="label_2">
-         <property name="text">
-          <string>Добавить дополнительный параметр</string>
-         </property>
-        </widget>
-       </item>
-       <item>
-        <layout class="QHBoxLayout" name="horizontalLayout_3">
-         <item>
-          <widget class="QPushButton" name="selectParam">
-           <property name="text">
-            <string>Выбрать параметр</string>
-           </property>
-          </widget>
-         </item>
-         <item>
-          <widget class="QLineEdit" name="paramValuesLineEdit"/>
-         </item>
-        </layout>
-       </item>
-      </layout>
-     </item>
+    </layout>
+   </item>
+   <item>
+    <widget class="QLabel" name="descriptionLabel">
+     <property name="text">
+      <string>Используйте окно для подготовки новой эпюры: выберите один или несколько параметров оси X, при необходимости укажите дополнительный параметр и настройте отображение оси OY.</string>
+     </property>
+     <property name="wordWrap">
+      <bool>true</bool>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="axisGroupBox">
+     <property name="title">
+      <string>Параметры оси X</string>
+     </property>
+     <layout class="QVBoxLayout" name="axisLayout">
+      <item>
+       <widget class="QLabel" name="axisHintLabel">
+        <property name="text">
+         <string>Выбранные параметры отображаются в списке. Нажмите «Добавить параметр…», чтобы выбрать доступные значения. Для удаления воспользуйтесь кнопкой «Удалить выбранное».</string>
+        </property>
+        <property name="wordWrap">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QTreeView" name="paramsTreeView">
+        <property name="alternatingRowColors">
+         <bool>true</bool>
+        </property>
+        <property name="rootIsDecorated">
+         <bool>false</bool>
+        </property>
+        <property name="headerHidden">
+         <bool>true</bool>
+        </property>
+       <property name="selectionBehavior">
+        <enum>QAbstractItemView::SelectRows</enum>
+       </property>
+        <property name="editTriggers">
+         <set>QAbstractItemView::NoEditTriggers</set>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <layout class="QHBoxLayout" name="axisButtonsLayout">
+        <item>
+         <widget class="QPushButton" name="addParamPushButton">
+          <property name="text">
+           <string>Добавить параметр…</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="removeParamPushButton">
+          <property name="text">
+           <string>Удалить выбранное</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <spacer name="axisButtonsSpacer">
+          <property name="orientation">
+           <enum>Qt::Horizontal</enum>
+          </property>
+          <property name="sizeHint" stdset="0">
+           <size>
+            <width>40</width>
+            <height>20</height>
+           </size>
+          </property>
+         </spacer>
+        </item>
+       </layout>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="extraParamGroupBox">
+     <property name="title">
+      <string>Дополнительный параметр</string>
+     </property>
+     <layout class="QVBoxLayout" name="extraParamLayout">
+      <item>
+       <widget class="QLabel" name="extraParamHintLabel">
+        <property name="text">
+         <string>Необязательный параметр помогает уточнить данные эпюры. После выбора значения будут отображены ниже.</string>
+        </property>
+        <property name="wordWrap">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <layout class="QHBoxLayout" name="extraParamSelectionLayout">
+        <item>
+         <widget class="QPushButton" name="selectParam">
+          <property name="text">
+           <string>Выбрать параметр…</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLineEdit" name="paramValuesLineEdit">
+          <property name="readOnly">
+           <bool>true</bool>
+          </property>
+          <property name="placeholderText">
+           <string>Выбранные значения будут показаны здесь</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="footerLayout">
      <item>
       <widget class="QPushButton" name="oySetupPushButton">
        <property name="text">
-        <string>Настройка оси OY</string>
+        <string>Настроить ось OY…</string>
        </property>
       </widget>
      </item>
      <item>
-      <layout class="QHBoxLayout" name="horizontalLayout_2">
-       <item>
-        <widget class="QPushButton" name="acceptPushButton">
-         <property name="text">
-          <string>Ок</string>
-         </property>
-        </widget>
-       </item>
-       <item>
-        <widget class="QPushButton" name="cancelPushButton">
-         <property name="text">
-          <string>Отмена</string>
-         </property>
-        </widget>
-       </item>
-      </layout>
+      <spacer name="footerSpacer">
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
+       </property>
+       <property name="sizeHint" stdset="0">
+        <size>
+         <width>40</width>
+         <height>20</height>
+        </size>
+       </property>
+      </spacer>
+     </item>
+     <item>
+      <widget class="QPushButton" name="acceptPushButton">
+       <property name="text">
+        <string>Создать</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="cancelPushButton">
+       <property name="text">
+        <string>Отмена</string>
+       </property>
+      </widget>
      </item>
     </layout>
    </item>
