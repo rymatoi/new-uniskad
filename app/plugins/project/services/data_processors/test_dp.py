@@ -5,21 +5,26 @@ class TestProcessor:
     @staticmethod
     @lru_cache(maxsize=None)
     def collect_tests(item):
-        root = item.parent()
-        if root:
-            root = root.parent()
-        if not root:
+        if item is None:
             return {}
-        test_roots = []
-        if getattr(root, 'internal_type', lambda: None)() == 'product_folder':
-            test_roots.append((root, TestProcessor._is_item_deleted(root)))
 
-        if hasattr(root, 'find_descendants_by_internal_type'):
-            for folder in root.find_descendants_by_internal_type('product_folder'):
+        test_roots = []
+        seen_folders = set()
+        if hasattr(item, 'iter_project_product_folders'):
+            for folder in item.iter_project_product_folders():
+                folder_id = getattr(getattr(folder, '_data', None), 'id', None)
+                if folder_id is None:
+                    folder_id = id(folder)
+                if folder_id in seen_folders:
+                    continue
+                seen_folders.add(folder_id)
                 test_roots.append((folder, TestProcessor._is_item_deleted(folder)))
 
         if not test_roots:
-            test_roots.append((root, TestProcessor._is_item_deleted(root)))
+            fallback_root = item.find_ancestor_by_internal_type('root') if hasattr(item, 'find_ancestor_by_internal_type') else None
+            if fallback_root is None:
+                fallback_root = item
+            test_roots.append((fallback_root, TestProcessor._is_item_deleted(fallback_root)))
 
         collected = {}
         for folder, folder_deleted in test_roots:

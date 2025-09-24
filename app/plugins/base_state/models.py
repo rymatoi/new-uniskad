@@ -82,6 +82,18 @@ class Node(object):
             parent = parent.parent()
         return None
 
+    def find_ancestor_by_internal_type(self, internal_type: str) -> Optional["Node"]:
+        """Возвращает первый элемент в цепочке родителей (включая текущий) с указанным типом."""
+        current = self
+        while current is not None:
+            try:
+                if current.internal_type() == internal_type:
+                    return current
+            except AttributeError:
+                pass
+            current = current.parent()
+        return None
+
     def iter_descendants(self) -> Iterable["Node"]:
         """Итератор по всем дочерним элементам узла (включая вложенные)."""
         for child in self.children:
@@ -99,6 +111,55 @@ class Node(object):
             except AttributeError:
                 continue
         return matches
+
+    def iter_project_product_folders(self) -> Iterable["Node"]:
+        """Итерирует по папкам испытаний внутри текущего проекта."""
+
+        def mark_seen(node, seen):
+            if node is None:
+                return False
+            node_id = getattr(getattr(node, "_data", None), "id", None)
+            if node_id is None:
+                node_id = id(node)
+            if node_id in seen:
+                return False
+            seen.add(node_id)
+            return True
+
+        seen = set()
+        found = False
+
+        project_root = self.find_ancestor_by_internal_type('root')
+        if project_root is None:
+            project_root = self
+            current = self.parent() if hasattr(self, 'parent') else None
+            while current is not None:
+                project_root = current
+                try:
+                    if current.internal_type() == 'root':
+                        break
+                except AttributeError:
+                    pass
+                current = current.parent()
+
+        product_folder = self.find_ancestor_by_internal_type('product_folder')
+        if product_folder is not None and mark_seen(product_folder, seen):
+            found = True
+            yield product_folder
+
+        if getattr(self, 'internal_type', lambda: None)() == 'product_folder':
+            if mark_seen(self, seen):
+                found = True
+                yield self
+
+        if hasattr(project_root, 'find_descendants_by_internal_type'):
+            for folder in project_root.find_descendants_by_internal_type('product_folder'):
+                if mark_seen(folder, seen):
+                    found = True
+                    yield folder
+
+        if not found and mark_seen(project_root, seen):
+            yield project_root
 
     @staticmethod
     def is_folder():

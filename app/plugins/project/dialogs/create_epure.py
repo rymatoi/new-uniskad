@@ -128,15 +128,22 @@ class CreateEpureDialog(BaseDialog):
             return []
 
         test_roots = []
-        if getattr(project_item, 'internal_type', lambda: None)() == 'product_folder':
-            test_roots.append((project_item, is_deleted(project_item)))
-
-        if hasattr(project_item, 'find_descendants_by_internal_type'):
-            for folder in project_item.find_descendants_by_internal_type('product_folder'):
+        seen_folders = set()
+        if hasattr(project_item, 'iter_project_product_folders'):
+            for folder in project_item.iter_project_product_folders():
+                folder_id = getattr(getattr(folder, '_data', None), 'id', None)
+                if folder_id is None:
+                    folder_id = id(folder)
+                if folder_id in seen_folders:
+                    continue
+                seen_folders.add(folder_id)
                 test_roots.append((folder, is_deleted(folder)))
 
         if not test_roots:
-            test_roots.append((project_item, is_deleted(project_item)))
+            fallback_root = project_item.find_ancestor_by_internal_type('root') if hasattr(project_item, 'find_ancestor_by_internal_type') else None
+            if fallback_root is None:
+                fallback_root = project_item
+            test_roots.append((fallback_root, is_deleted(fallback_root)))
 
         collected = []
         seen_ids = set()
