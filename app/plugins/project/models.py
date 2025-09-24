@@ -315,9 +315,13 @@ class WDAssemblyNode(AssemblyNode, ProjectRoot):
                 return self
 
             root = parent.parent()
-            graph_folder = [folder for folder in root.children if folder.internal_type() == 'graph_folder']
-            if len(graph_folder) == 1:
-                return tuple([child for child in graph_folder[0].children if child._data.deleted is False] + [self])
+            graph_folders = utils.find_nodes_by_type(root, 'graph_folder')
+            active_graphs = [
+                child for folder in graph_folders for child in folder.children
+                if not utils.is_node_deleted(child)
+            ]
+            if active_graphs:
+                return tuple(active_graphs + [self])
             return self
 
     @staticmethod
@@ -374,9 +378,13 @@ class WDModelNode(ModelNode, ProjectRoot):
                 return self
 
             root = parent.parent()
-            graph_folder = [folder for folder in root.children if folder.internal_type() == 'graph_folder']
-            if len(graph_folder) == 1:
-                return tuple([child for child in graph_folder[0].children if child._data.deleted is False] + [self])
+            graph_folders = utils.find_nodes_by_type(root, 'graph_folder')
+            active_graphs = [
+                child for folder in graph_folders for child in folder.children
+                if not utils.is_node_deleted(child)
+            ]
+            if active_graphs:
+                return tuple(active_graphs + [self])
             return self
 
     @staticmethod
@@ -426,9 +434,13 @@ class WDProductNode(ProductNode, ProjectRoot):
                 return self
 
             root = parent.parent()
-            graph_folder = [folder for folder in root.children if folder.internal_type() == 'graph_folder']
-            if len(graph_folder) == 1:
-                return tuple([child for child in graph_folder[0].children if child._data.deleted is False] + [self])
+            graph_folders = utils.find_nodes_by_type(root, 'graph_folder')
+            active_graphs = [
+                child for folder in graph_folders for child in folder.children
+                if not utils.is_node_deleted(child)
+            ]
+            if active_graphs:
+                return tuple(active_graphs + [self])
             return self
 
     @staticmethod
@@ -479,11 +491,16 @@ class TestNode(ProjectRoot):
                 return self
 
             root = parent.parent()
-            graph_folder = [folder for folder in root.children if folder.internal_type() == 'graph_folder']
-            epure_folder = [folder for folder in root.children if folder.internal_type() == 'epure_folder']
-            if len(graph_folder) == 1 and len(epure_folder) == 1:
-                return tuple([child for child in graph_folder[0].children + epure_folder[0].children if
-                              child._data.deleted is False] + [self])
+            graph_folders = utils.find_nodes_by_type(root, 'graph_folder')
+            epure_folders = utils.find_nodes_by_type(root, 'epure_folder')
+            related_nodes = [
+                child
+                for folder in graph_folders + epure_folders
+                for child in folder.children
+                if not utils.is_node_deleted(child)
+            ]
+            if related_nodes:
+                return tuple(related_nodes + [self])
             return self
 
     @staticmethod
@@ -881,9 +898,13 @@ class ProjectTreeModel(TreeModel):
 
     def update_external_graphs(self):
         root = self._root
-        graph_folder = [folder for folder in root.children if folder.internal_type() == 'graph_folder']
-        epure_folder = [folder for folder in root.children if folder.internal_type() == 'epure_folder']
-        if len(graph_folder) == 1 and len(epure_folder) == 1:
-            self.view.update_external_nodes(
-                tuple([child for child in graph_folder[0].children + epure_folder[0].children if
-                       child._data.deleted is False]))
+        graph_folders = utils.find_nodes_by_type(root, 'graph_folder')
+        epure_folders = utils.find_nodes_by_type(root, 'epure_folder')
+        external_nodes = [
+            child
+            for folder in graph_folders + epure_folders
+            for child in folder.children
+            if not utils.is_node_deleted(child)
+        ]
+        if graph_folders or epure_folders:
+            self.view.update_external_nodes(tuple(external_nodes))

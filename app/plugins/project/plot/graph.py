@@ -830,24 +830,17 @@ class PlotView(pg.PlotWidget):
                 curve.init_style()
 
     def collect_tests(self):
-        test_folder = \
-            [child for child in self.item.parent().parent().children if child.internal_type() == 'product_folder'][0]
-        return self._inspect_children(test_folder, False)
+        project_item = self.item.parent().parent()
+        return self._inspect_children(project_item, utils.is_node_deleted(project_item))
 
     def _inspect_children(self, root, root_deleted):
         test_nodes = []
         for child in root.children:
             if child.internal_type() == 'test':
-                if hasattr(child._data, 'deleted') and (
-                        child._data.deleted == 'False' or child._data.deleted is False) and root_deleted is False:
+                if not (root_deleted or utils.is_node_deleted(child)):
                     test_nodes.append(child)
             else:
-                if root_deleted:
-                    test_nodes += self._inspect_children(child, True)
-                elif child._data.deleted is True:
-                    test_nodes += self._inspect_children(child, True)
-                else:
-                    test_nodes += self._inspect_children(child, False)
+                test_nodes += self._inspect_children(child, root_deleted or utils.is_node_deleted(child))
         return test_nodes
 
     def _find_parent_item(self, test, type_):

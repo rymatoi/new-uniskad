@@ -1,16 +1,14 @@
 from functools import lru_cache
 
+from app.plugins.project import utils
+
 
 class TestProcessor:
     @staticmethod
     @lru_cache(maxsize=None)
     def collect_tests(item):
         parent = item.parent().parent()
-        test_folder = next(
-            child for child in parent.children
-            if child.internal_type() == 'product_folder'
-        )
-        return TestProcessor._inspect_children(test_folder)
+        return TestProcessor._inspect_children(parent, TestProcessor._is_item_deleted(parent))
 
     @staticmethod
     def get_item_style(item):  # TODO надо будет учитывать настройки отображений по условиям
@@ -39,10 +37,7 @@ class TestProcessor:
 
     @staticmethod
     def _is_item_deleted(item):
-        deleted = getattr(item._data, 'deleted', False)
-        if isinstance(deleted, str):
-            return deleted.lower() == 'true'
-        return bool(deleted)
+        return utils.is_node_deleted(item)
 
     @staticmethod
     def _is_item_active(item):
