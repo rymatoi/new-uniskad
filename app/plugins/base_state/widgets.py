@@ -1532,6 +1532,8 @@ class TableItem(QTableWidgetItem):
 
     def calculate_formula(self):
         formula = self.get('formula', str, '')
+        previous_cells = list(self.cells_in_formula)
+        self.cells_in_formula = []
         used_cells = []
         for m in re.findall(r'"(?:[^\\"]|\\.)*"', formula):
             param_index = m[1:-1]
@@ -1561,7 +1563,7 @@ class TableItem(QTableWidgetItem):
                     cell.update_cell('dependencies',
                                      str([(_c[0], _c[1].strftime("%Y-%m-%d %H:%M:%S.%f")) for _c in
                                           cell.dependencies]))
-                if cell not in self.cells_in_formula:
+                if cell.key not in self.cells_in_formula:
                     self.cells_in_formula.append(cell.key)
 
                 plus_val = tw.get_row_prop(cell.key[0], 'plus_value', float, 0)
@@ -1586,11 +1588,14 @@ class TableItem(QTableWidgetItem):
         self.update_cell('cells_in_formula',
                          str([(_c[0], _c[1].strftime("%Y-%m-%d %H:%M:%S.%f")) for _c in
                               self.cells_in_formula]))
-        self.clear_unused_dependencies(used_cells)
+        self.clear_unused_dependencies(used_cells, previous_cells)
         return evaled
 
-    def clear_unused_dependencies(self, used_cells):
-        for cell_key in self.cells_in_formula:
+    def clear_unused_dependencies(self, used_cells, previous_cells=None):
+        if previous_cells is None:
+            previous_cells = []
+        used_keys = {cell.key for cell in used_cells}
+        for cell_key in previous_cells:
             if cell_key in self.tableWidget().table.keys():
                 tw = self.tableWidget()
                 row = tw.ord_rows.index(cell_key[0])
@@ -1598,7 +1603,7 @@ class TableItem(QTableWidgetItem):
                 cell = tw.item(row, column)
             else:
                 continue
-            if cell not in used_cells:
+            if cell_key not in used_keys:
                 if self in cell.dependencies:
                     cell.dependencies.remove(self)
                     cell.update_cell('dependencies', str([(_c[0], _c[1].strftime("%Y-%m-%d %H:%M:%S.%f")) for _c in

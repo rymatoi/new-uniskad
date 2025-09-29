@@ -45,6 +45,7 @@ class FormulaLineEdit(QtWidgets.QLineEdit):
         self.funcs = funcs or []
         self._known_words = set()
         self._completion_region = None
+        self._programmatic_change = False
 
         self.setClearButtonEnabled(True)
 
@@ -54,8 +55,8 @@ class FormulaLineEdit(QtWidgets.QLineEdit):
         self.completer.setCompletionMode(QCompleter.PopupCompletion)
         self.completer.setFilterMode(Qt.MatchContains)
 
-        self.textChanged.connect(self.handle_text_changed)
-        self.textChanged.connect(self.text_edited)
+        self.textChanged.connect(self._handle_text_changed)
+        self.textEdited.connect(self._handle_text_edited)
         self.completer.activated.connect(self.handle_activated)
 
         self.set_context(self.params, self.funcs)
@@ -95,6 +96,15 @@ class FormulaLineEdit(QtWidgets.QLineEdit):
         """Совместимость: проксирует к :meth:`add_word`."""
         self.add_word(word)
 
+    def setText(self, text):
+        self._programmatic_change = True
+        try:
+            super().setText(text)
+        finally:
+            self._programmatic_change = False
+        self._completion_region = None
+        self.completer.popup().hide()
+
     def _extract_completion_region(self, text):
         """Возвращает диапазон последней лексемы для автодополнения."""
         if not text:
@@ -122,7 +132,13 @@ class FormulaLineEdit(QtWidgets.QLineEdit):
             'prefix': match.group(1),
         }
 
-    def handle_text_changed(self):
+    def _has_matches(self, prefix):
+        if not self._known_words:
+            return False
+        lowered = prefix.lower()
+        return any(lowered in word.lower() for word in self._known_words)
+
+    def _update_completion(self):
         upto_cursor = self.text()[:self.cursorPosition()]
         region = self._extract_completion_region(upto_cursor)
         self._completion_region = region
@@ -131,11 +147,22 @@ class FormulaLineEdit(QtWidgets.QLineEdit):
             return
 
         prefix = region['prefix']
-        self.completer.setCompletionPrefix(prefix)
-        if self.completer.completionCount():
-            self.completer.complete()
-        else:
+        if not self._has_matches(prefix):
             self.completer.popup().hide()
+            return
+        self.completer.setCompletionPrefix(prefix)
+        self.completer.complete()
+
+    def _handle_text_changed(self, text):
+        if self._programmatic_change:
+            self.completer.popup().hide()
+            self._completion_region = None
+
+    def _handle_text_edited(self, text):
+        self.text_edited.emit(text)
+        if self._programmatic_change:
+            return
+        self._update_completion()
 
     def handle_activated(self, text):
         region = self._completion_region
