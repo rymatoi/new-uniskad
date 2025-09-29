@@ -134,7 +134,7 @@ class ProjectNode(ProjectRoot):
     @staticmethod
     def container_types():
         """Возвращает типы возможных дочерних элементов"""
-        return [TestNode, FolderNode]
+        return [FolderNode]
 
     @staticmethod
     def internal_actions():
@@ -229,7 +229,7 @@ class ProductFolderNode(ProjectRoot):
     @staticmethod
     def container_types():
         """Возвращает типы возможных дочерних элементов"""
-        return [TestNode, FileNode, FolderNode]
+        return [TestNode, FileNode, FolderNode, WDAssemblyNode, WDProductNode, WDModelNode]
 
     @staticmethod
     def internal_actions():
@@ -295,7 +295,7 @@ class WDAssemblyNode(AssemblyNode, ProjectRoot):
     @staticmethod
     def container_types():
         """Возвращает типы возможных дочерних элементов"""
-        return [FolderNode]
+        return [FolderNode, WDProductNode]
 
     @staticmethod
     def internal_actions():
@@ -347,7 +347,7 @@ class WDModelNode(ModelNode, ProjectRoot):
     @staticmethod
     def container_types():
         """Возвращает типы возможных дочерних элементов"""
-        return [FolderNode]
+        return [FolderNode, WDAssemblyNode]
 
     @staticmethod
     def internal_actions():
