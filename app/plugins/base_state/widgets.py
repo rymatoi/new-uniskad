@@ -2363,24 +2363,29 @@ class TableWidget(QTableWidget):
             if cell.excel_param_name == old_name:
                 cell.excel_param_name = new_name
 
-    def add_row(self, db_objects):
+    def add_row(self, db_objects, position=None):
         if not len(db_objects):
             return
+
         new_row = db_objects[0].excel_param_name
 
         list(map(lambda obj: self.get_object(obj).update({obj.prop_name: obj}), db_objects))
 
-        self.ord_rows.append(new_row)
-        self.setRowCount(len(self.ord_rows))
+        if position is None or position < 0 or position > len(self.ord_rows):
+            position = len(self.ord_rows)
+
+        self.ord_rows.insert(position, new_row)
+        self.insertRow(position)
 
         for column in self.columns:
             cell = self.table[new_row, column[1]]
             item = self.TABLE_ITEM(cell, (new_row, column[1]))
-            self.setItem(self.ord_rows.index(new_row), self.ord_columns.index(column[1]), item)
+            column_index = self.ord_columns.index(column[1])
+            self.setItem(position, column_index, item)
             if item.get('formula', str, None):
                 item.calculate_formula()
 
-        self.setVerticalHeaderLabels(self.ord_rows)
+        self.set_vertical_headers()
 
         # for i, row in enumerate(self.ord_rows):
         #     self.setVerticalHeaderItem(i, HeaderItem(row, self.rows[row, None]))

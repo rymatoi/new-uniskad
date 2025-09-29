@@ -91,9 +91,32 @@ class ProjectTablePage1(TablePage1):
         sp.new_upd_project_data_array(result_list)
 
     def add_row(self, index, name=None, formula=None):
-        # item = self.table.itemFromIndex(index)
-        max_row = self.table.ord_rows[-1]
-        max_row_npp = self.table.get_row_npp(max_row)
+        ord_rows = list(self.table.ord_rows)
+        insert_position = len(ord_rows)
+        rows_to_shift = []
+
+        if ord_rows:
+            if index is not None and index.isValid():
+                item = self.table.itemFromIndex(index)
+                if item is not None and item.key[0] in ord_rows:
+                    insert_position = ord_rows.index(item.key[0]) + 1
+
+            if insert_position < len(ord_rows):
+                next_row_name = ord_rows[insert_position]
+                new_row_npp = self.table.get_row_npp(next_row_name)
+                if new_row_npp is None:
+                    new_row_npp = insert_position
+                rows_to_shift = ord_rows[insert_position:]
+            else:
+                last_row_name = ord_rows[-1]
+                last_row_npp = self.table.get_row_npp(last_row_name)
+                if last_row_npp is None:
+                    last_row_npp = len(ord_rows) - 1
+                new_row_npp = last_row_npp + 1
+        else:
+            insert_position = 0
+            new_row_npp = 0
+
         if name is None:
             new_param_name = basic_funcs.get_text('Добавление строки', 'Введите название параметра строки:',
                                                   'Новая строка')
@@ -105,7 +128,7 @@ class ProjectTablePage1(TablePage1):
 
         if new_param_name:
             cells = [self.get_row_db_object(new_param_name, 'type', 'row'),
-                     self.get_row_db_object(new_param_name, 'row_npp', str(max_row_npp)),
+                     self.get_row_db_object(new_param_name, 'row_npp', str(new_row_npp)),
                      self.get_row_db_object(new_param_name, 'name', str(new_param_name))]
             for i in self.table.ord_columns:
                 cells.append(self.get_cell_db_object(new_param_name, 'value', '0', i))
@@ -113,7 +136,30 @@ class ProjectTablePage1(TablePage1):
                 if formula:
                     cells.append(self.get_cell_db_object(new_param_name, 'formula', str(formula), i))
             new_cells = sp.new_project_data_array(cells)
-            self.table.add_row(new_cells)
+            self.table.add_row(new_cells, insert_position)
+
+            new_row_obj = self.table.rows.get((new_param_name, None), {}).get('row_npp')
+            if new_row_obj is not None:
+                new_row_obj.prop_value = str(new_row_npp)
+                if hasattr(new_row_obj, 'npp'):
+                    new_row_obj.npp = new_row_npp
+
+            if rows_to_shift:
+                update_data = []
+                next_npp_value = new_row_npp + 1
+                for row_name in rows_to_shift:
+                    row_props = self.table.rows.get((row_name, None), {})
+                    row_npp_obj = row_props.get('row_npp')
+                    if row_npp_obj is None:
+                        continue
+                    row_npp_obj.prop_value = str(next_npp_value)
+                    if hasattr(row_npp_obj, 'npp'):
+                        row_npp_obj.npp = next_npp_value
+                    update_data.append(row_npp_obj.table_fit(PROJECT_DATA))
+                    next_npp_value += 1
+                if update_data:
+                    sp.new_upd_project_data_array(update_data)
+
             self.update_formula_context()
             self._set_formula_target(self.table.currentItem())
 
