@@ -27,25 +27,30 @@ class FormulaDelegate(QStyledItemDelegate):
 
 
 class FormulaLineEdit(QtWidgets.QLineEdit):
-    """
-    Класс, регулирующий работу LineEdit для написаний формул
-    Сейчас контролирует механизм подсказок при наборе (предлагает функции из заданого набора funcs)
-    """
+    """Поле ввода формул с современным автодополнением и вставкой ссылок."""
+
     text_edited = QtCore.Signal(str)
 
-    def __init__(self, params, funcs, parent=None):
+    def __init__(self, params=None, funcs=None, parent=None):
         super().__init__(parent)
 
-        self.params = params
-        self.funcs = funcs
+        self.params = params or []
+        self.funcs = funcs or []
+        self._known_words = set()
+
+        self.setClearButtonEnabled(True)
 
         self.completer.setWidget(self)
         self.completer.setModel(self.model)
+        self.completer.setCaseSensitivity(Qt.CaseInsensitive)
+        self.completer.setCompletionMode(QCompleter.PopupCompletion)
+        self.completer.setFilterMode(Qt.MatchContains)
+
         self.textChanged.connect(self.handle_text_changed)
         self.textChanged.connect(self.text_edited)
         self.completer.activated.connect(self.handle_activated)
-        for word in self.params + self.funcs:
-            self.add_word(word)
+
+        self.set_context(self.params, self.funcs)
 
     @cached_property
     def model(self):
@@ -55,19 +60,32 @@ class FormulaLineEdit(QtWidgets.QLineEdit):
     def completer(self):
         return QCompleter()
 
+    def clear_context(self):
+        self._known_words.clear()
+        self.model.clear()
+
+    def set_context(self, params=None, funcs=None):
+        if params is not None:
+            self.params = list(params)
+        if funcs is not None:
+            self.funcs = list(funcs)
+
+        self.clear_context()
+        for word in self.funcs + self.params:
+            self.add_word(word)
+
     def add_word(self, word):
-        """
-        Добавления слова для подсказки
-        """
-        if not self.model.findItems(word):
-            self.model.appendRow(QStandardItem(word))
+        """Добавляет слово в подсказки, избегая дубликатов."""
+        if not word:
+            return
+        if word in self._known_words:
+            return
+        self._known_words.add(word)
+        self.model.appendRow(QStandardItem(word))
 
     def add_param(self, word):
-        """
-        Добавления слова для подсказки
-        """
-        if not self.model.findItems(word):
-            self.model.appendRow(QStandardItem(word))
+        """Совместимость: проксирует к :meth:`add_word`."""
+        self.add_word(word)
 
     def handle_text_changed(self):
         text = self.text()[0: self.cursorPosition()]
@@ -82,7 +100,8 @@ class FormulaLineEdit(QtWidgets.QLineEdit):
             complete_this = complete_this[1:]
 
         self.completer.setCompletionPrefix(complete_this)
-        self.completer.complete()
+        if self.completer.completionCount():
+            self.completer.complete()
 
     def handle_activated(self, text):
         prefix = self.completer.completionPrefix()
@@ -96,3 +115,13 @@ class FormulaLineEdit(QtWidgets.QLineEdit):
             self.setCursorPosition(self.cursorPosition() - 2)
 
         self.blockSignals(False)
+
+    def insert_reference(self, reference):
+        if not reference:
+            return
+        cursor_position = self.cursorPosition()
+        if not self.text().startswith('='):
+            self.setText('=' + self.text())
+            cursor_position += 1
+        self.insert(reference)
+        self.setCursorPosition(cursor_position + len(reference))

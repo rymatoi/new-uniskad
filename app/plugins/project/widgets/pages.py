@@ -114,6 +114,8 @@ class ProjectTablePage1(TablePage1):
                     cells.append(self.get_cell_db_object(new_param_name, 'formula', str(formula), i))
             new_cells = sp.new_project_data_array(cells)
             self.table.add_row(new_cells)
+            self.update_formula_context()
+            self._set_formula_target(self.table.currentItem())
 
     def remove_row(self, index):
         if not index.isValid():
@@ -140,6 +142,8 @@ class ProjectTablePage1(TablePage1):
             self.table.removeRow(item.row())
             for cell in cells_to_delete:
                 del self.table.table[cell]
+            self.update_formula_context()
+            self._set_formula_target(self.table.currentItem())
 
     def add_column(self, index):
         # current_date = datetime.now().strftime("%Y.%m.%d %H:%M:%S.%f")
@@ -159,6 +163,8 @@ class ProjectTablePage1(TablePage1):
              column_npp] + cells)
 
         self.table.add_column(new_columns)
+        self.update_formula_context()
+        self._set_formula_target(self.table.currentItem())
 
     def remove_column(self, index):
         if not index.isValid():
@@ -179,6 +185,7 @@ class ProjectTablePage1(TablePage1):
             self.table.removeColumn(item.column())
             self.table.ord_columns.remove(item.key[1])
             del self.table.columns[None, item.key[1]]
+            self._set_formula_target(self.table.currentItem())
 
     def row_settings(self, index):
         item = self.table.itemFromIndex(index)
