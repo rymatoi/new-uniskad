@@ -134,7 +134,7 @@ class ProjectNode(ProjectRoot):
     @staticmethod
     def container_types():
         """Возвращает типы возможных дочерних элементов"""
-        return [TestNode, FolderNode]
+        return [FolderNode]
 
     @staticmethod
     def internal_actions():
@@ -152,6 +152,7 @@ class ProjectNode(ProjectRoot):
 
 
 class FolderNode(ProjectRoot):
+    inherit_actions_from_parent = False
 
     @staticmethod
     def internal_type():
@@ -169,7 +170,11 @@ class FolderNode(ProjectRoot):
     @staticmethod
     def internal_actions():
         """Список действий с данным элементом (корень дерева)"""
-        return []
+        return ['add']
+
+    @classmethod
+    def creatable_types(cls):
+        return [cls]
 
     @staticmethod
     def add(up_node_id, parent):
@@ -224,7 +229,7 @@ class ProductFolderNode(ProjectRoot):
     @staticmethod
     def container_types():
         """Возвращает типы возможных дочерних элементов"""
-        return [TestNode, FileNode, FolderNode]
+        return [TestNode, FileNode, FolderNode, WDAssemblyNode, WDProductNode, WDModelNode]
 
     @staticmethod
     def internal_actions():
@@ -290,7 +295,7 @@ class WDAssemblyNode(AssemblyNode, ProjectRoot):
     @staticmethod
     def container_types():
         """Возвращает типы возможных дочерних элементов"""
-        return [FolderNode]
+        return [FolderNode, WDProductNode]
 
     @staticmethod
     def internal_actions():
@@ -342,7 +347,7 @@ class WDModelNode(ModelNode, ProjectRoot):
     @staticmethod
     def container_types():
         """Возвращает типы возможных дочерних элементов"""
-        return [FolderNode]
+        return [FolderNode, WDAssemblyNode]
 
     @staticmethod
     def internal_actions():
