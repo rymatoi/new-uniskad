@@ -830,9 +830,45 @@ class PlotView(pg.PlotWidget):
                 curve.init_style()
 
     def collect_tests(self):
-        test_folder = \
-            [child for child in self.item.parent().parent().children if child.internal_type() == 'product_folder'][0]
-        return self._inspect_children(test_folder, False)
+        item = self.item
+        if item is None:
+            return []
+
+        def is_deleted(node):
+            deleted = getattr(getattr(node, '_data', None), 'deleted', False)
+            if isinstance(deleted, str):
+                return deleted.lower() == 'true'
+            return bool(deleted)
+
+        test_roots = []
+        seen_folders = set()
+        if hasattr(item, 'iter_project_product_folders'):
+            for folder in item.iter_project_product_folders():
+                folder_id = getattr(getattr(folder, '_data', None), 'id', None)
+                if folder_id is None:
+                    folder_id = id(folder)
+                if folder_id in seen_folders:
+                    continue
+                seen_folders.add(folder_id)
+                test_roots.append((folder, is_deleted(folder)))
+
+        if not test_roots:
+            fallback_root = item.find_ancestor_by_internal_type('root') if hasattr(item, 'find_ancestor_by_internal_type') else None
+            if fallback_root is None:
+                fallback_root = item
+            test_roots.append((fallback_root, is_deleted(fallback_root)))
+
+        collected = []
+        seen_ids = set()
+        for folder, folder_deleted in test_roots:
+            for test in self._inspect_children(folder, folder_deleted):
+                project_id = getattr(getattr(test, '_data', None), 'project_id', None)
+                if project_id in seen_ids:
+                    continue
+                collected.append(test)
+                if project_id is not None:
+                    seen_ids.add(project_id)
+        return collected
 
     def _inspect_children(self, root, root_deleted):
         test_nodes = []
@@ -852,9 +888,11 @@ class PlotView(pg.PlotWidget):
 
     def _find_parent_item(self, test, type_):
         parent = test.parent()
-        while parent.internal_type() != 'product_folder':
+        while parent is not None:
             if parent.internal_type() == type_:
                 return parent
+            if parent.internal_type() == 'product_folder':
+                break
             parent = parent.parent()
         return None
 

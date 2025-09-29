@@ -1,6 +1,6 @@
 from collections import defaultdict
 from copy import copy
-from typing import List
+from typing import Iterable, List, Optional
 import PySide2
 from PySide2.QtCore import QAbstractItemModel, QPointF, Signal, QPersistentModelIndex
 from PySide2.QtGui import QIcon, QFont, QColor, QPainter, QPen, QPixmap
@@ -60,6 +60,107 @@ class Node(object):
     @property
     def children(self):
         return self._children
+
+    def find_child_by_internal_type(self, internal_type: str) -> Optional["Node"]:
+        """Возвращает первого дочернего элемента с указанным типом или None."""
+        for child in self.children:
+            try:
+                if child.internal_type() == internal_type:
+                    return child
+            except AttributeError:
+                continue
+        return None
+
+    def find_parent_by_internal_type(self, internal_type: str) -> Optional["Node"]:
+        """Возвращает первого родителя с указанным типом или None."""
+        parent = self.parent()
+        while parent is not None:
+            try:
+                if parent.internal_type() == internal_type:
+                    return parent
+            except AttributeError:
+                pass
+            parent = parent.parent()
+        return None
+
+    def find_ancestor_by_internal_type(self, internal_type: str) -> Optional["Node"]:
+        """Возвращает первый элемент в цепочке родителей (включая текущий) с указанным типом."""
+        current = self
+        while current is not None:
+            try:
+                if current.internal_type() == internal_type:
+                    return current
+            except AttributeError:
+                pass
+            current = current.parent()
+        return None
+
+    def iter_descendants(self) -> Iterable["Node"]:
+        """Итератор по всем дочерним элементам узла (включая вложенные)."""
+        for child in self.children:
+            yield child
+            if hasattr(child, "iter_descendants"):
+                yield from child.iter_descendants()
+
+    def find_descendants_by_internal_type(self, internal_type: str) -> List["Node"]:
+        """Возвращает список всех дочерних элементов указанного типа."""
+        matches = []
+        for descendant in self.iter_descendants():
+            try:
+                if descendant.internal_type() == internal_type:
+                    matches.append(descendant)
+            except AttributeError:
+                continue
+        return matches
+
+    def iter_project_product_folders(self) -> Iterable["Node"]:
+        """Итерирует по папкам испытаний внутри текущего проекта."""
+
+        def mark_seen(node, seen):
+            if node is None:
+                return False
+            node_id = getattr(getattr(node, "_data", None), "id", None)
+            if node_id is None:
+                node_id = id(node)
+            if node_id in seen:
+                return False
+            seen.add(node_id)
+            return True
+
+        seen = set()
+        found = False
+
+        project_root = self.find_ancestor_by_internal_type('root')
+        if project_root is None:
+            project_root = self
+            current = self.parent() if hasattr(self, 'parent') else None
+            while current is not None:
+                project_root = current
+                try:
+                    if current.internal_type() == 'root':
+                        break
+                except AttributeError:
+                    pass
+                current = current.parent()
+
+        product_folder = self.find_ancestor_by_internal_type('product_folder')
+        if product_folder is not None and mark_seen(product_folder, seen):
+            found = True
+            yield product_folder
+
+        if getattr(self, 'internal_type', lambda: None)() == 'product_folder':
+            if mark_seen(self, seen):
+                found = True
+                yield self
+
+        if hasattr(project_root, 'find_descendants_by_internal_type'):
+            for folder in project_root.find_descendants_by_internal_type('product_folder'):
+                if mark_seen(folder, seen):
+                    found = True
+                    yield folder
+
+        if not found and mark_seen(project_root, seen):
+            yield project_root
 
     @staticmethod
     def is_folder():

@@ -312,14 +312,13 @@ class WDAssemblyNode(AssemblyNode, ProjectRoot):
     def customize(self, ):
         dialog = EditProjectItemDialog(self)
         if dialog.exec_():
-            parent = self.parent()
-            while parent.internal_type() != 'product_folder':
-                parent = parent.parent()
-
+            parent = self.find_parent_by_internal_type('product_folder')
             if parent is None:
                 return self
 
             root = parent.parent()
+            if root is None:
+                return self
             graph_folder = [folder for folder in root.children if folder.internal_type() == 'graph_folder']
             if len(graph_folder) == 1:
                 return tuple([child for child in graph_folder[0].children if child._data.deleted is False] + [self])
@@ -371,14 +370,13 @@ class WDModelNode(ModelNode, ProjectRoot):
     def customize(self, ):
         dialog = EditProjectItemDialog(self)
         if dialog.exec_():
-            parent = self.parent()
-            while parent.internal_type() != 'product_folder':
-                parent = parent.parent()
-
+            parent = self.find_parent_by_internal_type('product_folder')
             if parent is None:
                 return self
 
             root = parent.parent()
+            if root is None:
+                return self
             graph_folder = [folder for folder in root.children if folder.internal_type() == 'graph_folder']
             if len(graph_folder) == 1:
                 return tuple([child for child in graph_folder[0].children if child._data.deleted is False] + [self])
@@ -423,14 +421,13 @@ class WDProductNode(ProductNode, ProjectRoot):
     def customize(self, ):
         dialog = EditProjectItemDialog(self)
         if dialog.exec_():
-            parent = self.parent()
-            while parent.internal_type() != 'product_folder':
-                parent = parent.parent()
-
+            parent = self.find_parent_by_internal_type('product_folder')
             if parent is None:
                 return self
 
             root = parent.parent()
+            if root is None:
+                return self
             graph_folder = [folder for folder in root.children if folder.internal_type() == 'graph_folder']
             if len(graph_folder) == 1:
                 return tuple([child for child in graph_folder[0].children if child._data.deleted is False] + [self])
@@ -476,14 +473,13 @@ class TestNode(ProjectRoot):
     def customize(self, ):
         dialog = EditProjectItemDialog(self)
         if dialog.exec_():
-            parent = self.parent()
-            while parent.internal_type() != 'product_folder':
-                parent = parent.parent()
-
+            parent = self.find_parent_by_internal_type('product_folder')
             if parent is None:
                 return self
 
             root = parent.parent()
+            if root is None:
+                return self
             graph_folder = [folder for folder in root.children if folder.internal_type() == 'graph_folder']
             epure_folder = [folder for folder in root.children if folder.internal_type() == 'epure_folder']
             if len(graph_folder) == 1 and len(epure_folder) == 1:

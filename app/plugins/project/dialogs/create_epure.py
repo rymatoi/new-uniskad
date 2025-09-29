@@ -117,8 +117,45 @@ class CreateEpureDialog(BaseDialog):
                 self.ui.paramValuesLineEdit.setText(str(self.extra_param_values))
 
     def collect_tests(self):
-        test_folder = [child for child in self.project_item.children if child.internal_type() == 'product_folder'][0]
-        return self._inspect_children(test_folder, False)
+        def is_deleted(node):
+            deleted = getattr(getattr(node, '_data', None), 'deleted', False)
+            if isinstance(deleted, str):
+                return deleted.lower() == 'true'
+            return bool(deleted)
+
+        project_item = self.project_item
+        if project_item is None:
+            return []
+
+        test_roots = []
+        seen_folders = set()
+        if hasattr(project_item, 'iter_project_product_folders'):
+            for folder in project_item.iter_project_product_folders():
+                folder_id = getattr(getattr(folder, '_data', None), 'id', None)
+                if folder_id is None:
+                    folder_id = id(folder)
+                if folder_id in seen_folders:
+                    continue
+                seen_folders.add(folder_id)
+                test_roots.append((folder, is_deleted(folder)))
+
+        if not test_roots:
+            fallback_root = project_item.find_ancestor_by_internal_type('root') if hasattr(project_item, 'find_ancestor_by_internal_type') else None
+            if fallback_root is None:
+                fallback_root = project_item
+            test_roots.append((fallback_root, is_deleted(fallback_root)))
+
+        collected = []
+        seen_ids = set()
+        for folder, folder_deleted in test_roots:
+            for test in self._inspect_children(folder, folder_deleted):
+                project_id = getattr(getattr(test, '_data', None), 'project_id', None)
+                if project_id in seen_ids:
+                    continue
+                collected.append(test)
+                if project_id is not None:
+                    seen_ids.add(project_id)
+        return collected
 
     def _inspect_children(self, root, root_deleted):
         test_nodes = []
