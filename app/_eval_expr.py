@@ -1,6 +1,6 @@
 import re
 
-from sympy import *
+from sympy import Add, Basic, Integer, Max, Min, Piecewise, sympify
 
 
 def _as_sympy_args(args):
