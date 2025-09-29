@@ -243,6 +243,59 @@ class TreeModel(QAbstractItemModel):
 
         # self.register_nodes()
 
+    def _container_owner_for(self, node):
+        """Возвращает узел, определяющий типы допустимых дочерних элементов."""
+        if not node:
+            return None
+        if node.is_folder():
+            parent = node.parent()
+            while parent and parent.is_folder():
+                parent = parent.parent()
+            if parent is not None:
+                return parent
+        return node
+
+    def _effective_container_types_for(self, node):
+        owner = self._container_owner_for(node)
+        if owner is None:
+            return []
+        return list(owner.container_types())
+
+    @staticmethod
+    def _node_matches_allowed(node, allowed_children):
+        node_cls = node.__class__
+        node_type = node.internal_type() if hasattr(node, 'internal_type') else None
+        for child_cls in allowed_children:
+            if child_cls == ANY_CHILD_TYPE:
+                return True
+            child_type = None
+            if hasattr(child_cls, 'internal_type') and callable(child_cls.internal_type):
+                child_type = child_cls.internal_type()
+            elif child_cls is not None and not isinstance(child_cls, type):
+                child_type = child_cls
+            if child_type == ANY_CHILD_TYPE:
+                return True
+            try:
+                if isinstance(child_cls, type) and issubclass(node_cls, child_cls):
+                    return True
+            except TypeError:
+                pass
+            if node_type and child_type and node_type == child_type:
+                return True
+        return False
+
+    def allows_child(self, parent_node, child_node):
+        """Проверяет, разрешено ли размещать child_node внутри parent_node."""
+        if parent_node in (None, self._root):
+            return True
+        allowed_children = self._effective_container_types_for(parent_node)
+        folder_cls = self.item_types.get('folder') if hasattr(self, 'item_types') else None
+        if folder_cls and folder_cls not in allowed_children:
+            allowed_children.append(folder_cls)
+        if not allowed_children:
+            return child_node.parent() is parent_node
+        return self._node_matches_allowed(child_node, allowed_children)
+
     def get_root_elements(self):
         root_elements = []
 
@@ -601,6 +654,15 @@ class TreeModel(QAbstractItemModel):
             return []
 
         parent_node = self.nodeFromIndex(new_parent_index)
+        if parent_node not in (None, self._root):
+            for idx in indexes:
+                if not idx.isValid():
+                    continue
+                node = idx.internalPointer()
+                if node is None:
+                    continue
+                if not self.allows_child(parent_node, node):
+                    return []
         parent_persistent = QPersistentModelIndex(new_parent_index) if new_parent_index.isValid() else None
 
         def index_path(idx):

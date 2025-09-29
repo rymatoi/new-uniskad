@@ -244,44 +244,14 @@ class TreeView(QTreeView):
                 return True
         return False
 
-    def _node_allowed_in_parent(self, node, allowed_children):
-        node_cls = node.__class__
-        node_type = node.internal_type() if hasattr(node, 'internal_type') else None
-        for child_cls in allowed_children:
-            if child_cls == ANY_CHILD_TYPE:
-                return True
-            child_type = None
-            if hasattr(child_cls, 'internal_type') and callable(child_cls.internal_type):
-                child_type = child_cls.internal_type()
-            elif child_cls is not None and not isinstance(child_cls, type):
-                child_type = child_cls
-            if child_type == ANY_CHILD_TYPE:
-                return True
-            try:
-                if isinstance(child_cls, type) and issubclass(node_cls, child_cls):
-                    return True
-            except TypeError:
-                pass
-            if node_type and child_type and node_type == child_type:
-                return True
-        return False
-
     def _parent_accepts_nodes(self, parent_index, indexes):
         model = self.model()
         parent_node = model.nodeFromIndex(parent_index)
         if parent_node in (None, model._root):
             return True
-        allowed_children = self._effective_container_types(parent_node)
-        folder_cls = None
-        if hasattr(model, 'item_types'):
-            folder_cls = model.item_types.get('folder')
-        if folder_cls and folder_cls not in allowed_children:
-            allowed_children.append(folder_cls)
         nodes = [idx.internalPointer() for idx in indexes]
-        if not allowed_children:
-            return all(node.parent() is parent_node for node in nodes)
         for node in nodes:
-            if not self._node_allowed_in_parent(node, allowed_children):
+            if not model.allows_child(parent_node, node):
                 return False
         return True
 
@@ -672,10 +642,10 @@ class TreeView(QTreeView):
         return item
 
     def _effective_container_types(self, item):
-        owner = self._container_owner(item)
-        if owner is None:
+        model = self.model()
+        if not model:
             return []
-        return list(owner.container_types())
+        return model._effective_container_types_for(item)
 
     def _effective_creatable_types(self, item):
         owner = self._action_owner(item)
