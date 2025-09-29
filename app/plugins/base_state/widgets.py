@@ -1540,22 +1540,27 @@ class TableItem(QTableWidgetItem):
         previous_cells = list(self.cells_in_formula)
         self.cells_in_formula = []
         used_cells = []
+        collected_cells = []
+        cycle_detected = False
         tw = self.tableWidget()
         if tw is None:
             return None
 
         def _register_dependency(cell_item):
-            if cell_item is None:
+            nonlocal cycle_detected
+
+            if cell_item is None or cycle_detected:
                 return False
-            used_cells.append(cell_item)
-            if self.key not in cell_item.dependencies:
-                cell_item.dependencies.append(self.key)
-                cell_item.update_cell(
-                    'dependencies',
-                    str([(_c[0], _c[1].strftime("%Y-%m-%d %H:%M:%S.%f")) for _c in cell_item.dependencies])
-                )
-            if cell_item.key not in self.cells_in_formula:
-                self.cells_in_formula.append(cell_item.key)
+
+            if self.would_create_cycle(cell_item):
+                cycle_detected = True
+                return False
+
+            if cell_item not in used_cells:
+                used_cells.append(cell_item)
+
+            if cell_item.key not in collected_cells:
+                collected_cells.append(cell_item.key)
             return True
 
         def _get_cell_numeric_value(cell_item):
@@ -1594,10 +1599,12 @@ class TableItem(QTableWidgetItem):
                         continue
                     cell = tw.item(row_idx, offset)
                     if not _register_dependency(cell):
-                        continue
+                        break
                     values.append(str(_get_cell_numeric_value(cell)))
                 if not values:
                     return self.update_cell('cformula', 'Параметр отсутствует в таблице')
+                if cycle_detected:
+                    break
                 formula = formula.replace(m, ';'.join(values), 1)
                 continue
 
@@ -1611,9 +1618,15 @@ class TableItem(QTableWidgetItem):
                     return self.update_cell('cformula', 'Параметр отсутствует в таблице')
                 cell = tw.item(tw.ord_rows.index(param), index - 1)
                 if not _register_dependency(cell):
-                    continue
+                    break
 
                 formula = formula.replace(m, str(_get_cell_numeric_value(cell)), 1)
+            if cycle_detected:
+                break
+        if cycle_detected:
+            self.cells_in_formula = previous_cells
+            self.update_cell('cformula', 'Циклическая ссылка')
+            return None
         formula = formula.replace('=', '')
         if formula.replace(' ', '') == '':
             self.update_cell('cformula', '')
@@ -1621,9 +1634,17 @@ class TableItem(QTableWidgetItem):
         evaled = str(eval_expr(formula.replace('=', '')))
         if evaled:
             self.update_cell('cformula', evaled)
+        self.cells_in_formula = collected_cells
         self.update_cell('cells_in_formula',
                          str([(_c[0], _c[1].strftime("%Y-%m-%d %H:%M:%S.%f")) for _c in
                               self.cells_in_formula]))
+        for cell_item in used_cells:
+            if self.key not in cell_item.dependencies:
+                cell_item.dependencies.append(self.key)
+            cell_item.update_cell(
+                'dependencies',
+                str([(_c[0], _c[1].strftime("%Y-%m-%d %H:%M:%S.%f")) for _c in cell_item.dependencies])
+            )
         self.clear_unused_dependencies(used_cells, previous_cells)
         return evaled
 
@@ -1644,6 +1665,46 @@ class TableItem(QTableWidgetItem):
                     cell.dependencies.remove(self)
                     cell.update_cell('dependencies', str([(_c[0], _c[1].strftime("%Y-%m-%d %H:%M:%S.%f")) for _c in
                                                           cell.dependencies]))
+
+    def _item_from_key(self, key):
+        tw = self.tableWidget()
+        if tw is None:
+            return None
+        row_key, column_key = key
+        try:
+            row_index = tw.ord_rows.index(row_key)
+            column_index = tw.ord_columns.index(column_key)
+        except ValueError:
+            return None
+        return tw.item(row_index, column_index)
+
+    def would_create_cycle(self, target_item):
+        if target_item is None:
+            return False
+
+        target_key = target_item.key
+        if target_key == self.key:
+            return True
+
+        visited = set()
+        stack = [target_key]
+        while stack:
+            key = stack.pop()
+            if key == self.key:
+                return True
+            if key in visited:
+                continue
+            visited.add(key)
+            item = self._item_from_key(key)
+            if item is None:
+                continue
+            if not item.cells_in_formula and item.get('cells_in_formula', ast.literal_eval, None):
+                item.init_cells_in_formula()
+            for dependency_key in item.cells_in_formula:
+                if dependency_key not in visited:
+                    stack.append(dependency_key)
+
+        return False
 
     def set_highlighted(self, state):
         if self.highlighted == state:
