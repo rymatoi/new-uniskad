@@ -14,7 +14,7 @@ from openpyxl.workbook import Workbook
 from app import app_logger, _menu, basic_funcs
 from app._eval_expr import eval_expr
 from app.basic_funcs import timing_decorator
-from app.formula import FormulaDelegate
+from app.formula import FormulaDelegate, FormulaLineEdit
 from app.plugins.base_state.models import Node, ANY_CHILD_TYPE
 from db import sp, session
 
@@ -1413,6 +1413,7 @@ class TableItem(QTableWidgetItem):
         self.cells_in_formula = []
 
         self.dep_inited = False
+        self.highlighted = False
 
     def init_dependencies(self):
         self.dependencies = []
@@ -1483,6 +1484,10 @@ class TableItem(QTableWidgetItem):
             return self.get('formula', str, '')
 
         if role == Qt.BackgroundColorRole:
+            if self.highlighted:
+                if self.get('broken', bool, False):
+                    return QColor('#d7d7d7')
+                return QColor('#fff4ce')
             if self.get('broken', bool, False):
                 return QBrush(Qt.lightGray)
             else:
@@ -1514,6 +1519,11 @@ class TableItem(QTableWidgetItem):
                     self.update_cell('formula', value)
                     self.calculate_formula()
                     self.update_dependencies()
+                    table = self.tableWidget()
+                    if table is not None and table.model() is not None:
+                        index = table.indexFromItem(self)
+                        if index.isValid():
+                            table.model().dataChanged.emit(index, index, [Qt.DisplayRole])
 
     def update_dependencies(self):
         for cell_key in self.dependencies:
@@ -1527,50 +1537,96 @@ class TableItem(QTableWidgetItem):
 
     def calculate_formula(self):
         formula = self.get('formula', str, '')
+        previous_cells = list(self.cells_in_formula)
+        self.cells_in_formula = []
         used_cells = []
+        collected_cells = []
+        cycle_detected = False
+        tw = self.tableWidget()
+        if tw is None:
+            return None
+
+        def _register_dependency(cell_item):
+            nonlocal cycle_detected
+
+            if cell_item is None or cycle_detected:
+                return False
+
+            if self.would_create_cycle(cell_item):
+                cycle_detected = True
+                return False
+
+            if cell_item not in used_cells:
+                used_cells.append(cell_item)
+
+            if cell_item.key not in collected_cells:
+                collected_cells.append(cell_item.key)
+            return True
+
+        def _get_cell_numeric_value(cell_item):
+            plus_val = tw.get_row_prop(cell_item.key[0], 'plus_value', float, 0)
+            mul_val = tw.get_row_prop(cell_item.key[0], 'mul_value', float, 1)
+            cashed_val = cell_item.get('cformula', float, 0)
+            if cashed_val:
+                return cashed_val + plus_val if plus_val else cashed_val * mul_val
+            raw_value = cell_item.get('value', float, 0)
+            return raw_value + plus_val if plus_val else raw_value * mul_val
+
         for m in re.findall(r'"(?:[^\\"]|\\.)*"', formula):
             param_index = m[1:-1]
-            if '[' not in param_index and ']' not in param_index:
+            full_row_reference = '[' not in param_index and ']' not in param_index
+            if full_row_reference:
                 param = param_index.replace('\\', '')
-                index = str(self.column() + 1)
+                indices = list(range(1, len(tw.ord_columns) + 1))
             else:
                 param_index = param_index.split('[', 1)
                 if len(param_index) != 2:
                     self.update_cell('cformula', 'Неверный синтаксис')
                 param = param_index[0].replace('\\', '')
                 index = param_index[1][:-1]
-            if index and index.isdigit():
-                tw = self.tableWidget()
-                if len(tw.ord_columns) + 1 < int(index) or int(index) < 0:
+                indices = [int(index)] if index and index.isdigit() else []
+
+            if not indices:
+                continue
+
+            if full_row_reference:
+                if param not in tw.ord_rows:
+                    return self.update_cell('cformula', 'Параметр отсутствует в таблице')
+                row_idx = tw.ord_rows.index(param)
+                values = []
+                for offset, column in enumerate(tw.ord_columns):
+                    if (param, column) not in tw.table.keys():
+                        continue
+                    cell = tw.item(row_idx, offset)
+                    if not _register_dependency(cell):
+                        break
+                    values.append(str(_get_cell_numeric_value(cell)))
+                if not values:
+                    return self.update_cell('cformula', 'Параметр отсутствует в таблице')
+                if cycle_detected:
+                    break
+                formula = formula.replace(m, ';'.join(values), 1)
+                continue
+
+            for index in indices:
+                if len(tw.ord_columns) + 1 < index or index < 0:
                     self.update_cell('cformula', 'Неверный индекс')
-                column = tw.ord_columns[int(index) - 1]
+                    break
+                column = tw.ord_columns[index - 1]
 
                 if (param, column) not in tw.table.keys():
                     return self.update_cell('cformula', 'Параметр отсутствует в таблице')
-                cell = tw.item(tw.ord_rows.index(param), int(index) - 1)
-                if cell is None:
-                    continue
-                used_cells.append(cell)
-                if self.key not in cell.dependencies:
-                    cell.dependencies.append(self.key)
-                    cell.update_cell('dependencies',
-                                     str([(_c[0], _c[1].strftime("%Y-%m-%d %H:%M:%S.%f")) for _c in
-                                          cell.dependencies]))
-                if cell not in self.cells_in_formula:
-                    self.cells_in_formula.append(cell.key)
+                cell = tw.item(tw.ord_rows.index(param), index - 1)
+                if not _register_dependency(cell):
+                    break
 
-                plus_val = tw.get_row_prop(cell.key[0], 'plus_value', float, 0)
-                mul_val = tw.get_row_prop(cell.key[0], 'mul_value', float, 1)
-                if cashed_val := cell.get('cformula', float, 0):
-                    if plus_val:
-                        formula = formula.replace(m, str(cashed_val + plus_val))
-                    else:
-                        formula = formula.replace(m, str(cashed_val * mul_val))
-                else:
-                    if plus_val:
-                        formula = formula.replace(m, str(cell.get('value', float, 0) + plus_val))
-                    else:
-                        formula = formula.replace(m, str(cell.get('value', float, 0) * mul_val))
+                formula = formula.replace(m, str(_get_cell_numeric_value(cell)), 1)
+            if cycle_detected:
+                break
+        if cycle_detected:
+            self.cells_in_formula = previous_cells
+            self.update_cell('cformula', 'Циклическая ссылка')
+            return None
         formula = formula.replace('=', '')
         if formula.replace(' ', '') == '':
             self.update_cell('cformula', '')
@@ -1578,14 +1634,25 @@ class TableItem(QTableWidgetItem):
         evaled = str(eval_expr(formula.replace('=', '')))
         if evaled:
             self.update_cell('cformula', evaled)
+        self.cells_in_formula = collected_cells
         self.update_cell('cells_in_formula',
                          str([(_c[0], _c[1].strftime("%Y-%m-%d %H:%M:%S.%f")) for _c in
                               self.cells_in_formula]))
-        self.clear_unused_dependencies(used_cells)
+        for cell_item in used_cells:
+            if self.key not in cell_item.dependencies:
+                cell_item.dependencies.append(self.key)
+            cell_item.update_cell(
+                'dependencies',
+                str([(_c[0], _c[1].strftime("%Y-%m-%d %H:%M:%S.%f")) for _c in cell_item.dependencies])
+            )
+        self.clear_unused_dependencies(used_cells, previous_cells)
         return evaled
 
-    def clear_unused_dependencies(self, used_cells):
-        for cell_key in self.cells_in_formula:
+    def clear_unused_dependencies(self, used_cells, previous_cells=None):
+        if previous_cells is None:
+            previous_cells = []
+        used_keys = {cell.key for cell in used_cells}
+        for cell_key in previous_cells:
             if cell_key in self.tableWidget().table.keys():
                 tw = self.tableWidget()
                 row = tw.ord_rows.index(cell_key[0])
@@ -1593,11 +1660,60 @@ class TableItem(QTableWidgetItem):
                 cell = tw.item(row, column)
             else:
                 continue
-            if cell not in used_cells:
+            if cell_key not in used_keys:
                 if self in cell.dependencies:
                     cell.dependencies.remove(self)
                     cell.update_cell('dependencies', str([(_c[0], _c[1].strftime("%Y-%m-%d %H:%M:%S.%f")) for _c in
                                                           cell.dependencies]))
+
+    def _item_from_key(self, key):
+        tw = self.tableWidget()
+        if tw is None:
+            return None
+        row_key, column_key = key
+        try:
+            row_index = tw.ord_rows.index(row_key)
+            column_index = tw.ord_columns.index(column_key)
+        except ValueError:
+            return None
+        return tw.item(row_index, column_index)
+
+    def would_create_cycle(self, target_item):
+        if target_item is None:
+            return False
+
+        target_key = target_item.key
+        if target_key == self.key:
+            return True
+
+        visited = set()
+        stack = [target_key]
+        while stack:
+            key = stack.pop()
+            if key == self.key:
+                return True
+            if key in visited:
+                continue
+            visited.add(key)
+            item = self._item_from_key(key)
+            if item is None:
+                continue
+            if not item.cells_in_formula and item.get('cells_in_formula', ast.literal_eval, None):
+                item.init_cells_in_formula()
+            for dependency_key in item.cells_in_formula:
+                if dependency_key not in visited:
+                    stack.append(dependency_key)
+
+        return False
+
+    def set_highlighted(self, state):
+        if self.highlighted == state:
+            return
+        self.highlighted = state
+        table = self.tableWidget()
+        if table is not None and table.model() is not None:
+            index = table.model().index(self.row(), self.column())
+            table.model().dataChanged.emit(index, index, [Qt.BackgroundColorRole])
 
     def get(self, prop, cast_type=None, default=None):
         if prop not in self.cell:
@@ -1666,6 +1782,12 @@ class TablePage1(QtWidgets.QWidget):
 
         self.edit_cell = None
         self.table = TableWidget(self, main_window) if self.TABLE is None else self.TABLE(self, main_window)
+        self._formula_delegate = None
+        self._formula_functions = []
+        self._syncing_formula_editor = False
+        self._applying_formula = False
+        self.formula_target_item = None
+        self._capturing_formula_reference = False
 
         self.available_actions = []
         self.cell_menu = self._load_menu('any', 'table_cell')
@@ -1673,7 +1795,14 @@ class TablePage1(QtWidgets.QWidget):
         self.column_menu = self._load_menu('any', 'table_column')
         self.table_menu = self._load_menu('any', 'table')
         self.centralLayout = QVBoxLayout(self)
+        self.centralLayout.setContentsMargins(0, 0, 0, 0)
+        self.centralLayout.setSpacing(6)
+
+        self.formula_panel = self._create_formula_panel()
+        self.centralLayout.addWidget(self.formula_panel)
+
         self.centralLayout.addWidget(self.table)
+        self.centralLayout.setStretch(1, 1)
         self.setLayout(self.centralLayout)
         self.toolbar = QtWidgets.QToolBar(self)
         self.init_toolbar()
@@ -1684,12 +1813,124 @@ class TablePage1(QtWidgets.QWidget):
         self.available_actions += [action.name for action in menu]
         return menu
 
+    def _create_formula_panel(self):
+        panel = QWidget(self)
+        panel.setObjectName('formulaPanel')
+        layout = QHBoxLayout(panel)
+        layout.setContentsMargins(8, 4, 8, 4)
+        layout.setSpacing(8)
+
+        self.formula_icon = QLabel('fx', panel)
+        icon_font = self.formula_icon.font()
+        icon_font.setBold(True)
+        self.formula_icon.setFont(icon_font)
+        self.formula_icon.setAlignment(Qt.AlignCenter)
+        self.formula_icon.setFixedWidth(26)
+        self.formula_icon.setStyleSheet('color: #555555;')
+
+        self.formula_edit = FormulaLineEdit(params=[], funcs=[], parent=panel)
+        self.formula_edit.setPlaceholderText('=Введите формулу или значение')
+        self.formula_edit.text_edited.connect(self.on_formula_text_edited)
+        self.formula_edit.returnPressed.connect(self.commit_formula_from_bar)
+
+        self.formula_result_label = QLabel('Значение: —', panel)
+        self.formula_result_label.setObjectName('formulaResultLabel')
+        self.formula_result_label.setStyleSheet('color: #666666;')
+
+        layout.addWidget(self.formula_icon)
+        layout.addWidget(self.formula_edit, 1)
+        layout.addWidget(self.formula_result_label, 0, Qt.AlignRight)
+
+        return panel
+
+    def update_formula_context(self):
+        if not hasattr(self, 'formula_edit'):
+            return
+        params = getattr(self.table, 'ord_rows', [])
+        self.formula_edit.set_context(params, self._formula_functions)
+
+    def _sync_formula_editor_from_item(self, item, update_text=True):
+        if not hasattr(self, 'formula_edit'):
+            return
+        self._syncing_formula_editor = True
+        if item is None:
+            if update_text:
+                self.formula_edit.clear()
+            self.formula_result_label.setText('Значение: —')
+        else:
+            if update_text:
+                formula_text = item.get('formula', str, '')
+                self.formula_edit.setText(formula_text)
+                self.formula_edit.setCursorPosition(len(self.formula_edit.text()))
+            self.formula_result_label.setText(f'Значение: {item.value()}')
+        self._syncing_formula_editor = False
+
+    def begin_formula_reference_capture(self):
+        self._capturing_formula_reference = True
+
+    def end_formula_reference_capture(self):
+        self._capturing_formula_reference = False
+
+    def _set_formula_target(self, item):
+        self.formula_target_item = item
+        self._sync_formula_editor_from_item(item)
+        if hasattr(self.table, 'highlight_formula_references'):
+            self.table.highlight_formula_references(item)
+
+    def refresh_formula_result(self, item=None):
+        item = item or self.formula_target_item
+        self._sync_formula_editor_from_item(item, update_text=False)
+
+    def on_current_cell_changed(self, current, previous):
+        if self._capturing_formula_reference:
+            return
+        item = self.table.itemFromIndex(current) if current.isValid() else None
+        self._set_formula_target(item)
+
+    def on_table_item_changed(self, item):
+        if self._applying_formula:
+            return
+        if item is None:
+            return
+        if item is not self.formula_target_item:
+            return
+        self._sync_formula_editor_from_item(item)
+
+    def on_formula_text_edited(self, text):
+        if self._syncing_formula_editor:
+            return
+        if text:
+            self.formula_result_label.setText('Редактирование…')
+        else:
+            self.formula_result_label.setText('Значение: —')
+
+    def commit_formula_from_bar(self):
+        if self._syncing_formula_editor:
+            return
+        item = self.formula_target_item or self.table.currentItem()
+        if item is None:
+            return
+        index = self.table.indexFromItem(item)
+        if not index.isValid():
+            return
+        text = self.formula_edit.text()
+        self._applying_formula = True
+        try:
+            self.table.model().setData(index, text, Qt.EditRole)
+        finally:
+            self._applying_formula = False
+        self.refresh_formula_result(item)
+        if hasattr(self.table, 'highlight_formula_references'):
+            self.table.highlight_formula_references(item)
+
     def init_table(self, cells):
         self.table.load_table(cells)
         if hasattr(self.item, 'filters') and self.item.filters and (
                 self.item.use_filters == 'True' or self.item.use_filters is True):
             self.table.apply_filters(self.item.filters)
         delegate = FormulaDelegate(parent=self)
+        self._formula_delegate = delegate
+        self._formula_functions = delegate.funcs
         self.table.setItemDelegate(delegate)
         self.table.setContextMenuPolicy(Qt.CustomContextMenu)
         self.table.customContextMenuRequested.connect(self.show_cell_menu)
@@ -1701,6 +1942,15 @@ class TablePage1(QtWidgets.QWidget):
         column_headers = self.table.horizontalHeader()
         column_headers.setContextMenuPolicy(Qt.CustomContextMenu)
         column_headers.customContextMenuRequested.connect(self.show_column_menu)
+
+        if self.table.selectionModel() is not None:
+            self.table.selectionModel().currentChanged.connect(self.on_current_cell_changed)
+        self.table.itemChanged.connect(self.on_table_item_changed)
+        self.update_formula_context()
+        if self.table.currentItem() is not None:
+            self._set_formula_target(self.table.currentItem())
+        else:
+            self._set_formula_target(None)
 
     def show_row_menu(self, point):
         index = self.table.indexAt(point)
@@ -1886,6 +2136,7 @@ class TableWidget(QTableWidget):
 
         self.search_string = None
         self.need_update = []
+        self._highlighted_items = []
 
         if self.TABLE_ITEM is None:
             self.TABLE_ITEM = TableItem
@@ -1936,6 +2187,60 @@ class TableWidget(QTableWidget):
             else:
                 self.setRowHidden(row, True)
 
+    def mousePressEvent(self, event):
+        parent = getattr(self, '_parent', None)
+        if parent and hasattr(parent, 'formula_edit') and parent.formula_edit.hasFocus():
+            index = self.indexAt(event.pos())
+            if index.isValid():
+                item = self.itemFromIndex(index)
+                reference = self.format_cell_reference(item)
+                if reference:
+                    parent.begin_formula_reference_capture()
+                    self.setCurrentCell(index.row(), index.column())
+                    parent.formula_edit.insert_reference(reference)
+                    QTimer.singleShot(0, parent.formula_edit.setFocus)
+                    QTimer.singleShot(0, parent.end_formula_reference_capture)
+                    return
+        super().mousePressEvent(event)
+
+    def clear_highlights(self):
+        for item in self._highlighted_items:
+            if item is not None:
+                item.set_highlighted(False)
+        self._highlighted_items = []
+
+    def highlight_formula_references(self, item):
+        self.clear_highlights()
+        if item is None:
+            return
+
+        item.init_cells_in_formula()
+        if not item.cells_in_formula:
+            return
+
+        for cell_key in item.cells_in_formula:
+            if cell_key in self.table:
+                try:
+                    row_index = self.ord_rows.index(cell_key[0])
+                    column_index = self.ord_columns.index(cell_key[1])
+                except ValueError:
+                    continue
+                referenced_item = self.item(row_index, column_index)
+                if referenced_item is not None:
+                    referenced_item.set_highlighted(True)
+                    self._highlighted_items.append(referenced_item)
+
+    def format_cell_reference(self, item):
+        if item is None:
+            return ''
+        if not hasattr(item, 'key'):
+            return ''
+        row_name, column_value = item.key
+        if row_name not in self.ord_rows or column_value not in self.ord_columns:
+            return ''
+        column_index = self.ord_columns.index(column_value) + 1
+        return f'"{row_name}"[{column_index}]'
+
     def load_table(self, db_objects):
         self.clear()
         self.table = {}
@@ -1962,6 +2267,8 @@ class TableWidget(QTableWidget):
 
         if sp.get_session_role_secret_grantness() is False:
             self.hide_secret_rows()
+
+        self.clear_highlights()
 
     def hide_secret_rows(self):
         for row in range(self.rowCount()):

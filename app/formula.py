@@ -11,7 +11,14 @@ class FormulaDelegate(QStyledItemDelegate):
         super().__init__(parent)
         self._parent = parent
         self.params = params
-        self.funcs = ['sin()', 'cos()', 'avg()']
+        self.funcs = [
+            'СУММ()',
+            'СРЗНАЧ()',
+            'МИН()',
+            'МАКС()',
+            'СЧЁТ()',
+            'ЕСЛИ()'
+        ]
 
     def createEditor(self, parent, option, index):
         editor = FormulaLineEdit(params=self._parent.table.ord_rows, funcs=self.funcs, parent=parent)
@@ -27,25 +34,32 @@ class FormulaDelegate(QStyledItemDelegate):
 
 
 class FormulaLineEdit(QtWidgets.QLineEdit):
-    """
-    Класс, регулирующий работу LineEdit для написаний формул
-    Сейчас контролирует механизм подсказок при наборе (предлагает функции из заданого набора funcs)
-    """
+    """Поле ввода формул с современным автодополнением и вставкой ссылок."""
+
     text_edited = QtCore.Signal(str)
 
-    def __init__(self, params, funcs, parent=None):
+    def __init__(self, params=None, funcs=None, parent=None):
         super().__init__(parent)
 
-        self.params = params
-        self.funcs = funcs
+        self.params = params or []
+        self.funcs = funcs or []
+        self._known_words = set()
+        self._completion_region = None
+        self._programmatic_change = False
+
+        self.setClearButtonEnabled(True)
 
         self.completer.setWidget(self)
         self.completer.setModel(self.model)
-        self.textChanged.connect(self.handle_text_changed)
-        self.textChanged.connect(self.text_edited)
+        self.completer.setCaseSensitivity(Qt.CaseInsensitive)
+        self.completer.setCompletionMode(QCompleter.PopupCompletion)
+        self.completer.setFilterMode(Qt.MatchContains)
+
+        self.textChanged.connect(self._handle_text_changed)
+        self.textEdited.connect(self._handle_text_edited)
         self.completer.activated.connect(self.handle_activated)
-        for word in self.params + self.funcs:
-            self.add_word(word)
+
+        self.set_context(self.params, self.funcs)
 
     @cached_property
     def model(self):
@@ -55,44 +69,143 @@ class FormulaLineEdit(QtWidgets.QLineEdit):
     def completer(self):
         return QCompleter()
 
+    def clear_context(self):
+        self._known_words.clear()
+        self.model.clear()
+
+    def set_context(self, params=None, funcs=None):
+        if params is not None:
+            self.params = list(params)
+        if funcs is not None:
+            self.funcs = list(funcs)
+
+        self.clear_context()
+        for word in self.funcs + self.params:
+            self.add_word(word)
+
     def add_word(self, word):
-        """
-        Добавления слова для подсказки
-        """
-        if not self.model.findItems(word):
-            self.model.appendRow(QStandardItem(word))
+        """Добавляет слово в подсказки, избегая дубликатов."""
+        if not word:
+            return
+        if word in self._known_words:
+            return
+        self._known_words.add(word)
+        self.model.appendRow(QStandardItem(word))
 
     def add_param(self, word):
-        """
-        Добавления слова для подсказки
-        """
-        if not self.model.findItems(word):
-            self.model.appendRow(QStandardItem(word))
+        """Совместимость: проксирует к :meth:`add_word`."""
+        self.add_word(word)
 
-    def handle_text_changed(self):
-        text = self.text()[0: self.cursorPosition()]
+    def setText(self, text):
+        self._programmatic_change = True
+        try:
+            super().setText(text)
+        finally:
+            self._programmatic_change = False
+        self._completion_region = None
+        self.completer.popup().hide()
+
+    def _extract_completion_region(self, text):
+        """Возвращает диапазон последней лексемы для автодополнения."""
         if not text:
+            return None
+
+        cursor = len(text)
+        last_quote = text.rfind('"')
+        if last_quote != -1:
+            tail = text[last_quote + 1:]
+            if '"' not in tail:
+                # Если после кавычки уже встретились арифметические операторы или
+                # разделители, значит курсор вышел из строкового литерала и нужно
+                # искать обычную лексему. В противном случае продолжаем работать
+                # как с параметром в кавычках.
+                if not re.search(r'[+\-*/=(),;]', tail):
+                    return {
+                        'start': last_quote + 1,
+                        'replace_start': last_quote,
+                        'end': cursor,
+                        'prefix': tail,
+                    }
+
+        match = re.search(r'([A-Za-zА-Яа-яЁё0-9_]+)$', text)
+        if not match:
+            return None
+        return {
+            'start': match.start(1),
+            'replace_start': match.start(1),
+            'end': cursor,
+            'prefix': match.group(1),
+        }
+
+    def _has_matches(self, prefix):
+        if not self._known_words:
+            return False
+        lowered = prefix.lower()
+        return any(lowered in word.lower() for word in self._known_words)
+
+    def _update_completion(self):
+        upto_cursor = self.text()[:self.cursorPosition()]
+        region = self._extract_completion_region(upto_cursor)
+        self._completion_region = region
+        if region is None:
             self.completer.popup().hide()
             return
-        words = text.split()
-        if len(words) == 0:
-            return
-        complete_this = words[-1]
-        if complete_this.startswith('"'):
-            complete_this = complete_this[1:]
 
-        self.completer.setCompletionPrefix(complete_this)
+        prefix = region['prefix']
+        if not self._has_matches(prefix):
+            self.completer.popup().hide()
+            return
+        self.completer.setCompletionPrefix(prefix)
         self.completer.complete()
 
+    def _handle_text_changed(self, text):
+        if self._programmatic_change:
+            self.completer.popup().hide()
+            self._completion_region = None
+
+    def _handle_text_edited(self, text):
+        self.text_edited.emit(text)
+        if self._programmatic_change:
+            return
+        self._update_completion()
+
     def handle_activated(self, text):
-        prefix = self.completer.completionPrefix()
-        extra = text[len(prefix):]
+        region = self._completion_region
+        if region is None:
+            return
+
+        start = region['start']
+        replace_start = region['replace_start']
+        end = region['end']
+        before = self.text()[:start]
+        replace_before = self.text()[:replace_start]
+        after = self.text()[end:]
+
         self.blockSignals(True)
-        if extra in self.funcs:
-            self.insert(extra)
-            self.setCursorPosition(self.cursorPosition() - 1)
+        if text in self.funcs:
+            replacement = text
+            new_text = before + replacement + after
+            self.setText(new_text)
+            cursor = len(before) + len(replacement)
+            if replacement.endswith(')'):
+                cursor -= 1
+            self.setCursorPosition(cursor)
         else:
-            self.insert(f'{extra}[]"')
-            self.setCursorPosition(self.cursorPosition() - 2)
+            replacement = f'"{text}[]"'
+            new_text = replace_before + replacement + after
+            self.setText(new_text)
+            cursor = len(replace_before) + len(text) + 2
+            self.setCursorPosition(cursor)
 
         self.blockSignals(False)
+        self._completion_region = None
+
+    def insert_reference(self, reference):
+        if not reference:
+            return
+        cursor_position = self.cursorPosition()
+        if not self.text().startswith('='):
+            self.setText('=' + self.text())
+            cursor_position += 1
+        self.insert(reference)
+        self.setCursorPosition(cursor_position + len(reference))
