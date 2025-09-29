@@ -1,3 +1,5 @@
+import re
+
 from sympy import *
 
 
@@ -63,7 +65,10 @@ CUSTOM_FUNCTIONS = {
 def eval_expr(expr: str) -> "Optional[float]":
     """Вычисление выражения"""
     expr = expr.replace(';', ',')
-    expr = expr.replace(',', '.')
+    # Excel использует запятую как десятичный разделитель. Заменяем только те
+    # запятые, которые стоят между цифрами, чтобы аргументные запятые не
+    # превращались в точки.
+    expr = re.sub(r'(?<=\d),(?=\d)', '.', expr)
     try:
         return sympify(expr, locals=CUSTOM_FUNCTIONS).evalf()
     except Exception as ex:
