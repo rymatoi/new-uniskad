@@ -1519,6 +1519,11 @@ class TableItem(QTableWidgetItem):
                     self.update_cell('formula', value)
                     self.calculate_formula()
                     self.update_dependencies()
+                    table = self.tableWidget()
+                    if table is not None and table.model() is not None:
+                        index = table.indexFromItem(self)
+                        if index.isValid():
+                            table.model().dataChanged.emit(index, index, [Qt.DisplayRole])
 
     def update_dependencies(self):
         for cell_key in self.dependencies:
