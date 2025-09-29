@@ -1540,49 +1540,80 @@ class TableItem(QTableWidgetItem):
         previous_cells = list(self.cells_in_formula)
         self.cells_in_formula = []
         used_cells = []
+        tw = self.tableWidget()
+        if tw is None:
+            return None
+
+        def _register_dependency(cell_item):
+            if cell_item is None:
+                return False
+            used_cells.append(cell_item)
+            if self.key not in cell_item.dependencies:
+                cell_item.dependencies.append(self.key)
+                cell_item.update_cell(
+                    'dependencies',
+                    str([(_c[0], _c[1].strftime("%Y-%m-%d %H:%M:%S.%f")) for _c in cell_item.dependencies])
+                )
+            if cell_item.key not in self.cells_in_formula:
+                self.cells_in_formula.append(cell_item.key)
+            return True
+
+        def _get_cell_numeric_value(cell_item):
+            plus_val = tw.get_row_prop(cell_item.key[0], 'plus_value', float, 0)
+            mul_val = tw.get_row_prop(cell_item.key[0], 'mul_value', float, 1)
+            cashed_val = cell_item.get('cformula', float, 0)
+            if cashed_val:
+                return cashed_val + plus_val if plus_val else cashed_val * mul_val
+            raw_value = cell_item.get('value', float, 0)
+            return raw_value + plus_val if plus_val else raw_value * mul_val
+
         for m in re.findall(r'"(?:[^\\"]|\\.)*"', formula):
             param_index = m[1:-1]
-            if '[' not in param_index and ']' not in param_index:
+            full_row_reference = '[' not in param_index and ']' not in param_index
+            if full_row_reference:
                 param = param_index.replace('\\', '')
-                index = str(self.column() + 1)
+                indices = list(range(1, len(tw.ord_columns) + 1))
             else:
                 param_index = param_index.split('[', 1)
                 if len(param_index) != 2:
                     self.update_cell('cformula', 'Неверный синтаксис')
                 param = param_index[0].replace('\\', '')
                 index = param_index[1][:-1]
-            if index and index.isdigit():
-                tw = self.tableWidget()
-                if len(tw.ord_columns) + 1 < int(index) or int(index) < 0:
+                indices = [int(index)] if index and index.isdigit() else []
+
+            if not indices:
+                continue
+
+            if full_row_reference:
+                if param not in tw.ord_rows:
+                    return self.update_cell('cformula', 'Параметр отсутствует в таблице')
+                row_idx = tw.ord_rows.index(param)
+                values = []
+                for offset, column in enumerate(tw.ord_columns):
+                    if (param, column) not in tw.table.keys():
+                        continue
+                    cell = tw.item(row_idx, offset)
+                    if not _register_dependency(cell):
+                        continue
+                    values.append(str(_get_cell_numeric_value(cell)))
+                if not values:
+                    return self.update_cell('cformula', 'Параметр отсутствует в таблице')
+                formula = formula.replace(m, ';'.join(values), 1)
+                continue
+
+            for index in indices:
+                if len(tw.ord_columns) + 1 < index or index < 0:
                     self.update_cell('cformula', 'Неверный индекс')
-                column = tw.ord_columns[int(index) - 1]
+                    break
+                column = tw.ord_columns[index - 1]
 
                 if (param, column) not in tw.table.keys():
                     return self.update_cell('cformula', 'Параметр отсутствует в таблице')
-                cell = tw.item(tw.ord_rows.index(param), int(index) - 1)
-                if cell is None:
+                cell = tw.item(tw.ord_rows.index(param), index - 1)
+                if not _register_dependency(cell):
                     continue
-                used_cells.append(cell)
-                if self.key not in cell.dependencies:
-                    cell.dependencies.append(self.key)
-                    cell.update_cell('dependencies',
-                                     str([(_c[0], _c[1].strftime("%Y-%m-%d %H:%M:%S.%f")) for _c in
-                                          cell.dependencies]))
-                if cell.key not in self.cells_in_formula:
-                    self.cells_in_formula.append(cell.key)
 
-                plus_val = tw.get_row_prop(cell.key[0], 'plus_value', float, 0)
-                mul_val = tw.get_row_prop(cell.key[0], 'mul_value', float, 1)
-                if cashed_val := cell.get('cformula', float, 0):
-                    if plus_val:
-                        formula = formula.replace(m, str(cashed_val + plus_val))
-                    else:
-                        formula = formula.replace(m, str(cashed_val * mul_val))
-                else:
-                    if plus_val:
-                        formula = formula.replace(m, str(cell.get('value', float, 0) + plus_val))
-                    else:
-                        formula = formula.replace(m, str(cell.get('value', float, 0) * mul_val))
+                formula = formula.replace(m, str(_get_cell_numeric_value(cell)), 1)
         formula = formula.replace('=', '')
         if formula.replace(' ', '') == '':
             self.update_cell('cformula', '')
