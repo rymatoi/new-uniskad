@@ -44,6 +44,7 @@ class FormulaLineEdit(QtWidgets.QLineEdit):
         self.params = params or []
         self.funcs = funcs or []
         self._known_words = set()
+        self._completion_region = None
 
         self.setClearButtonEnabled(True)
 
@@ -94,34 +95,78 @@ class FormulaLineEdit(QtWidgets.QLineEdit):
         """Совместимость: проксирует к :meth:`add_word`."""
         self.add_word(word)
 
-    def handle_text_changed(self):
-        text = self.text()[0: self.cursorPosition()]
+    def _extract_completion_region(self, text):
+        """Возвращает диапазон последней лексемы для автодополнения."""
         if not text:
+            return None
+
+        cursor = len(text)
+        last_quote = text.rfind('"')
+        if last_quote != -1:
+            tail = text[last_quote + 1:]
+            if '"' not in tail:
+                return {
+                    'start': last_quote + 1,
+                    'replace_start': last_quote,
+                    'end': cursor,
+                    'prefix': tail,
+                }
+
+        match = re.search(r'([A-Za-zА-Яа-яЁё0-9_]+)$', text)
+        if not match:
+            return None
+        return {
+            'start': match.start(1),
+            'replace_start': match.start(1),
+            'end': cursor,
+            'prefix': match.group(1),
+        }
+
+    def handle_text_changed(self):
+        upto_cursor = self.text()[:self.cursorPosition()]
+        region = self._extract_completion_region(upto_cursor)
+        self._completion_region = region
+        if region is None:
             self.completer.popup().hide()
             return
-        words = text.split()
-        if len(words) == 0:
-            return
-        complete_this = words[-1]
-        if complete_this.startswith('"'):
-            complete_this = complete_this[1:]
 
-        self.completer.setCompletionPrefix(complete_this)
+        prefix = region['prefix']
+        self.completer.setCompletionPrefix(prefix)
         if self.completer.completionCount():
             self.completer.complete()
+        else:
+            self.completer.popup().hide()
 
     def handle_activated(self, text):
-        prefix = self.completer.completionPrefix()
-        extra = text[len(prefix):]
+        region = self._completion_region
+        if region is None:
+            return
+
+        start = region['start']
+        replace_start = region['replace_start']
+        end = region['end']
+        before = self.text()[:start]
+        replace_before = self.text()[:replace_start]
+        after = self.text()[end:]
+
         self.blockSignals(True)
-        if extra in self.funcs:
-            self.insert(extra)
-            self.setCursorPosition(self.cursorPosition() - 1)
+        if text in self.funcs:
+            replacement = text
+            new_text = before + replacement + after
+            self.setText(new_text)
+            cursor = len(before) + len(replacement)
+            if replacement.endswith(')'):
+                cursor -= 1
+            self.setCursorPosition(cursor)
         else:
-            self.insert(f'{extra}[]"')
-            self.setCursorPosition(self.cursorPosition() - 2)
+            replacement = f'"{text}[]"'
+            new_text = replace_before + replacement + after
+            self.setText(new_text)
+            cursor = len(replace_before) + len(text) + 2
+            self.setCursorPosition(cursor)
 
         self.blockSignals(False)
+        self._completion_region = None
 
     def insert_reference(self, reference):
         if not reference:
