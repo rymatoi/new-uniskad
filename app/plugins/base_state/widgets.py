@@ -1433,6 +1433,201 @@ class TableItem(QTableWidgetItem):
                 if cell_key in self.tableWidget().table.keys():
                     self.cells_in_formula.append(cell_key)
 
+    @staticmethod
+    def _excel_column_name(index):
+        if index < 0:
+            return ''
+        name = ''
+        while True:
+            index, remainder = divmod(index, 26)
+            name = chr(ord('A') + remainder) + name
+            if index == 0:
+                break
+            index -= 1
+        return name
+
+    @staticmethod
+    def _excel_column_index(value):
+        value = value.upper()
+        result = 0
+        for char in value:
+            if not 'A' <= char <= 'Z':
+                return -1
+            result = result * 26 + (ord(char) - ord('A') + 1)
+        return result - 1
+
+    def _get_cell_eval_value(self, cell):
+        tw = self.tableWidget()
+        plus_val = tw.get_row_prop(cell.key[0], 'plus_value', float, 0)
+        mul_val = tw.get_row_prop(cell.key[0], 'mul_value', float, 1)
+
+        cashed_val = cell.get('cformula', float, None)
+        if cashed_val is None or cashed_val == '':
+            if cell.is_float(cell.get('value')):
+                base_value = cell.get('value', float, 0)
+            else:
+                base_value = cell.get('value')
+        else:
+            base_value = float(cashed_val)
+
+        if isinstance(base_value, str):
+            if cell.is_float(base_value):
+                base_value = float(base_value)
+            else:
+                return '0'
+
+        if plus_val:
+            return str(base_value + plus_val)
+        return str(base_value * mul_val)
+
+    def _register_dependency(self, cell):
+        if self.key not in cell.dependencies:
+            cell.dependencies.append(self.key)
+            cell.update_cell(
+                'dependencies',
+                str([(_c[0], _c[1].strftime("%Y-%m-%d %H:%M:%S.%f")) for _c in cell.dependencies])
+            )
+
+    def _register_used_cell(self, cell, used_cells):
+        if cell not in used_cells:
+            used_cells.append(cell)
+        if cell.key not in self.cells_in_formula:
+            self.cells_in_formula.append(cell.key)
+        self._register_dependency(cell)
+
+    def _set_formula_error(self, message):
+        self.update_cell('cformula', message)
+        previous_cells = list(self.cells_in_formula)
+        self.cells_in_formula = previous_cells
+        self.clear_unused_dependencies([])
+        self.cells_in_formula = []
+        self.update_cell('cells_in_formula', '[]')
+
+    @staticmethod
+    def _prepare_formula_for_storage(value):
+        if not isinstance(value, str):
+            return value
+        prepared = value.strip()
+        if not prepared:
+            return ''
+        if not prepared.startswith('='):
+            prepared = f'={prepared}'
+        return prepared
+
+    def get_user_formula(self):
+        formula = self.get('formula', str, '')
+        if not formula:
+            return ''
+        return self._to_excel_style(formula)
+
+    def _to_excel_style(self, formula):
+        if not formula:
+            return ''
+
+        tw = self.tableWidget()
+
+        def replace_reference(match):
+            row_name = match.group(1).replace('\\"', '"')
+            column_index = match.group(3)
+            if row_name not in tw.ord_rows:
+                return match.group(0)
+            row_number = tw.ord_rows.index(row_name) + 1
+            if column_index:
+                column_number = int(column_index) - 1
+            else:
+                column_number = self.column()
+            column_name = self._excel_column_name(column_number)
+            return f'{column_name}{row_number}'
+
+        pattern = re.compile(r'"((?:[^\\"]|\\.)*)"(\[(\d+)\])?')
+        converted = pattern.sub(replace_reference, formula)
+        return converted
+
+    def _expand_excel_ranges(self, formula):
+        pattern = re.compile(r'([A-Z]+)(\d+):([A-Z]+)(\d+)')
+        tw = self.tableWidget()
+
+        def expand(match):
+            start_col, start_row = match.group(1), int(match.group(2))
+            end_col, end_row = match.group(3), int(match.group(4))
+            start_col_index = self._excel_column_index(start_col)
+            end_col_index = self._excel_column_index(end_col)
+            start_row_index = start_row - 1
+            end_row_index = end_row - 1
+
+            if start_col_index < 0 or end_col_index < 0:
+                return match.group(0)
+
+            col_range = range(min(start_col_index, end_col_index), max(start_col_index, end_col_index) + 1)
+            row_range = range(min(start_row_index, end_row_index), max(start_row_index, end_row_index) + 1)
+
+            references = []
+            for row_idx in row_range:
+                if row_idx < 0 or row_idx >= tw.rowCount():
+                    continue
+                for col_idx in col_range:
+                    if col_idx < 0 or col_idx >= tw.columnCount():
+                        continue
+                    references.append(f'{self._excel_column_name(col_idx)}{row_idx + 1}')
+
+            return ','.join(references) if references else match.group(0)
+
+        return pattern.sub(expand, formula)
+
+    def _replace_excel_references(self, formula, used_cells):
+        pattern = re.compile(r'(?<![A-Z0-9_])([A-Z]+)(\d+)(?![A-Z0-9_])')
+        tw = self.tableWidget()
+        matches = list(pattern.finditer(formula))
+        for match in reversed(matches):
+            column_letters, row_number = match.group(1), match.group(2)
+            row_index = int(row_number) - 1
+            column_index = self._excel_column_index(column_letters)
+            if row_index < 0 or column_index < 0:
+                self._set_formula_error('Неверная ссылка на ячейку')
+                return None
+            if row_index >= tw.rowCount() or column_index >= tw.columnCount():
+                self._set_formula_error('Неверная ссылка на ячейку')
+                return None
+            cell = tw.item(row_index, column_index)
+            if cell is None:
+                replacement = '0'
+            else:
+                if getattr(cell, 'key', None) == self.key:
+                    self._set_formula_error('Ссылка на саму себя')
+                    return None
+                self._register_used_cell(cell, used_cells)
+                replacement = self._get_cell_eval_value(cell)
+            formula = formula[:match.start()] + replacement + formula[match.end():]
+        return formula
+
+    def _replace_legacy_references(self, formula, used_cells):
+        pattern = re.compile(r'"((?:[^\\"]|\\.)*)"(\[(\d+)\])?')
+        tw = self.tableWidget()
+        matches = list(pattern.finditer(formula))
+        for match in reversed(matches):
+            row_name = match.group(1).replace('\\"', '"')
+            column_index = match.group(3)
+            if row_name not in tw.ord_rows:
+                continue
+            if column_index:
+                column_number = int(column_index) - 1
+            else:
+                column_number = self.column()
+            if column_number < 0 or column_number >= tw.columnCount():
+                self._set_formula_error('Неверный индекс')
+                return None
+            cell = tw.item(tw.ord_rows.index(row_name), column_number)
+            if cell is None:
+                replacement = '0'
+            else:
+                if getattr(cell, 'key', None) == self.key:
+                    self._set_formula_error('Ссылка на саму себя')
+                    return None
+                self._register_used_cell(cell, used_cells)
+                replacement = self._get_cell_eval_value(cell)
+            formula = formula[:match.start()] + replacement + formula[match.end():]
+        return formula
+
     def is_float(self, num):
         try:
             float(num)
@@ -1480,7 +1675,7 @@ class TableItem(QTableWidgetItem):
             return self.value()
 
         if role == Qt.EditRole:
-            return self.get('formula', str, '')
+            return self.get_user_formula()
 
         if role == Qt.BackgroundColorRole:
             if self.get('broken', bool, False):
@@ -1508,10 +1703,11 @@ class TableItem(QTableWidgetItem):
     def setData(self, role: int, value) -> None:
         if role == Qt.EditRole:
             if isinstance(value, str):
-                if value != self.get('formula', str, '='):
-                    if value == '':
+                prepared = self._prepare_formula_for_storage(value)
+                if prepared != self.get('formula', str, '='):
+                    if prepared == '':
                         return
-                    self.update_cell('formula', value)
+                    self.update_cell('formula', prepared)
                     self.calculate_formula()
                     self.update_dependencies()
 
@@ -1527,62 +1723,47 @@ class TableItem(QTableWidgetItem):
 
     def calculate_formula(self):
         formula = self.get('formula', str, '')
-        used_cells = []
-        for m in re.findall(r'"(?:[^\\"]|\\.)*"', formula):
-            param_index = m[1:-1]
-            if '[' not in param_index and ']' not in param_index:
-                param = param_index.replace('\\', '')
-                index = str(self.column() + 1)
-            else:
-                param_index = param_index.split('[', 1)
-                if len(param_index) != 2:
-                    self.update_cell('cformula', 'Неверный синтаксис')
-                param = param_index[0].replace('\\', '')
-                index = param_index[1][:-1]
-            if index and index.isdigit():
-                tw = self.tableWidget()
-                if len(tw.ord_columns) + 1 < int(index) or int(index) < 0:
-                    self.update_cell('cformula', 'Неверный индекс')
-                column = tw.ord_columns[int(index) - 1]
-
-                if (param, column) not in tw.table.keys():
-                    return self.update_cell('cformula', 'Параметр отсутствует в таблице')
-                cell = tw.item(tw.ord_rows.index(param), int(index) - 1)
-                if cell is None:
-                    continue
-                used_cells.append(cell)
-                if self.key not in cell.dependencies:
-                    cell.dependencies.append(self.key)
-                    cell.update_cell('dependencies',
-                                     str([(_c[0], _c[1].strftime("%Y-%m-%d %H:%M:%S.%f")) for _c in
-                                          cell.dependencies]))
-                if cell not in self.cells_in_formula:
-                    self.cells_in_formula.append(cell.key)
-
-                plus_val = tw.get_row_prop(cell.key[0], 'plus_value', float, 0)
-                mul_val = tw.get_row_prop(cell.key[0], 'mul_value', float, 1)
-                if cashed_val := cell.get('cformula', float, 0):
-                    if plus_val:
-                        formula = formula.replace(m, str(cashed_val + plus_val))
-                    else:
-                        formula = formula.replace(m, str(cashed_val * mul_val))
-                else:
-                    if plus_val:
-                        formula = formula.replace(m, str(cell.get('value', float, 0) + plus_val))
-                    else:
-                        formula = formula.replace(m, str(cell.get('value', float, 0) * mul_val))
-        formula = formula.replace('=', '')
-        if formula.replace(' ', '') == '':
-            self.update_cell('cformula', '')
+        if not isinstance(formula, str):
             return None
-        evaled = str(eval_expr(formula.replace('=', '')))
-        if evaled:
-            self.update_cell('cformula', evaled)
-        self.update_cell('cells_in_formula',
-                         str([(_c[0], _c[1].strftime("%Y-%m-%d %H:%M:%S.%f")) for _c in
-                              self.cells_in_formula]))
+
+        formula = formula.strip()
+        if not formula:
+            self.update_cell('cformula', '')
+            self.cells_in_formula = []
+            self.update_cell('cells_in_formula', '[]')
+            self.clear_unused_dependencies([])
+            return None
+
+        if not formula.startswith('='):
+            formula = f'={formula}'
+
+        used_cells = []
+        self.cells_in_formula = []
+
+        formula = self._expand_excel_ranges(formula)
+        normalized = self._replace_excel_references(formula, used_cells)
+        if normalized is None:
+            return None
+        normalized = self._replace_legacy_references(normalized, used_cells)
+        if normalized is None:
+            return None
+
+        expression = normalized.lstrip('=').strip()
+        if not expression:
+            self.update_cell('cformula', '')
+            self.update_cell('cells_in_formula', '[]')
+            self.clear_unused_dependencies(used_cells)
+            return None
+
+        expression = expression.replace('^', '**')
+        evaluated = eval_expr(expression)
+        result = str(evaluated)
+
+        self.update_cell('cformula', result)
+        serialized_cells = str([(_c[0], _c[1].strftime("%Y-%m-%d %H:%M:%S.%f")) for _c in self.cells_in_formula])
+        self.update_cell('cells_in_formula', serialized_cells)
         self.clear_unused_dependencies(used_cells)
-        return evaled
+        return result
 
     def clear_unused_dependencies(self, used_cells):
         for cell_key in self.cells_in_formula:
