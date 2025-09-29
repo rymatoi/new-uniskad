@@ -115,12 +115,17 @@ class FormulaLineEdit(QtWidgets.QLineEdit):
         if last_quote != -1:
             tail = text[last_quote + 1:]
             if '"' not in tail:
-                return {
-                    'start': last_quote + 1,
-                    'replace_start': last_quote,
-                    'end': cursor,
-                    'prefix': tail,
-                }
+                # Если после кавычки уже встретились арифметические операторы или
+                # разделители, значит курсор вышел из строкового литерала и нужно
+                # искать обычную лексему. В противном случае продолжаем работать
+                # как с параметром в кавычках.
+                if not re.search(r'[+\-*/=(),;]', tail):
+                    return {
+                        'start': last_quote + 1,
+                        'replace_start': last_quote,
+                        'end': cursor,
+                        'prefix': tail,
+                    }
 
         match = re.search(r'([A-Za-zА-Яа-яЁё0-9_]+)$', text)
         if not match:
