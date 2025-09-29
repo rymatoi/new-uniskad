@@ -11,7 +11,14 @@ class FormulaDelegate(QStyledItemDelegate):
         super().__init__(parent)
         self._parent = parent
         self.params = params
-        self.funcs = ['sin()', 'cos()', 'avg()']
+        self.funcs = [
+            'СУММ()',
+            'СРЗНАЧ()',
+            'МИН()',
+            'МАКС()',
+            'СЧЁТ()',
+            'ЕСЛИ()'
+        ]
 
     def createEditor(self, parent, option, index):
         editor = FormulaLineEdit(params=self._parent.table.ord_rows, funcs=self.funcs, parent=parent)

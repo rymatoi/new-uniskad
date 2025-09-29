@@ -1685,6 +1685,7 @@ class TablePage1(QtWidgets.QWidget):
         self._syncing_formula_editor = False
         self._applying_formula = False
         self.formula_target_item = None
+        self._capturing_formula_reference = False
 
         self.available_actions = []
         self.cell_menu = self._load_menu('any', 'table_cell')
@@ -1730,19 +1731,12 @@ class TablePage1(QtWidgets.QWidget):
         self.formula_edit.text_edited.connect(self.on_formula_text_edited)
         self.formula_edit.returnPressed.connect(self.commit_formula_from_bar)
 
-        self.insert_reference_btn = QToolButton(panel)
-        self.insert_reference_btn.setText('Вставить ссылку')
-        self.insert_reference_btn.setToolTip('Ctrl + клик по ячейке также вставит ссылку в формулу')
-        self.insert_reference_btn.clicked.connect(self.insert_cell_reference)
-        self.insert_reference_btn.setEnabled(False)
-
         self.formula_result_label = QLabel('Значение: —', panel)
         self.formula_result_label.setObjectName('formulaResultLabel')
         self.formula_result_label.setStyleSheet('color: #666666;')
 
         layout.addWidget(self.formula_icon)
         layout.addWidget(self.formula_edit, 1)
-        layout.addWidget(self.insert_reference_btn)
         layout.addWidget(self.formula_result_label, 0, Qt.AlignRight)
 
         return panel
@@ -1760,16 +1754,20 @@ class TablePage1(QtWidgets.QWidget):
         if item is None:
             if update_text:
                 self.formula_edit.clear()
-            self.insert_reference_btn.setEnabled(False)
             self.formula_result_label.setText('Значение: —')
         else:
             if update_text:
                 formula_text = item.get('formula', str, '')
                 self.formula_edit.setText(formula_text)
                 self.formula_edit.setCursorPosition(len(self.formula_edit.text()))
-            self.insert_reference_btn.setEnabled(True)
             self.formula_result_label.setText(f'Значение: {item.value()}')
         self._syncing_formula_editor = False
+
+    def begin_formula_reference_capture(self):
+        self._capturing_formula_reference = True
+
+    def end_formula_reference_capture(self):
+        self._capturing_formula_reference = False
 
     def _set_formula_target(self, item):
         self.formula_target_item = item
@@ -1782,6 +1780,8 @@ class TablePage1(QtWidgets.QWidget):
         self._sync_formula_editor_from_item(item, update_text=False)
 
     def on_current_cell_changed(self, current, previous):
+        if self._capturing_formula_reference:
+            return
         item = self.table.itemFromIndex(current) if current.isValid() else None
         self._set_formula_target(item)
 
@@ -1820,15 +1820,6 @@ class TablePage1(QtWidgets.QWidget):
         self.refresh_formula_result(item)
         if hasattr(self.table, 'highlight_formula_references'):
             self.table.highlight_formula_references(item)
-
-    def insert_cell_reference(self):
-        if not hasattr(self, 'formula_edit'):
-            return
-        item = self.table.currentItem()
-        reference = self.table.format_cell_reference(item)
-        if reference:
-            self.formula_edit.insert_reference(reference)
-            self.formula_edit.setFocus()
 
     def init_table(self, cells):
         self.table.load_table(cells)
@@ -2097,13 +2088,16 @@ class TableWidget(QTableWidget):
     def mousePressEvent(self, event):
         parent = getattr(self, '_parent', None)
         if parent and hasattr(parent, 'formula_edit') and parent.formula_edit.hasFocus():
-            if event.modifiers() & Qt.ControlModifier:
-                index = self.indexAt(event.pos())
-                if index.isValid():
-                    item = self.itemFromIndex(index)
-                    reference = self.format_cell_reference(item)
+            index = self.indexAt(event.pos())
+            if index.isValid():
+                item = self.itemFromIndex(index)
+                reference = self.format_cell_reference(item)
+                if reference:
+                    parent.begin_formula_reference_capture()
+                    self.setCurrentCell(index.row(), index.column())
                     parent.formula_edit.insert_reference(reference)
-                    parent.formula_edit.setFocus()
+                    QTimer.singleShot(0, parent.formula_edit.setFocus)
+                    QTimer.singleShot(0, parent.end_formula_reference_capture)
                     return
         super().mousePressEvent(event)
 
