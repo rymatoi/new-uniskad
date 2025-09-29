@@ -247,13 +247,16 @@ class TreeView(QTreeView):
     def _parent_accepts_nodes(self, parent_index, indexes):
         model = self.model()
         parent_node = model.nodeFromIndex(parent_index)
-        if parent_node in (None, model._root):
-            return True
         nodes = [idx.internalPointer() for idx in indexes]
+        if parent_node in (None, model._root):
+            for node in nodes:
+                if not model.allows_root_child(node):
+                    return False, 'На корневом уровне проекта можно размещать только папки.'
+            return True, ''
         for node in nodes:
             if not model.allows_child(parent_node, node):
-                return False
-        return True
+                return False, 'Выбранный родитель не поддерживает типы перемещаемых элементов.'
+        return True, ''
 
     def _select_persistent_indexes(self, persistent_indexes):
         selection_model = self.selectionModel()
@@ -299,8 +302,9 @@ class TreeView(QTreeView):
             event.ignore()
             return
 
-        if not self._parent_accepts_nodes(parent_index, movable_indexes):
-            basic_funcs.info('Перемещение', 'Выбранный родитель не поддерживает типы перемещаемых элементов.')
+        accepts_parent, error_message = self._parent_accepts_nodes(parent_index, movable_indexes)
+        if not accepts_parent:
+            basic_funcs.info('Перемещение', error_message or 'Выбранный родитель не поддерживает типы перемещаемых элементов.')
             event.ignore()
             return
 

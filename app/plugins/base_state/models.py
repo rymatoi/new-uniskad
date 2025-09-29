@@ -284,10 +284,19 @@ class TreeModel(QAbstractItemModel):
                 return True
         return False
 
+    def allows_root_child(self, child_node):
+        """Возвращает True, если элемент может находиться на корневом уровне."""
+        if child_node is None:
+            return False
+        current_parent = child_node.parent()
+        if current_parent in (None, self._root):
+            return True
+        return child_node.is_folder()
+
     def allows_child(self, parent_node, child_node):
         """Проверяет, разрешено ли размещать child_node внутри parent_node."""
         if parent_node in (None, self._root):
-            return True
+            return self.allows_root_child(child_node)
         allowed_children = self._effective_container_types_for(parent_node)
         folder_cls = self.item_types.get('folder') if hasattr(self, 'item_types') else None
         if folder_cls and folder_cls not in allowed_children:
@@ -654,13 +663,20 @@ class TreeModel(QAbstractItemModel):
             return []
 
         parent_node = self.nodeFromIndex(new_parent_index)
-        if parent_node not in (None, self._root):
-            for idx in indexes:
-                if not idx.isValid():
-                    continue
-                node = idx.internalPointer()
-                if node is None:
-                    continue
+        nodes_to_validate = []
+        for idx in indexes:
+            if not idx.isValid():
+                continue
+            node = idx.internalPointer()
+            if node is None:
+                continue
+            nodes_to_validate.append(node)
+        if parent_node in (None, self._root):
+            for node in nodes_to_validate:
+                if not self.allows_root_child(node):
+                    return []
+        else:
+            for node in nodes_to_validate:
                 if not self.allows_child(parent_node, node):
                     return []
         parent_persistent = QPersistentModelIndex(new_parent_index) if new_parent_index.isValid() else None
@@ -760,7 +776,7 @@ class TreeModel(QAbstractItemModel):
         if index.isValid():
             return Qt.ItemIsDragEnabled | Qt.ItemIsDropEnabled | Qt.ItemIsSelectable | Qt.ItemIsEnabled | defaultFlags
         else:
-            Qt.ItemIsDropEnabled | defaultFlags
+            return Qt.ItemIsDropEnabled | defaultFlags
 
     def removeRows(self, row: int, count: int, parent: PySide2.QtCore.QModelIndex = ...) -> bool:
         parent_ = self.nodeFromIndex(parent)
