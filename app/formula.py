@@ -11,7 +11,7 @@ class FormulaDelegate(QStyledItemDelegate):
         super().__init__(parent)
         self._parent = parent
         self.params = params
-        self.funcs = ['sin()', 'cos()', 'avg()']
+        self.funcs = ['sin()', 'cos()', 'SUM()', 'AVERAGE()', 'AVG()', 'avg()', 'MIN()', 'MAX()']
 
     def createEditor(self, parent, option, index):
         editor = FormulaLineEdit(params=self._parent.table.ord_rows, funcs=self.funcs, parent=parent)
@@ -38,6 +38,8 @@ class FormulaLineEdit(QtWidgets.QLineEdit):
 
         self.params = params
         self.funcs = funcs
+
+        self.setPlaceholderText('Например: =SUM(A1:A5) или =A1+B1')
 
         self.completer.setWidget(self)
         self.completer.setModel(self.model)

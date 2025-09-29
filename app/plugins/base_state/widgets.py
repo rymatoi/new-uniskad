@@ -21,6 +21,10 @@ from db import sp, session
 logger = app_logger.get_logger(__name__)
 
 
+class FormulaReferenceError(Exception):
+    pass
+
+
 class Tab(QDockWidget):
     def __init__(self, index, parent, main_window=None):
         super().__init__(parent)
@@ -1414,6 +1418,168 @@ class TableItem(QTableWidgetItem):
 
         self.dep_inited = False
 
+    @staticmethod
+    def _escape_param_name(name: str) -> str:
+        return name.replace('\\', '\\\\').replace('"', '\\"')
+
+    def _build_placeholder(self, row_name: str, column_index: int) -> str:
+        escaped_name = self._escape_param_name(row_name)
+        return f'"{escaped_name}[{column_index}]"'
+
+    def _parse_excel_reference(self, reference: str):
+        tw = self.tableWidget()
+        if tw is None:
+            return None
+
+        ref = reference.strip()
+        if not ref:
+            return None
+
+        ref = ref.replace('$', '')
+        match = re.fullmatch(r'([A-Za-z]+)(\d+)', ref)
+        if not match:
+            return None
+
+        column_letters, row_number = match.groups()
+        column_index = tw.column_index_from_letters(column_letters.upper())
+        if column_index is None:
+            raise FormulaReferenceError(reference)
+
+        row_key = tw.row_key_from_number(int(row_number))
+        if row_key is None:
+            raise FormulaReferenceError(reference)
+
+        return row_key, column_index + 1
+
+    def _expand_excel_range(self, start_ref: str, end_ref: str):
+        try:
+            start = self._parse_excel_reference(start_ref)
+            end = self._parse_excel_reference(end_ref)
+        except FormulaReferenceError:
+            raise
+        if start is None or end is None:
+            return []
+
+        tw = self.tableWidget()
+        if tw is None:
+            return []
+
+        start_row_key, start_col = start
+        end_row_key, end_col = end
+
+        start_row_idx = tw.ord_rows.index(start_row_key)
+        end_row_idx = tw.ord_rows.index(end_row_key)
+        row_range = range(min(start_row_idx, end_row_idx), max(start_row_idx, end_row_idx) + 1)
+
+        start_col_idx = start_col - 1
+        end_col_idx = end_col - 1
+        col_range = range(min(start_col_idx, end_col_idx), max(start_col_idx, end_col_idx) + 1)
+
+        placeholders = []
+        for row_idx in row_range:
+            row_name = tw.ord_rows[row_idx]
+            for col_idx in col_range:
+                placeholders.append(self._build_placeholder(row_name, col_idx + 1))
+
+        return placeholders
+
+    def _placeholders_from_argument(self, argument: str):
+        argument = argument.strip()
+        if not argument:
+            return []
+        if ':' in argument:
+            start_ref, end_ref = argument.split(':', 1)
+            return self._expand_excel_range(start_ref, end_ref)
+
+        try:
+            parsed = self._parse_excel_reference(argument)
+        except FormulaReferenceError:
+            raise
+        if parsed is None:
+            numeric_arg = argument.replace(',', '.')
+            try:
+                float(numeric_arg)
+                return [numeric_arg]
+            except ValueError:
+                return []
+        row_name, column_index = parsed
+        return [self._build_placeholder(row_name, column_index)]
+
+    def _split_excel_arguments(self, args: str):
+        if not args:
+            return []
+        raw_args = re.split(r'[;,]', args)
+        return [arg.strip() for arg in raw_args if arg.strip()]
+
+    def _convert_excel_functions(self, formula: str):
+        pattern = re.compile(r'(?P<func>SUM|AVERAGE|AVG|MIN|MAX)\s*\((?P<args>[^()]*)\)', re.IGNORECASE)
+
+        def replace(match):
+            func = match.group('func').upper()
+            args = match.group('args')
+            placeholders = []
+            for argument in self._split_excel_arguments(args):
+                placeholders.extend(self._placeholders_from_argument(argument))
+
+            if not placeholders:
+                return '0'
+
+            if func == 'SUM':
+                return f"({' + '.join(placeholders)})"
+            if func in ('AVERAGE', 'AVG'):
+                return f"(({' + '.join(placeholders)})/{len(placeholders)})"
+            if func == 'MIN':
+                return f"Min({', '.join(placeholders)})"
+            if func == 'MAX':
+                return f"Max({', '.join(placeholders)})"
+            return match.group(0)
+
+        previous = None
+        converted = formula
+        while previous != converted:
+            previous = converted
+            converted = pattern.sub(replace, converted)
+        return converted
+
+    def _convert_excel_references(self, formula: str):
+        tw = self.tableWidget()
+        if tw is None:
+            return formula
+
+        # mask quoted strings to avoid replacing references inside them
+        masked_chars = []
+        in_quotes = False
+        for idx, ch in enumerate(formula):
+            if ch == '"' and (idx == 0 or formula[idx - 1] != '\\'):
+                in_quotes = not in_quotes
+                masked_chars.append(' ')
+            elif in_quotes:
+                masked_chars.append(' ')
+            else:
+                masked_chars.append(ch)
+        masked = ''.join(masked_chars)
+
+        pattern = re.compile(r'(?<![A-Za-z0-9_])\$?[A-Za-z]+\$?\d+(?![A-Za-z0-9_])')
+        matches = list(pattern.finditer(masked))
+        if not matches:
+            return formula
+
+        converted = formula
+        offset = 0
+        for match in matches:
+            token = formula[match.start():match.end()]
+            parsed = self._parse_excel_reference(token)
+            if parsed is None:
+                continue
+            row_name, column_index = parsed
+            placeholder = self._build_placeholder(row_name, column_index)
+            start = match.start() + offset
+            end = match.end() + offset
+            converted = converted[:start] + placeholder + converted[end:]
+            offset += len(placeholder) - (match.end() - match.start())
+
+        return converted
+
     def init_dependencies(self):
         self.dependencies = []
         if dep := self.get('dependencies', ast.literal_eval, None):
@@ -1526,7 +1692,18 @@ class TableItem(QTableWidgetItem):
                 cell.update_dependencies()
 
     def calculate_formula(self):
-        formula = self.get('formula', str, '')
+        raw_formula = self.get('formula', str, '')
+        if raw_formula and not raw_formula.startswith('='):
+            raw_formula = f'={raw_formula}'
+
+        try:
+            formula = self._convert_excel_functions(raw_formula)
+            formula = self._convert_excel_references(formula)
+        except FormulaReferenceError:
+            self.cells_in_formula = []
+            self.update_cell('cformula', 'Неверная ссылка')
+            self.update_cell('cells_in_formula', str([]))
+            return None
         used_cells = []
         for m in re.findall(r'"(?:[^\\"]|\\.)*"', formula):
             param_index = m[1:-1]
@@ -2110,6 +2287,26 @@ class TableWidget(QTableWidget):
             if (param_name, obj.date_time_izm) not in self.table:
                 self.table[(param_name, obj.date_time_izm)] = {}
             return self.table[(param_name, obj.date_time_izm)]
+
+    @staticmethod
+    def _letters_to_index(letters: str) -> int:
+        result = 0
+        for char in letters:
+            if not char.isalpha():
+                return -1
+            result = result * 26 + (ord(char.upper()) - ord('A') + 1)
+        return result - 1
+
+    def column_index_from_letters(self, letters: str):
+        index = self._letters_to_index(letters)
+        if 0 <= index < len(self.ord_columns):
+            return index
+        return None
+
+    def row_key_from_number(self, number: int):
+        if 1 <= number <= len(self.ord_rows):
+            return self.ord_rows[number - 1]
+        return None
 
     def get_row_npp(self, row):
         return self.get_row_prop(row, 'row_npp', int, None)
