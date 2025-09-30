@@ -1536,15 +1536,16 @@ class TableItem(QTableWidgetItem):
                 cell.update_dependencies()
 
     def calculate_formula(self):
-        formula = self.get('formula', str, '')
+        tw = self.tableWidget()
+        if tw is None:
+            return None
+
+        formula = self.get('formula', str, '') or ''
         previous_cells = list(self.cells_in_formula)
         self.cells_in_formula = []
         used_cells = []
         collected_cells = []
         cycle_detected = False
-        tw = self.tableWidget()
-        if tw is None:
-            return None
 
         def _register_dependency(cell_item):
             nonlocal cycle_detected
@@ -1571,6 +1572,32 @@ class TableItem(QTableWidgetItem):
                 return cashed_val + plus_val if plus_val else cashed_val * mul_val
             raw_value = cell_item.get('value', float, 0)
             return raw_value + plus_val if plus_val else raw_value * mul_val
+
+        row_formula_applied = False
+        if not formula or formula.strip() in {'', '='}:
+            row_formula = tw.get_row_prop(self.key[0], 'row_formula', str, '')
+            if row_formula:
+                formula = row_formula
+                row_formula_applied = True
+
+        if row_formula_applied:
+            try:
+                column_number = tw.ord_columns.index(self.key[1]) + 1
+            except ValueError:
+                column_number = None
+            if column_number is not None:
+                pattern = r'"((?:[^"\\]|\\.)*?)\[\]"'
+
+                def _replace_current_column(match):
+                    inner = match.group(1)
+                    return f'"{inner}[{column_number}]"'
+
+                formula = re.sub(pattern, _replace_current_column, formula)
+
+        if not formula or formula.strip() in {'', '='}:
+            self.update_cell('cformula', '')
+            self.clear_unused_dependencies([], previous_cells)
+            return None
 
         for m in re.findall(r'"(?:[^\\"]|\\.)*"', formula):
             param_index = m[1:-1]
@@ -1627,11 +1654,14 @@ class TableItem(QTableWidgetItem):
             self.cells_in_formula = previous_cells
             self.update_cell('cformula', 'Циклическая ссылка')
             return None
-        formula = formula.replace('=', '')
-        if formula.replace(' ', '') == '':
+
+        normalized_formula = formula[1:] if formula.startswith('=') else formula
+        if normalized_formula.replace(' ', '') == '':
             self.update_cell('cformula', '')
+            self.clear_unused_dependencies([], previous_cells)
             return None
-        evaled = str(eval_expr(formula.replace('=', '')))
+
+        evaled = str(eval_expr(normalized_formula))
         if evaled:
             self.update_cell('cformula', evaled)
         self.cells_in_formula = collected_cells
