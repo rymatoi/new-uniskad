@@ -9,7 +9,7 @@ from PySide2.QtGui import QIcon, QCursor, QColor, QFont, QBrush, QKeySequence
 from PySide2.QtWidgets import QTreeView, QMenu, QColorDialog, QInputDialog, QDockWidget, \
     QHBoxLayout, QToolButton, QWidget, QLabel, QAbstractItemView, QAction, QLineEdit, QShortcut, \
     QFontDialog, QComboBox, QCompleter, QTableWidget, QTableWidgetItem, QVBoxLayout, QTreeWidget, QTreeWidgetItem, \
-    QApplication, QStyle, QSizePolicy
+    QApplication, QStyle, QSizePolicy, QDialog, QDialogButtonBox, QTextBrowser
 from openpyxl.workbook import Workbook
 from app import app_logger, _menu, basic_funcs
 from app._eval_expr import eval_expr
@@ -1836,12 +1836,73 @@ class TablePage1(QtWidgets.QWidget):
         self.formula_result_label = QLabel('Значение: —', panel)
         self.formula_result_label.setObjectName('formulaResultLabel')
         self.formula_result_label.setStyleSheet('color: #666666;')
+        self.formula_result_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        self.formula_result_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+
+        self.formula_help_button = QToolButton(panel)
+        self.formula_help_button.setObjectName('formulaHelpButton')
+        self.formula_help_button.setAutoRaise(True)
+        self.formula_help_button.setIcon(panel.style().standardIcon(QStyle.SP_MessageBoxQuestion))
+        self.formula_help_button.setToolTip('Показать инструкцию по формулам')
+        self.formula_help_button.clicked.connect(self.show_formula_help)
 
         layout.addWidget(self.formula_icon)
         layout.addWidget(self.formula_edit, 1)
-        layout.addWidget(self.formula_result_label, 0, Qt.AlignRight)
+        layout.addWidget(self.formula_result_label)
+        layout.addWidget(self.formula_help_button, 0, Qt.AlignRight)
 
         return panel
+
+    def show_formula_help(self):
+        help_dialog = QDialog(self)
+        help_dialog.setWindowTitle('Инструкция по формулам')
+        help_dialog.setModal(True)
+        help_dialog.setFixedSize(600, 520)
+
+        layout = QVBoxLayout(help_dialog)
+        layout.setContentsMargins(16, 16, 16, 16)
+
+        help_text = (
+            "<p><b>Работа с формулами в таблице</b></p>"
+            "<p>Строка формулы позволяет вычислять значения непосредственно в выбранной ячейке. "
+            "Используйте её, чтобы быстро создавать расчёты без открытия отдельного диалога.</p>"
+            "<ul>"
+            "<li><b>Быстрый ввод.</b> Начните выражение со знака <code>=</code>. При вводе названий строк или функций "
+            "появляются подсказки с автодополнением.</li>"
+            "<li><b>Ссылки на параметры.</b> Пока курсор находится в строке формулы, щёлкните по нужной ячейке таблицы — "
+            "в формулу автоматически подставится ссылка вида <code>&quot;Имя строки&quot;[Номер столбца]</code>, а задействованные "
+            "ячейки подсветятся.</li>"
+            "<li><b>Готовые функции.</b> Доступны <code>СУММ()</code>, <code>СРЗНАЧ()</code>, <code>МИН()</code>, "
+            "<code>МАКС()</code>, <code>СЧЁТ()</code> и <code>ЕСЛИ(условие; значение_если_истина; значение_если_ложь)</code>. "
+            "Аргументы можно разделять точкой с запятой или запятой.</li>"
+            "<li><b>Автоподстановка параметров.</b> Выбирайте элементы из выпадающего списка — параметр вставляется в кавычках "
+            "с пустыми скобками, например <code>&quot;Температура[]&quot;</code>. Укажите номер столбца в квадратных скобках, чтобы "
+            "обратиться к конкретному значению. Без указания номера столбца ссылка раскрывается в массив всех значений строки, "
+            "что удобно для агрегирующих функций вроде <code>СУММ(&quot;Температура[]&quot;)</code>.</li>"
+            "<li><b>Мгновенный результат.</b> Итог расчёта отображается справа от поля ввода. При ошибке вычисления здесь остаётся "
+            "исходный текст формулы, что помогает обнаружить опечатку.</li>"
+            "<li><b>Применение.</b> Нажмите Enter или кнопку сохранения в панели, чтобы записать формулу в ячейку. Повторный выбор "
+            "ячейки возвращает формулу в строку для редактирования.</li>"
+            "</ul>"
+            "<p><b>Примеры</b></p>"
+            "<ul>"
+            "<li><code>=СУММ(&quot;Температура&quot;[1]; &quot;Температура&quot;[2])</code> — суммирует два показателя строки «Температура».</li>"
+            "<li><code>=ЕСЛИ(&quot;Давление&quot;[1] &gt; 10; &quot;Превышение&quot;; &quot;Норма&quot;)</code> — возвращает текст в зависимости от условия.</li>"
+            "<li><code>=(&quot;Масса&quot;[1] - &quot;Масса&quot;[2]) / &quot;Масса&quot;[2]</code> — вычисляет относительное отклонение между измерениями.</li>"
+            "</ul>"
+            "<p>Сложные выражения можно сохранить в разделе «Список шаблонных формул» и использовать повторно.</p>"
+        )
+        text_browser = QTextBrowser(help_dialog)
+        text_browser.setHtml(help_text)
+        text_browser.setOpenExternalLinks(True)
+        text_browser.setTextInteractionFlags(Qt.TextBrowserInteraction)
+        layout.addWidget(text_browser)
+
+        button_box = QDialogButtonBox(QDialogButtonBox.Close, Qt.Horizontal, help_dialog)
+        button_box.rejected.connect(help_dialog.reject)
+        layout.addWidget(button_box)
+
+        help_dialog.exec_()
 
     def update_formula_context(self):
         if not hasattr(self, 'formula_edit'):
