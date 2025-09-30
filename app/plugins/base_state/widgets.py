@@ -9,7 +9,7 @@ from PySide2.QtGui import QIcon, QCursor, QColor, QFont, QBrush, QKeySequence
 from PySide2.QtWidgets import QTreeView, QMenu, QColorDialog, QInputDialog, QDockWidget, \
     QHBoxLayout, QToolButton, QWidget, QLabel, QAbstractItemView, QAction, QLineEdit, QShortcut, \
     QFontDialog, QComboBox, QCompleter, QTableWidget, QTableWidgetItem, QVBoxLayout, QTreeWidget, QTreeWidgetItem, \
-    QApplication, QStyle, QSizePolicy, QMessageBox
+    QApplication, QStyle, QSizePolicy, QDialog, QDialogButtonBox, QTextBrowser
 from openpyxl.workbook import Workbook
 from app import app_logger, _menu, basic_funcs
 from app._eval_expr import eval_expr
@@ -1854,11 +1854,14 @@ class TablePage1(QtWidgets.QWidget):
         return panel
 
     def show_formula_help(self):
-        help_box = QMessageBox(self)
-        help_box.setIcon(QMessageBox.Information)
-        help_box.setWindowTitle('Инструкция по формулам')
-        help_box.setTextFormat(Qt.RichText)
-        help_box.setTextInteractionFlags(Qt.TextBrowserInteraction)
+        help_dialog = QDialog(self)
+        help_dialog.setWindowTitle('Инструкция по формулам')
+        help_dialog.setModal(True)
+        help_dialog.setFixedSize(600, 520)
+
+        layout = QVBoxLayout(help_dialog)
+        layout.setContentsMargins(16, 16, 16, 16)
+
         help_text = (
             "<p><b>Работа с формулами в таблице</b></p>"
             "<p>Строка формулы позволяет вычислять значения непосредственно в выбранной ячейке. "
@@ -1889,11 +1892,17 @@ class TablePage1(QtWidgets.QWidget):
             "</ul>"
             "<p>Сложные выражения можно сохранить в разделе «Список шаблонных формул» и использовать повторно.</p>"
         )
-        help_box.setText(help_text)
-        help_box.setStandardButtons(QMessageBox.Ok)
-        help_box.setDefaultButton(QMessageBox.Ok)
-        help_box.setMinimumWidth(520)
-        help_box.exec_()
+        text_browser = QTextBrowser(help_dialog)
+        text_browser.setHtml(help_text)
+        text_browser.setOpenExternalLinks(True)
+        text_browser.setTextInteractionFlags(Qt.TextBrowserInteraction)
+        layout.addWidget(text_browser)
+
+        button_box = QDialogButtonBox(QDialogButtonBox.Close, Qt.Horizontal, help_dialog)
+        button_box.rejected.connect(help_dialog.reject)
+        layout.addWidget(button_box)
+
+        help_dialog.exec_()
 
     def update_formula_context(self):
         if not hasattr(self, 'formula_edit'):
