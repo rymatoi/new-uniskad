@@ -74,10 +74,25 @@ class Ui_EditFormulaDialog(object):
 
         self.verticalLayout_2.addLayout(self.gridLayout)
 
+        self.formulaHeaderLayout = QHBoxLayout()
+        self.formulaHeaderLayout.setObjectName(u"formulaHeaderLayout")
         self.label = QLabel(EditFormulaDialog)
         self.label.setObjectName(u"label")
 
-        self.verticalLayout_2.addWidget(self.label)
+        self.formulaHeaderLayout.addWidget(self.label)
+
+        self.formulaHelpToolButton = QToolButton(EditFormulaDialog)
+        self.formulaHelpToolButton.setObjectName(u"formulaHelpToolButton")
+        self.formulaHelpToolButton.setAutoRaise(True)
+
+        self.formulaHeaderLayout.addWidget(self.formulaHelpToolButton)
+
+        self.formulaHeaderSpacer = QSpacerItem(40, 20, QSizePolicy.Expanding, QSizePolicy.Minimum)
+
+        self.formulaHeaderLayout.addItem(self.formulaHeaderSpacer)
+
+
+        self.verticalLayout_2.addLayout(self.formulaHeaderLayout)
 
         self.formulaLineEdit = QLineEdit(EditFormulaDialog)
         self.formulaLineEdit.setObjectName(u"formulaLineEdit")
@@ -119,6 +134,8 @@ class Ui_EditFormulaDialog(object):
         self.removePushButton.setText(QCoreApplication.translate("EditFormulaDialog", u"\u0423\u0434\u0430\u043b\u0438\u0442\u044c", None))
         self.label_2.setText(QCoreApplication.translate("EditFormulaDialog", u"\u0418\u043c\u044f", None))
         self.label.setText(QCoreApplication.translate("EditFormulaDialog", u"\u0412\u044b\u0440\u0430\u0436\u0435\u043d\u0438\u0435 \u0434\u043b\u044f \u0444\u043e\u0440\u043c\u0443\u043b\u044b", None))
+        self.formulaHelpToolButton.setToolTip(QCoreApplication.translate("EditFormulaDialog", u"\u041f\u043e\u043a\u0430\u0437\u0430\u0442\u044c \u043f\u043e\u0434\u0441\u043a\u0430\u0437\u043a\u0443 \u043f\u043e \u0441\u0438\u043d\u0442\u0430\u043a\u0441\u0438\u0441\u0443 \u0444\u043e\u0440\u043c\u0443\u043b", None))
+        self.formulaHelpToolButton.setText(QCoreApplication.translate("EditFormulaDialog", u"?", None))
         self.savePushButton.setText(QCoreApplication.translate("EditFormulaDialog", u"\u0421\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c", None))
         self.cancelPushButton.setText(QCoreApplication.translate("EditFormulaDialog", u"\u041e\u0442\u043c\u0435\u043d\u0430", None))
     # retranslateUi

@@ -1,6 +1,7 @@
 import ast
 import re
-from PySide2.QtWidgets import QTreeWidgetItem, QDialog, QTreeWidgetItemIterator
+from PySide2 import QtCore
+from PySide2.QtWidgets import QTreeWidgetItem, QDialog, QTreeWidgetItemIterator, QMessageBox
 from app import basic_funcs
 from app.plugins.base_state.dialogs.edit_user_formula import EditUserFormulaDialog
 from app.plugins.project import utils
@@ -68,6 +69,7 @@ class ManageUserFormulasDialog(BaseDialog):
         self.ui.addParamsPushButton.clicked.connect(self.add_params_to_table)
         self.ui.upButton.clicked.connect(self.move_item_up)
         self.ui.downButton.clicked.connect(self.move_item_down)
+        self.ui.helpToolButton.clicked.connect(self.show_help)
 
     def update_indices(self):
         iterator = QTreeWidgetItemIterator(self.ui.treeWidget)
@@ -160,6 +162,40 @@ class ManageUserFormulasDialog(BaseDialog):
 
     def cancel(self):
         self.close()
+
+    def show_help(self):
+        message = QMessageBox(self)
+        message.setWindowTitle('Инструкция по формульному редактору')
+        message.setTextFormat(QtCore.Qt.RichText)
+        message.setStandardButtons(QMessageBox.Ok)
+        message.setText(
+            '<h3>Работа со списком пользовательских формул</h3>'
+            '<p>Этот список хранит формулы, которые можно автоматически добавить в таблицу расчёта. '
+            'Каждая строка содержит название параметра и выражение, по которому он будет вычисляться.</p>'
+            '<ol>'
+            '<li><b>Добавить</b> — создаёт новую заготовку формулы. Укажите имя параметра и настройте выражение через кнопку «Изменить».</li>'
+            '<li><b>Изменить</b> — открывает редактор, где выбираются исходные параметры и редактируется выражение.</li>'
+            '<li><b>Вверх/Вниз</b> — меняют порядок следования формул в списке.</li>'
+            '<li><b>Удалить</b> — удаляет выделенные формулы из списка.</li>'
+            '<li><b>Добавить строки в таблицу</b> — выгружает отмеченные формулы в текущую таблицу расчёта (значение будет подставлено как «=…»).</li>'
+            '</ol>'
+            '<p>После редактирования не забудьте нажать «Сохранить», чтобы изменения попали в общую библиотеку.</p>'
+            '<h4>Поддерживаемые функции и операции</h4>'
+            '<ul>'
+            '<li><code>+</code>, <code>-</code>, <code>*</code>, <code>/</code> — арифметика.</li>'
+            '<li><code>СУММ()</code>, <code>СРЗНАЧ()</code>, <code>МИН()</code>, <code>МАКС()</code>, <code>СЧЁТ()</code> — агрегируют переданные параметры.</li>'
+            '<li><code>ЕСЛИ(условие; значение_истина; значение_ложь)</code> — логическое ветвление.</li>'
+            '</ul>'
+            '<h4>Примеры выражений</h4>'
+            '<ul>'
+            '<li><code>X0 + X1</code> — сумма двух выбранных параметров.</li>'
+            '<li><code>СУММ(X0; X2; 15)</code> — сложение параметров и константы.</li>'
+            '<li><code>ЕСЛИ(X0 &gt; 0; X1 / X0; 0)</code> — проверка деления только при положительном X0.</li>'
+            '</ul>'
+            '<p>В списке «Имя переменной» показано соответствие между служебными именами <code>X0…Xn</code> и '
+            'фактическими параметрами проекта. Эти имена используются в выражении.</p>'
+        )
+        message.exec_()
 
     @classmethod
     def modal(cls, parent=None):

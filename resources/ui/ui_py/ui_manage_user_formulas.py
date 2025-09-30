@@ -35,6 +35,12 @@ class Ui_ListTemplateFormulas(object):
 
         self.horizontalLayout_2.addWidget(self.addParamsPushButton)
 
+        self.helpToolButton = QToolButton(ListTemplateFormulas)
+        self.helpToolButton.setObjectName(u"helpToolButton")
+        self.helpToolButton.setAutoRaise(True)
+
+        self.horizontalLayout_2.addWidget(self.helpToolButton)
+
 
         self.verticalLayout_2.addLayout(self.horizontalLayout_2)
 
@@ -119,6 +125,8 @@ class Ui_ListTemplateFormulas(object):
     def retranslateUi(self, ListTemplateFormulas):
         ListTemplateFormulas.setWindowTitle(QCoreApplication.translate("ListTemplateFormulas", u"\u0421\u043f\u0438\u0441\u043e\u043a \u0448\u0430\u0431\u043b\u043e\u043d\u043d\u044b\u0445 \u0444\u043e\u0440\u043c\u0443\u043b", None))
         self.addParamsPushButton.setText(QCoreApplication.translate("ListTemplateFormulas", u"\u0414\u043e\u0431\u0430\u0432\u0438\u0442\u044c \u0441\u0442\u0440\u043e\u043a\u0438 \u0432 \u0442\u0430\u0431\u043b\u0438\u0446\u0443", None))
+        self.helpToolButton.setToolTip(QCoreApplication.translate("ListTemplateFormulas", u"\u041f\u043e\u043a\u0430\u0437\u0430\u0442\u044c \u0438\u043d\u0441\u0442\u0440\u0443\u043a\u0446\u0438\u044e \u043f\u043e \u0440\u0430\u0431\u043e\u0442\u0435 \u0441 \u0444\u043e\u0440\u043c\u0443\u043b\u0430\u043c\u0438", None))
+        self.helpToolButton.setText(QCoreApplication.translate("ListTemplateFormulas", u"?", None))
         self.addPushButton.setText(QCoreApplication.translate("ListTemplateFormulas", u"\u0414\u043e\u0431\u0430\u0432\u0438\u0442\u044c", None))
         self.editPushButton.setText(QCoreApplication.translate("ListTemplateFormulas", u"\u0418\u0437\u043c\u0435\u043d\u0438\u0442\u044c", None))
         self.upButton.setText(QCoreApplication.translate("ListTemplateFormulas", u"\u0412\u0432\u0435\u0440\u0445", None))

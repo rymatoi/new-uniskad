@@ -40,6 +40,19 @@
            </property>
           </widget>
          </item>
+         <item>
+          <widget class="QToolButton" name="helpToolButton">
+           <property name="toolTip">
+            <string>Показать инструкцию по работе с формулами</string>
+           </property>
+           <property name="text">
+            <string>?</string>
+           </property>
+           <property name="autoRaise">
+            <bool>true</bool>
+           </property>
+          </widget>
+         </item>
         </layout>
        </item>
       </layout>

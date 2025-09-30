@@ -1,4 +1,5 @@
-from PySide2.QtWidgets import QTreeWidgetItem, QDialog, QTreeWidgetItemIterator, QTreeWidget
+from PySide2 import QtCore
+from PySide2.QtWidgets import QTreeWidgetItem, QDialog, QTreeWidgetItemIterator, QTreeWidget, QMessageBox
 from app import basic_funcs
 from app.plugins.base_state.dialogs.test_data_selection import TestDataSelectionDialog
 from app.plugins.project import utils
@@ -48,6 +49,7 @@ class EditUserFormulaDialog(BaseDialog):
         self.ui.addPushButton.clicked.connect(self.add_row)
         self.ui.removePushButton.clicked.connect(self.remove_row)
         self.ui.editPushButton.clicked.connect(self.edit_row)
+        self.ui.formulaHelpToolButton.clicked.connect(self.show_help)
 
     def add_row(self):
         parameters = utils.collect_project_params(
@@ -120,3 +122,34 @@ class EditUserFormulaDialog(BaseDialog):
     def modal(cls, parent=None):
         wnd = cls(parent)
         return wnd.exec_()
+
+    def show_help(self):
+        message = QMessageBox(self)
+        message.setWindowTitle('Помощь по синтаксису формул')
+        message.setTextFormat(QtCore.Qt.RichText)
+        message.setStandardButtons(QMessageBox.Ok)
+        message.setText(
+            '<h3>Редактирование формулы параметра</h3>'
+            '<p>На этой форме вы определяете выражение, по которому будет рассчитан пользовательский параметр.</p>'
+            '<h4>Как выбрать исходные данные</h4>'
+            '<ul>'
+            '<li>Используйте кнопки <b>Добавить</b> и <b>Изменить</b>, чтобы выбрать параметры проекта. '
+            'Каждому параметру соответствует служебное имя <code>X0</code>, <code>X1</code> и т.д.</li>'
+            '<li>Список слева показывает соответствие между именами <code>Xn</code> и фактическими параметрами.</li>'
+            '</ul>'
+            '<h4>Синтаксис выражения</h4>'
+            '<ul>'
+            '<li>Используйте служебные имена <code>X0…Xn</code> в поле формулы. Значения подставятся автоматически при вычислении.</li>'
+            '<li>Поддерживаются операции <code>+</code>, <code>-</code>, <code>*</code>, <code>/</code>, а также сравнения <code>&gt;</code>, <code>&lt;</code>, <code>=</code>.</li>'
+            '<li>Доступны функции: <code>СУММ()</code>, <code>СРЗНАЧ()</code>, <code>МИН()</code>, <code>МАКС()</code>, <code>СЧЁТ()</code>, <code>ЕСЛИ()</code>.</li>'
+            '<li>Аргументы в функциях разделяются точкой с запятой: <code>СУММ(X0; X1; 10)</code>.</li>'
+            '</ul>'
+            '<h4>Примеры</h4>'
+            '<ul>'
+            '<li><code>X0 * 1.2</code> — увеличить выбранный параметр на 20%.</li>'
+            '<li><code>СУММ(X0; X1; X2)</code> — суммировать несколько параметров.</li>'
+            '<li><code>ЕСЛИ(X0 &gt; 100; X1; X2)</code> — выбрать значение в зависимости от условия.</li>'
+            '</ul>'
+            '<p>После ввода формулы нажмите «Сохранить», чтобы вернуться к списку и зафиксировать изменения.</p>'
+        )
+        message.exec_()
