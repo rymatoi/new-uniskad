@@ -1695,6 +1695,8 @@ class TableItem(QTableWidgetItem):
                     replacement = values[0]
                 else:
                     replacement = ';'.join(values)
+                    if match.start() > 0 and formula[match.start() - 1] in {';', ','}:
+                        replacement = ' ' + replacement
                 formula = formula[:match.start()] + replacement + formula[match.end():]
                 new_search_pos = match.start() + len(replacement)
             else:
