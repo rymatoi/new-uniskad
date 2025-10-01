@@ -1645,12 +1645,18 @@ class TableItem(QTableWidgetItem):
                 param = param_index.replace('\\', '').strip()
                 indices = list(range(1, len(tw.ord_columns) + 1))
             else:
-                param_index = param_index.split('[', 1)
-                if len(param_index) != 2:
+                param_index_parts = param_index.split('[', 1)
+                if len(param_index_parts) != 2:
                     self.update_cell('cformula', 'Неверный синтаксис')
-                param = param_index[0].replace('\\', '').strip()
-                index = param_index[1][:-1].strip()
-                indices = [int(index)] if index and index.isdigit() else []
+                    search_pos = match.end()
+                    continue
+                param = param_index_parts[0].replace('\\', '').strip()
+                index = param_index_parts[1][:-1].strip()
+                if index == '':
+                    full_row_reference = True
+                    indices = list(range(1, len(tw.ord_columns) + 1))
+                else:
+                    indices = [int(index)] if index.isdigit() else []
 
             if not indices:
                 continue
