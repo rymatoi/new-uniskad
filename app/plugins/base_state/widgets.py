@@ -1662,19 +1662,34 @@ class TableItem(QTableWidgetItem):
             self.clear_unused_dependencies([], previous_cells)
             return None
 
-        evaled = str(eval_expr(normalized_formula))
-        if row_formula_applied and evaled is not None:
+        eval_result = eval_expr(normalized_formula)
+        evaled_value = eval_result
+
+        if row_formula_applied:
             column_index = column_number - 1 if column_number is not None else None
-            if ';' in evaled:
-                values = [value.strip() for value in evaled.split(';')]
+            if eval_result is None:
+                evaled_value = ''
+            elif isinstance(eval_result, (list, tuple)):
+                values = [str(value) for value in eval_result]
                 if column_index is None:
-                    evaled = values[0] if values else ''
+                    evaled_value = values[0] if values else ''
                 elif 0 <= column_index < len(values):
-                    evaled = values[column_index]
+                    evaled_value = values[column_index]
                 else:
-                    evaled = ''
-        if evaled or evaled == '':
-            self.update_cell('cformula', evaled)
+                    evaled_value = ''
+            else:
+                eval_result_str = str(eval_result)
+                if ';' in eval_result_str:
+                    values = [value.strip() for value in eval_result_str.split(';')]
+                    if column_index is None:
+                        evaled_value = values[0] if values else ''
+                    elif 0 <= column_index < len(values):
+                        evaled_value = values[column_index]
+                    else:
+                        evaled_value = ''
+
+        evaled = '' if evaled_value is None else str(evaled_value)
+        self.update_cell('cformula', evaled)
         self.cells_in_formula = collected_cells
         self.update_cell('cells_in_formula',
                          str([(_c[0], _c[1].strftime("%Y-%m-%d %H:%M:%S.%f")) for _c in
