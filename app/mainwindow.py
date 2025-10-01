@@ -1,7 +1,7 @@
 import ast
 
 from PySide2 import QtWidgets
-from PySide2.QtCore import QEventLoop, Slot
+from PySide2.QtCore import QEventLoop, Slot, QByteArray
 from PySide2.QtGui import QIcon, QCloseEvent, Qt, QKeySequence
 from PySide2.QtWidgets import QMenu, QToolBar, QHBoxLayout, QToolButton, QWidget, QDialog, QShortcut, QDockWidget, \
     QAction, QProgressBar, QLabel
@@ -463,7 +463,37 @@ class MainWindow(QtWidgets.QMainWindow):
                     sp.set_user_default_value(None, None, None, 'active_project', str(dw.project_id))
         sp.set_user_default_value(None, None, None, 'active_plugins', str(active_plugins))
 
+        try:
+            geometry = bytes(self.saveGeometry().toBase64()).decode('ascii')
+            sp.set_user_default_value(None, None, None, 'main_window_geometry', geometry)
+        except Exception as exc:
+            logger.warning('Не удалось сохранить геометрию окна: %s', exc)
+
+        try:
+            state = bytes(self.saveState().toBase64()).decode('ascii')
+            sp.set_user_default_value(None, None, None, 'main_window_state', state)
+        except Exception as exc:
+            logger.warning('Не удалось сохранить состояние окна: %s', exc)
+
     def restore_windows_state(self):
+        geometry = self.user_settings.get('main_window_geometry')
+        if geometry:
+            try:
+                geometry_bytes = QByteArray.fromBase64(geometry.encode('ascii'))
+                if not geometry_bytes.isEmpty():
+                    self.restoreGeometry(geometry_bytes)
+            except Exception as exc:
+                logger.warning('Не удалось восстановить геометрию окна: %s', exc)
+
+        window_state = self.user_settings.get('main_window_state')
+        if window_state:
+            try:
+                state_bytes = QByteArray.fromBase64(window_state.encode('ascii'))
+                if not state_bytes.isEmpty():
+                    self.restoreState(state_bytes)
+            except Exception as exc:
+                logger.warning('Не удалось восстановить состояние окна: %s', exc)
+
         active_plugins = self.user_settings.get('active_plugins')
         if active_plugins:
             active_plugins = ast.literal_eval(active_plugins)

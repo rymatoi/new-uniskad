@@ -1514,17 +1514,24 @@ class TableItem(QTableWidgetItem):
     def setData(self, role: int, value) -> None:
         if role == Qt.EditRole:
             if isinstance(value, str):
-                if value != self.get('formula', str, '='):
-                    if value == '':
-                        return
-                    self.update_cell('formula', value)
-                    self.calculate_formula()
-                    self.update_dependencies()
-                    table = self.tableWidget()
-                    if table is not None and table.model() is not None:
-                        index = table.indexFromItem(self)
-                        if index.isValid():
-                            table.model().dataChanged.emit(index, index, [Qt.DisplayRole])
+                current_formula = self.get('formula', str, '')
+                if value == current_formula:
+                    return
+
+                normalized_value = value.strip()
+                if normalized_value == '':
+                    new_formula = ''
+                else:
+                    new_formula = value
+
+                self.update_cell('formula', new_formula)
+                self.calculate_formula()
+                self.update_dependencies()
+                table = self.tableWidget()
+                if table is not None and table.model() is not None:
+                    index = table.indexFromItem(self)
+                    if index.isValid():
+                        table.model().dataChanged.emit(index, index, [Qt.DisplayRole])
 
     def update_dependencies(self):
         for cell_key in self.dependencies:
