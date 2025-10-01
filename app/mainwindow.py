@@ -466,8 +466,11 @@ class MainWindow(QtWidgets.QMainWindow):
         sp.set_user_default_value(None, None, None, 'active_plugins', str(active_plugins))
 
         try:
-            geometry = self._encode_window_data(self.saveGeometry())
+            geometry_bytes = self.saveGeometry()
+            geometry = self._encode_window_data(geometry_bytes)
             if geometry is not None:
+                logger.debug('Сохраняем геометрию окна: длина raw=%s, длина закодированных данных=%s',
+                             geometry_bytes.size(), len(geometry))
                 sp.set_user_default_value(None, None, None, 'main_window_geometry', geometry)
             else:
                 logger.warning('Не удалось сохранить геометрию окна: строка превышает %s символов',
@@ -476,8 +479,11 @@ class MainWindow(QtWidgets.QMainWindow):
             logger.warning('Не удалось сохранить геометрию окна: %s', exc)
 
         try:
-            state = self._encode_window_data(self.saveState())
+            state_bytes = self.saveState()
+            state = self._encode_window_data(state_bytes)
             if state is not None:
+                logger.debug('Сохраняем состояние окна: длина raw=%s, длина закодированных данных=%s',
+                             state_bytes.size(), len(state))
                 sp.set_user_default_value(None, None, None, 'main_window_state', state)
             else:
                 logger.warning('Не удалось сохранить состояние окна: строка превышает %s символов',
@@ -488,19 +494,29 @@ class MainWindow(QtWidgets.QMainWindow):
     def restore_windows_state(self):
         geometry = self.user_settings.get('main_window_geometry')
         if geometry:
+            logger.debug('Восстановление геометрии окна: длина сохраненной строки=%s, префикс=%s',
+                         len(geometry), geometry[:2])
             try:
                 geometry_bytes = self._decode_window_data(geometry)
                 if not geometry_bytes.isEmpty():
-                    self.restoreGeometry(geometry_bytes)
+                    restored = self.restoreGeometry(geometry_bytes)
+                    logger.debug('Результат восстановления геометрии окна: %s', restored)
+                else:
+                    logger.debug('Геометрия окна после декодирования пуста')
             except Exception as exc:
                 logger.warning('Не удалось восстановить геометрию окна: %s', exc)
 
         window_state = self.user_settings.get('main_window_state')
         if window_state:
+            logger.debug('Восстановление состояния окна: длина сохраненной строки=%s, префикс=%s',
+                         len(window_state), window_state[:2])
             try:
                 state_bytes = self._decode_window_data(window_state)
                 if not state_bytes.isEmpty():
-                    self.restoreState(state_bytes)
+                    restored = self.restoreState(state_bytes)
+                    logger.debug('Результат восстановления состояния окна: %s', restored)
+                else:
+                    logger.debug('Состояние окна после декодирования пусто')
             except Exception as exc:
                 logger.warning('Не удалось восстановить состояние окна: %s', exc)
 
@@ -520,10 +536,13 @@ class MainWindow(QtWidgets.QMainWindow):
         if data is None or data.isNull() or data.isEmpty():
             return ''
 
+        logger.debug('Кодирование состояния окна: исходная длина=%s', data.size())
+
         try:
             compressed = qCompress(data, 9)
             encoded_bytes = compressed.toBase64()
             encoded = 'z:' + bytes(encoded_bytes).decode('ascii')
+            logger.debug('Сжатые данные: длина=%s, длина строки=%s', compressed.size(), len(encoded))
         except Exception as exc:
             logger.warning('Ошибка при кодировании состояния окна: %s', exc)
             encoded = None
@@ -531,14 +550,23 @@ class MainWindow(QtWidgets.QMainWindow):
         if encoded and len(encoded) <= cls._MAX_DB_STRING_LENGTH:
             return encoded
 
+        if encoded:
+            logger.debug('Сжатая строка длиной %s превышает лимит %s символов',
+                         len(encoded), cls._MAX_DB_STRING_LENGTH)
+
         try:
             fallback_bytes = data.toBase64()
             fallback = bytes(fallback_bytes).decode('ascii')
+            logger.debug('Используем fallback base64: длина строки=%s', len(fallback))
         except Exception:
             fallback = None
 
         if fallback and len(fallback) <= cls._MAX_DB_STRING_LENGTH:
             return fallback
+
+        if fallback:
+            logger.debug('Fallback строка длиной %s превышает лимит %s символов',
+                         len(fallback), cls._MAX_DB_STRING_LENGTH)
 
         return None
 
@@ -551,17 +579,24 @@ class MainWindow(QtWidgets.QMainWindow):
             payload = encoded[2:]
             try:
                 compressed = QByteArray.fromBase64(payload.encode('ascii'))
+                logger.debug('Декодирование сжатой строки: длина base64=%s, длина сжатых данных=%s',
+                             len(payload), compressed.size())
                 decompressed = qUncompress(compressed)
                 if decompressed.isNull():
+                    logger.debug('Результат распаковки NULL, возвращаем пустой QByteArray')
                     return QByteArray()
                 result = QByteArray()
                 result.append(decompressed)
+                logger.debug('Распакованные данные: длина=%s', result.size())
                 return result
             except Exception as exc:
                 logger.warning('Ошибка при декодировании сжатого состояния окна: %s', exc)
 
         try:
-            return QByteArray.fromBase64(encoded.encode('ascii'))
+            decoded = QByteArray.fromBase64(encoded.encode('ascii'))
+            logger.debug('Декодирование base64 без сжатия: длина строки=%s, длина результата=%s',
+                         len(encoded), decoded.size())
+            return decoded
         except Exception:
             logger.warning('Ошибка при декодировании состояния окна')
             return QByteArray()
