@@ -2,7 +2,7 @@ import ast
 import re
 
 from PySide2 import QtWidgets
-from PySide2.QtCore import QEventLoop, Slot, QByteArray, qCompress, qUncompress
+from PySide2.QtCore import QEventLoop, Slot, QByteArray, qCompress, qUncompress, QSettings
 from PySide2.QtGui import QIcon, QCloseEvent, Qt, QKeySequence
 from PySide2.QtWidgets import QMenu, QToolBar, QHBoxLayout, QToolButton, QWidget, QDialog, QShortcut, QDockWidget, \
     QAction, QProgressBar, QLabel
@@ -75,6 +75,7 @@ class MainWindow(QtWidgets.QMainWindow):
         super(MainWindow, self).__init__()
 
         self.user_settings = UserSettings()
+        self._window_qsettings = QSettings('Uniskad', 'MainWindowState')
 
         config.config.app.enable_timer(self.user_settings.get('application_close_timeout', 30))
         config.config.app._main_window_initialized = True  # TODO test
@@ -468,12 +469,12 @@ class MainWindow(QtWidgets.QMainWindow):
 
         try:
             geometry_bytes = self.saveGeometry()
-            geometry_chunks = self._encode_window_data(geometry_bytes)
-            if geometry_chunks:
-                total_length = sum(len(chunk) for chunk in geometry_chunks)
-                logger.debug('Сохраняем геометрию окна: длина raw=%s, частей=%s, суммарная длина=%s',
-                             geometry_bytes.size(), len(geometry_chunks), total_length)
-                self._store_chunked_value('main_window_geometry', geometry_chunks)
+            geometry_payload, encoding_label = self._encode_window_data(geometry_bytes)
+            if geometry_payload is not None:
+                storage_target = self._store_chunked_value('main_window_geometry', geometry_payload)
+                logger.debug('Сохраняем геометрию окна: длина raw=%s, длина строки=%s, режим=%s, хранилище=%s',
+                             geometry_bytes.size(), len(geometry_payload), encoding_label or 'unknown',
+                             storage_target)
             else:
                 logger.warning('Не удалось сохранить геометрию окна: не удалось закодировать данные')
         except Exception as exc:
@@ -481,12 +482,11 @@ class MainWindow(QtWidgets.QMainWindow):
 
         try:
             state_bytes = self.saveState()
-            state_chunks = self._encode_window_data(state_bytes)
-            if state_chunks:
-                total_length = sum(len(chunk) for chunk in state_chunks)
-                logger.debug('Сохраняем состояние окна: длина raw=%s, частей=%s, суммарная длина=%s',
-                             state_bytes.size(), len(state_chunks), total_length)
-                self._store_chunked_value('main_window_state', state_chunks)
+            state_payload, encoding_label = self._encode_window_data(state_bytes)
+            if state_payload is not None:
+                storage_target = self._store_chunked_value('main_window_state', state_payload)
+                logger.debug('Сохраняем состояние окна: длина raw=%s, длина строки=%s, режим=%s, хранилище=%s',
+                             state_bytes.size(), len(state_payload), encoding_label or 'unknown', storage_target)
             else:
                 logger.warning('Не удалось сохранить состояние окна: не удалось закодировать данные')
         except Exception as exc:
@@ -495,10 +495,10 @@ class MainWindow(QtWidgets.QMainWindow):
         self.user_settings.update()
 
     def restore_windows_state(self):
-        geometry_payload, geometry_chunk_count = self._load_chunked_value('main_window_geometry')
+        geometry_payload, geometry_source, geometry_chunk_count = self._load_chunked_value('main_window_geometry')
         if geometry_chunk_count and geometry_payload:
-            logger.debug('Восстановление геометрии окна: частей=%s, длина объединенных данных=%s, префикс=%s',
-                         geometry_chunk_count, len(geometry_payload), geometry_payload[:2])
+            logger.debug('Восстановление геометрии окна: частей=%s, длина объединенных данных=%s, источник=%s, префикс=%s',
+                         geometry_chunk_count, len(geometry_payload), geometry_source, geometry_payload[:2])
             try:
                 geometry_bytes = self._decode_window_data(geometry_payload)
                 if not geometry_bytes.isEmpty():
@@ -509,10 +509,10 @@ class MainWindow(QtWidgets.QMainWindow):
             except Exception as exc:
                 logger.warning('Не удалось восстановить геометрию окна: %s', exc)
 
-        window_state_payload, state_chunk_count = self._load_chunked_value('main_window_state')
+        window_state_payload, state_source, state_chunk_count = self._load_chunked_value('main_window_state')
         if state_chunk_count and window_state_payload:
-            logger.debug('Восстановление состояния окна: частей=%s, длина объединенных данных=%s, префикс=%s',
-                         state_chunk_count, len(window_state_payload), window_state_payload[:2])
+            logger.debug('Восстановление состояния окна: частей=%s, длина объединенных данных=%s, источник=%s, префикс=%s',
+                         state_chunk_count, len(window_state_payload), state_source, window_state_payload[:2])
             try:
                 state_bytes = self._decode_window_data(window_state_payload)
                 if not state_bytes.isEmpty():
@@ -536,10 +536,13 @@ class MainWindow(QtWidgets.QMainWindow):
 
     @classmethod
     def _encode_window_data(cls, data: QByteArray):
-        if data is None or data.isNull() or data.isEmpty():
-            return ['']
+        if data is None or data.isNull():
+            return '', 'empty'
 
         logger.debug('Кодирование состояния окна: исходная длина=%s', data.size())
+
+        if data.isEmpty():
+            return '', 'empty'
 
         encoded = None
         encoding_label = ''
@@ -570,20 +573,11 @@ class MainWindow(QtWidgets.QMainWindow):
             selected = fallback
             encoding_label = 'base64'
 
-        if not selected:
+        if selected is None:
             logger.debug('Не удалось получить строковое представление данных окна')
-            return []
+            return None, None
 
-        if len(selected) <= cls._MAX_DB_STRING_LENGTH:
-            logger.debug('Результат кодирования укладывается в лимит: длина=%s, режим=%s',
-                         len(selected), encoding_label or 'unknown')
-            return [selected]
-
-        chunk_size = cls._MAX_DB_STRING_LENGTH
-        chunks = [selected[i:i + chunk_size] for i in range(0, len(selected), chunk_size)]
-        logger.debug('Строка длиной %s разбита на %s частей по %s символов (режим=%s)',
-                     len(selected), len(chunks), chunk_size, encoding_label or 'unknown')
-        return chunks
+        return selected, encoding_label
 
     @staticmethod
     def _decode_window_data(encoded) -> QByteArray:
@@ -619,63 +613,81 @@ class MainWindow(QtWidgets.QMainWindow):
             logger.warning('Ошибка при декодировании состояния окна')
             return QByteArray()
 
-    def _store_chunked_value(self, base_key: str, chunks):
-        prefix = f"{base_key}_part"
+    def _store_chunked_value(self, base_key: str, payload: str):
+        cleared_indices = self._clear_db_chunks(base_key)
+        if cleared_indices:
+            logger.debug('Удалены устаревшие части ключа %s: %s', base_key, cleared_indices)
 
-        pattern = re.compile(rf"^{re.escape(base_key)}_part(\d+)$")
-        existing_indices = []
-        for attr in vars(self.user_settings).keys():
-            match = pattern.match(attr)
-            if match:
-                existing_indices.append(int(match.group(1)))
-        existing_indices.sort()
+        storage_target = 'db'
+        if payload is None:
+            payload = ''
 
-        if not chunks:
-            sp.set_user_default_value(None, None, None, base_key, '')
+        if len(payload) <= self._MAX_DB_STRING_LENGTH:
+            sp.set_user_default_value(None, None, None, base_key, payload)
+            self._window_qsettings.remove(base_key)
+            self._window_qsettings.sync()
         else:
-            sp.set_user_default_value(None, None, None, base_key, chunks[0])
-            for idx, chunk in enumerate(chunks):
-                sp.set_user_default_value(None, None, None, f"{prefix}{idx}", chunk)
+            self._window_qsettings.setValue(base_key, payload)
+            self._window_qsettings.sync()
+            sp.set_user_default_value(None, None, None, base_key, '')
+            storage_target = 'qsettings'
 
-        required_part_count = len(chunks)
-        for idx in existing_indices[required_part_count:]:
-            sp.set_user_default_value(None, None, None, f"{prefix}{idx}", '')
+        return storage_target
 
     def _load_chunked_value(self, base_key: str):
+        self._window_qsettings.sync()
+        qsettings_value = self._window_qsettings.value(base_key, '', type=str)
+        if qsettings_value:
+            logger.debug('Значение ключа %s получено из QSettings: длина=%s', base_key, len(qsettings_value))
+            return qsettings_value, 'qsettings', 1
+
         base_value = self.user_settings.get(base_key)
-        parts = []
         part_entries = []
         pattern = re.compile(rf"^{re.escape(base_key)}_part(\d+)$")
         for attr, value in vars(self.user_settings).items():
             match = pattern.match(attr)
-            if match and value:
+            if match and value is not None:
                 part_entries.append((int(match.group(1)), value))
 
         part_entries.sort(key=lambda item: item[0])
 
-        if base_value is not None:
+        parts = []
+        chunk_count = 0
+        include_base = base_value not in (None, '')
+        if include_base:
             parts.append(base_value)
+            chunk_count += 1
 
         if part_entries:
-            if parts and part_entries and part_entries[0][0] == 0 and part_entries[0][1] == parts[0]:
-                start_index = 1
-            else:
-                start_index = 0
-            for _, value in part_entries[start_index:]:
+            for idx, value in part_entries:
+                if include_base and idx == 0 and value == base_value:
+                    continue
                 parts.append(value or '')
+                chunk_count += 1
 
-        if not part_entries and (base_value is None or base_value == ''):
-            chunk_count = 0 if base_value is None else 1
-            return base_value or '', chunk_count
-
-        if not parts:
-            return '', 0
-
-        chunk_count = len(parts)
-        if part_entries:
-            logger.debug('Собрано %s частей для ключа %s (индексы частей: %s)',
+            logger.debug('Собрано %s частей для ключа %s из базы данных (индексы частей: %s)',
                          chunk_count, base_key, [idx for idx, _ in part_entries])
-        return ''.join(parts), chunk_count
+
+        if parts:
+            storage = 'db_chunks' if chunk_count > 1 else 'db'
+            return ''.join(parts), storage, chunk_count
+
+        if base_value is None:
+            return '', 'none', 0
+
+        return base_value or '', 'db', 1
+
+    def _clear_db_chunks(self, base_key: str):
+        prefix_pattern = re.compile(rf"^{re.escape(base_key)}_part(\d+)$")
+        existing_indices = []
+        for attr in list(vars(self.user_settings).keys()):
+            match = prefix_pattern.match(attr)
+            if match:
+                index = int(match.group(1))
+                existing_indices.append(index)
+                sp.set_user_default_value(None, None, None, attr, '')
+
+        return sorted(existing_indices)
 
     # slots:
     def import_files(self, type_):
