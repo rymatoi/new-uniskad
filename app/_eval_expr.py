@@ -1,6 +1,7 @@
 import re
 
-from sympy import Add, Basic, Integer, Max, Min, Piecewise, sympify
+from sympy import Add, Abs, And, Basic, Integer, Max, Min, Not, Or, Piecewise, Pow, S, sympify
+from sympy.functions.elementary.integers import Round as SympyRound
 
 
 def _as_sympy_args(args):
@@ -51,6 +52,42 @@ def _func_if(condition, true_value, false_value=0):
     return Piecewise((true_expr, condition_expr), (false_expr, True))
 
 
+def _func_abs(value):
+    value_expr = sympify(value) if not isinstance(value, Basic) else value
+    return Abs(value_expr)
+
+
+def _func_power(base, exponent):
+    base_expr = sympify(base) if not isinstance(base, Basic) else base
+    exponent_expr = sympify(exponent) if not isinstance(exponent, Basic) else exponent
+    return Pow(base_expr, exponent_expr)
+
+
+def _func_round(value, digits=0):
+    value_expr = sympify(value) if not isinstance(value, Basic) else value
+    digits_expr = sympify(digits) if not isinstance(digits, Basic) else digits
+    return SympyRound(value_expr, digits_expr)
+
+
+def _func_and(*args):
+    sympy_args = _as_sympy_args(args)
+    if not sympy_args:
+        return S.true
+    return And(*sympy_args)
+
+
+def _func_or(*args):
+    sympy_args = _as_sympy_args(args)
+    if not sympy_args:
+        return S.false
+    return Or(*sympy_args)
+
+
+def _func_not(value):
+    value_expr = sympify(value) if not isinstance(value, Basic) else value
+    return Not(value_expr)
+
+
 CUSTOM_FUNCTIONS = {
     'СУММ': _func_summ,
     'СРЗНАЧ': _func_average,
@@ -59,6 +96,18 @@ CUSTOM_FUNCTIONS = {
     'СЧЁТ': _func_count,
     'СЧЕТ': _func_count_alias,
     'ЕСЛИ': _func_if,
+    'ABS': _func_abs,
+    'МОДУЛЬ': _func_abs,
+    'POWER': _func_power,
+    'СТЕПЕНЬ': _func_power,
+    'ROUND': _func_round,
+    'ОКРУГЛ': _func_round,
+    'AND': _func_and,
+    'И': _func_and,
+    'OR': _func_or,
+    'ИЛИ': _func_or,
+    'NOT': _func_not,
+    'НЕ': _func_not,
 }
 
 
