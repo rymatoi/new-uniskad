@@ -1,5 +1,6 @@
 import ast
 import re
+from collections.abc import Iterable
 from copy import copy
 from datetime import datetime
 
@@ -1671,6 +1672,19 @@ class TableItem(QTableWidgetItem):
                 evaled_value = ''
             elif isinstance(eval_result, (list, tuple)):
                 values = [str(value) for value in eval_result]
+                if column_index is None:
+                    evaled_value = values[0] if values else ''
+                elif 0 <= column_index < len(values):
+                    evaled_value = values[column_index]
+                else:
+                    evaled_value = ''
+            elif isinstance(eval_result, Iterable) and not isinstance(eval_result, (str, bytes, dict)):
+                values = []
+                for item in list(eval_result):
+                    if isinstance(item, Iterable) and not isinstance(item, (str, bytes, dict)):
+                        values.extend(str(inner) for inner in list(item))
+                    else:
+                        values.append(str(item))
                 if column_index is None:
                     evaled_value = values[0] if values else ''
                 elif 0 <= column_index < len(values):
