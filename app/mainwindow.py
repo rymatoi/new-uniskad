@@ -1,10 +1,7 @@
 import ast
-import base64
-import binascii
-import zlib
 
 from PySide2 import QtWidgets
-from PySide2.QtCore import QEventLoop, Slot, QByteArray
+from PySide2.QtCore import QEventLoop, Slot, QByteArray, qCompress, qUncompress
 from PySide2.QtGui import QIcon, QCloseEvent, Qt, QKeySequence
 from PySide2.QtWidgets import QMenu, QToolBar, QHBoxLayout, QToolButton, QWidget, QDialog, QShortcut, QDockWidget, \
     QAction, QProgressBar, QLabel
@@ -520,45 +517,54 @@ class MainWindow(QtWidgets.QMainWindow):
 
     @classmethod
     def _encode_window_data(cls, data: QByteArray):
-        if not data or data.isEmpty():
+        if data is None or data.isNull() or data.isEmpty():
             return ''
 
         try:
-            raw_bytes = bytes(data)
-            compressed = zlib.compress(raw_bytes)
-            encoded = base64.b64encode(compressed).decode('ascii')
+            compressed = qCompress(data, 9)
+            encoded_bytes = compressed.toBase64()
+            encoded = 'z:' + bytes(encoded_bytes).decode('ascii')
         except Exception as exc:
             logger.warning('Ошибка при кодировании состояния окна: %s', exc)
-            return None
+            encoded = None
 
-        if len(encoded) > cls._MAX_DB_STRING_LENGTH:
-            try:
-                fallback = data.toBase64().data().decode('ascii')
-            except Exception:
-                fallback = None
+        if encoded and len(encoded) <= cls._MAX_DB_STRING_LENGTH:
+            return encoded
 
-            if fallback and len(fallback) <= cls._MAX_DB_STRING_LENGTH:
-                return fallback
+        try:
+            fallback_bytes = data.toBase64()
+            fallback = bytes(fallback_bytes).decode('ascii')
+        except Exception:
+            fallback = None
 
-            return None
+        if fallback and len(fallback) <= cls._MAX_DB_STRING_LENGTH:
+            return fallback
 
-        return encoded
+        return None
 
     @staticmethod
     def _decode_window_data(encoded: str) -> QByteArray:
         if not encoded:
             return QByteArray()
 
-        try:
-            compressed = base64.b64decode(encoded.encode('ascii'))
-            raw_bytes = zlib.decompress(compressed)
-            return QByteArray(raw_bytes)
-        except (binascii.Error, zlib.error, ValueError):
+        if encoded.startswith('z:'):
+            payload = encoded[2:]
             try:
-                return QByteArray.fromBase64(encoded.encode('ascii'))
-            except Exception:
-                logger.warning('Ошибка при декодировании состояния окна')
-                return QByteArray()
+                compressed = QByteArray.fromBase64(payload.encode('ascii'))
+                decompressed = qUncompress(compressed)
+                if decompressed.isNull():
+                    return QByteArray()
+                result = QByteArray()
+                result.append(decompressed)
+                return result
+            except Exception as exc:
+                logger.warning('Ошибка при декодировании сжатого состояния окна: %s', exc)
+
+        try:
+            return QByteArray.fromBase64(encoded.encode('ascii'))
+        except Exception:
+            logger.warning('Ошибка при декодировании состояния окна')
+            return QByteArray()
 
     # slots:
     def import_files(self, type_):
