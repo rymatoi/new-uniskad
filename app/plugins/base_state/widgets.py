@@ -1665,7 +1665,7 @@ class TableItem(QTableWidgetItem):
         evaled = str(eval_expr(normalized_formula))
         if row_formula_applied and evaled is not None:
             column_index = column_number - 1 if column_number is not None else None
-            if ';' in evaled or (column_index is not None and column_index != 0):
+            if ';' in evaled:
                 values = [value.strip() for value in evaled.split(';')]
                 if column_index is None:
                     evaled = values[0] if values else ''
