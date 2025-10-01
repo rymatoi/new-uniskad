@@ -1642,14 +1642,14 @@ class TableItem(QTableWidgetItem):
             param_index = m[1:-1]
             full_row_reference = '[' not in param_index and ']' not in param_index
             if full_row_reference:
-                param = param_index.replace('\\', '')
+                param = param_index.replace('\\', '').strip()
                 indices = list(range(1, len(tw.ord_columns) + 1))
             else:
                 param_index = param_index.split('[', 1)
                 if len(param_index) != 2:
                     self.update_cell('cformula', 'Неверный синтаксис')
-                param = param_index[0].replace('\\', '')
-                index = param_index[1][:-1]
+                param = param_index[0].replace('\\', '').strip()
+                index = param_index[1][:-1].strip()
                 indices = [int(index)] if index and index.isdigit() else []
 
             if not indices:
@@ -1690,14 +1690,20 @@ class TableItem(QTableWidgetItem):
                 continue
 
             for index in indices:
-                if len(tw.ord_columns) + 1 < index or index < 0:
+                if index < 1 or index > len(tw.ord_columns):
                     self.update_cell('cformula', 'Неверный индекс')
                     break
-                column = tw.ord_columns[index - 1]
 
-                if (param, column) not in tw.table.keys():
+                if param not in tw.ord_rows:
                     return self.update_cell('cformula', 'Параметр отсутствует в таблице')
-                cell = tw.item(tw.ord_rows.index(param), index - 1)
+
+                row_idx = tw.ord_rows.index(param)
+                column = tw.ord_columns[index - 1]
+                cell = tw.item(row_idx, index - 1)
+
+                if cell is None:
+                    return self.update_cell('cformula', 'Параметр отсутствует в таблице')
+
                 if not _register_dependency(cell):
                     break
 
