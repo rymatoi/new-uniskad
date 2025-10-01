@@ -1,7 +1,7 @@
 import re
 
-from sympy import Add, Abs, And, Basic, Integer, Max, Min, Not, Or, Piecewise, Pow, S, sympify
-from sympy.functions.elementary.integers import Round as SympyRound
+from sympy import Add, Abs, And, Basic, Integer, Max, Min, Not, Or, Piecewise, Pow, S, sign, sympify
+from sympy.functions.elementary.integers import floor
 
 
 def _as_sympy_args(args):
@@ -66,7 +66,14 @@ def _func_power(base, exponent):
 def _func_round(value, digits=0):
     value_expr = sympify(value) if not isinstance(value, Basic) else value
     digits_expr = sympify(digits) if not isinstance(digits, Basic) else digits
-    return SympyRound(value_expr, digits_expr)
+
+    if not digits_expr.is_integer:
+        raise ValueError('ROUND requires an integer number of digits')
+
+    factor = Pow(Integer(10), digits_expr)
+    scaled = Abs(value_expr) * factor
+    rounded = floor(scaled + S.Half)
+    return sign(value_expr) * rounded / factor
 
 
 def _func_and(*args):
