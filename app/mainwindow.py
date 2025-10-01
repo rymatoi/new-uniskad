@@ -1,7 +1,7 @@
 import ast
 
 from PySide2 import QtWidgets
-from PySide2.QtCore import QEventLoop, Slot, QByteArray, qCompress, qUncompress
+from PySide2.QtCore import QEventLoop, Slot, QByteArray, qUncompress
 from PySide2.QtGui import QIcon, QCloseEvent, Qt, QKeySequence
 from PySide2.QtWidgets import QMenu, QToolBar, QHBoxLayout, QToolButton, QWidget, QDialog, QShortcut, QDockWidget, \
     QAction, QProgressBar, QLabel
@@ -63,8 +63,6 @@ class MainWindow(QtWidgets.QMainWindow):
     ADMIN_ROLE = '_role_200'
     USER_ROLE = '_role_100'
     DEVELOPER_ROLE = '_role_1000'
-
-    _MAX_DB_STRING_LENGTH = 255
 
     def __init__(self):
 
@@ -461,114 +459,78 @@ class MainWindow(QtWidgets.QMainWindow):
         for dw in self.findChildren(QDockWidget):
             if not dw.isHidden() and hasattr(dw, 'plugin_name'):
                 active_plugins.append(dw.plugin_name)
-                if dw.plugin_name == 'project':
-                    sp.set_user_default_value(None, None, None, 'active_project', str(dw.project_id))
-        sp.set_user_default_value(None, None, None, 'active_plugins', str(active_plugins))
+                if dw.plugin_name == 'project' and hasattr(dw, 'project_id'):
+                    self.user_settings.set('active_project', dw.project_id)
+
+        self.user_settings.set('active_plugins', active_plugins)
 
         try:
             geometry_bytes = self.saveGeometry()
-            geometry = self._encode_window_data(geometry_bytes)
-            if geometry is not None:
-                logger.debug('Сохраняем геометрию окна: длина raw=%s, длина закодированных данных=%s',
-                             geometry_bytes.size(), len(geometry))
-                sp.set_user_default_value(None, None, None, 'main_window_geometry', geometry)
-            else:
-                logger.warning('Не удалось сохранить геометрию окна: строка превышает %s символов',
-                               self._MAX_DB_STRING_LENGTH)
+            logger.debug('Сохраняем геометрию окна: длина raw=%s', geometry_bytes.size())
+            self.user_settings.set('main_window_geometry', geometry_bytes)
         except Exception as exc:
             logger.warning('Не удалось сохранить геометрию окна: %s', exc)
 
         try:
             state_bytes = self.saveState()
-            state = self._encode_window_data(state_bytes)
-            if state is not None:
-                logger.debug('Сохраняем состояние окна: длина raw=%s, длина закодированных данных=%s',
-                             state_bytes.size(), len(state))
-                sp.set_user_default_value(None, None, None, 'main_window_state', state)
-            else:
-                logger.warning('Не удалось сохранить состояние окна: строка превышает %s символов',
-                               self._MAX_DB_STRING_LENGTH)
+            logger.debug('Сохраняем состояние окна: длина raw=%s', state_bytes.size())
+            self.user_settings.set('main_window_state', state_bytes)
         except Exception as exc:
             logger.warning('Не удалось сохранить состояние окна: %s', exc)
 
     def restore_windows_state(self):
         geometry = self.user_settings.get('main_window_geometry')
-        if geometry:
-            logger.debug('Восстановление геометрии окна: длина сохраненной строки=%s, префикс=%s',
-                         len(geometry), geometry[:2])
+        if geometry is not None:
             try:
-                geometry_bytes = self._decode_window_data(geometry)
+                geometry_bytes = self._prepare_window_data(geometry)
                 if not geometry_bytes.isEmpty():
                     restored = self.restoreGeometry(geometry_bytes)
                     logger.debug('Результат восстановления геометрии окна: %s', restored)
                 else:
-                    logger.debug('Геометрия окна после декодирования пуста')
+                    logger.debug('Геометрия окна пуста, пропускаем восстановление')
             except Exception as exc:
                 logger.warning('Не удалось восстановить геометрию окна: %s', exc)
 
         window_state = self.user_settings.get('main_window_state')
-        if window_state:
-            logger.debug('Восстановление состояния окна: длина сохраненной строки=%s, префикс=%s',
-                         len(window_state), window_state[:2])
+        if window_state is not None:
             try:
-                state_bytes = self._decode_window_data(window_state)
+                state_bytes = self._prepare_window_data(window_state)
                 if not state_bytes.isEmpty():
                     restored = self.restoreState(state_bytes)
                     logger.debug('Результат восстановления состояния окна: %s', restored)
                 else:
-                    logger.debug('Состояние окна после декодирования пусто')
+                    logger.debug('Состояние окна пусто, пропускаем восстановление')
             except Exception as exc:
                 logger.warning('Не удалось восстановить состояние окна: %s', exc)
 
         active_plugins = self.user_settings.get('active_plugins')
-        if active_plugins:
-            active_plugins = ast.literal_eval(active_plugins)
-            for plugin in active_plugins:
-                if plugin == 'project':
-                    active_project = self.user_settings.get('active_project')
-                    if active_project:
-                        self.project.autoopen_project_id = active_project
+        if isinstance(active_plugins, str):
+            try:
+                active_plugins = ast.literal_eval(active_plugins)
+            except (ValueError, SyntaxError):
+                active_plugins = [active_plugins]
+
+        if not isinstance(active_plugins, (list, tuple)):
+            return
+
+        for plugin in active_plugins:
+            if plugin == 'project':
+                active_project = self.user_settings.get('active_project')
+                if active_project:
+                    self.project.autoopen_project_id = active_project
+            if hasattr(self, plugin) and hasattr(self, f'{plugin}_tree_dock_widget'):
                 self.activate_tree(getattr(self, plugin), getattr(self, plugin + '_tree_dock_widget'),
                                    getattr(self, plugin.upper() + '_TREE'))
 
-    @classmethod
-    def _encode_window_data(cls, data: QByteArray):
-        if data is None or data.isNull() or data.isEmpty():
-            return ''
-
-        logger.debug('Кодирование состояния окна: исходная длина=%s', data.size())
-
-        try:
-            compressed = qCompress(data, 9)
-            encoded_bytes = compressed.toBase64()
-            encoded = 'z:' + bytes(encoded_bytes).decode('ascii')
-            logger.debug('Сжатые данные: длина=%s, длина строки=%s', compressed.size(), len(encoded))
-        except Exception as exc:
-            logger.warning('Ошибка при кодировании состояния окна: %s', exc)
-            encoded = None
-
-        if encoded and len(encoded) <= cls._MAX_DB_STRING_LENGTH:
-            return encoded
-
-        if encoded:
-            logger.debug('Сжатая строка длиной %s превышает лимит %s символов',
-                         len(encoded), cls._MAX_DB_STRING_LENGTH)
-
-        try:
-            fallback_bytes = data.toBase64()
-            fallback = bytes(fallback_bytes).decode('ascii')
-            logger.debug('Используем fallback base64: длина строки=%s', len(fallback))
-        except Exception:
-            fallback = None
-
-        if fallback and len(fallback) <= cls._MAX_DB_STRING_LENGTH:
-            return fallback
-
-        if fallback:
-            logger.debug('Fallback строка длиной %s превышает лимит %s символов',
-                         len(fallback), cls._MAX_DB_STRING_LENGTH)
-
-        return None
+    @staticmethod
+    def _prepare_window_data(value) -> QByteArray:
+        if isinstance(value, QByteArray):
+            return value
+        if isinstance(value, (bytes, bytearray)):
+            return QByteArray(value)
+        if isinstance(value, str):
+            return MainWindow._decode_window_data(value)
+        return QByteArray()
 
     @staticmethod
     def _decode_window_data(encoded: str) -> QByteArray:

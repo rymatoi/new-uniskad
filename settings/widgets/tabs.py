@@ -1,6 +1,5 @@
 from PySide2.QtGui import QFontDatabase
 from PySide2.QtWidgets import QWidget
-from db import sp
 from resources.ui.ui_py.ui_settings_appearance import Ui_SettingsAppearance
 
 
@@ -29,12 +28,15 @@ class AppearanceTab(QWidget):
         self.ui.customFontCheckBox.stateChanged.connect(lambda: self.prop_changed('use_custom_font'))
 
     def prop_changed(self, prop_name):
+        if self.mw is None:
+            return
+
         if prop_name == 'font_name':
-            sp.set_user_default_value(None, None, None, 'font_name', self.ui.fontComboBox.currentText())
+            self.mw.user_settings.set('font_name', self.ui.fontComboBox.currentText())
         elif prop_name == 'font_size':
-            sp.set_user_default_value(None, None, None, 'font_size', self.ui.fontSizeComboBox.currentText())
+            self.mw.user_settings.set('font_size', self.ui.fontSizeComboBox.currentText())
         elif prop_name == 'use_custom_font':
-            sp.set_user_default_value(None, None, None, 'use_custom_font', str(self.ui.customFontCheckBox.isChecked()))
+            self.mw.user_settings.set('use_custom_font', self.ui.customFontCheckBox.isChecked())
 
     def init_default_values(self):
         font_families = QFontDatabase().families()
@@ -44,13 +46,16 @@ class AppearanceTab(QWidget):
         self.ui.fontSizeComboBox.addItems(font_sizes)
 
     def init_values(self):
-        bool_values = {
-            'true': True,
-            'false': False
-        }
-        if self.mw.user_settings.get('use_custom_font'):
-            self.ui.customFontCheckBox.setChecked(bool_values[self.mw.user_settings.use_custom_font.lower()])
-        if self.mw.user_settings.get('font_name'):
-            self.ui.fontComboBox.setCurrentText(self.mw.user_settings.font_name)
-        if self.mw.user_settings.get('font_size'):
-            self.ui.fontSizeComboBox.setCurrentText(self.mw.user_settings.font_size)
+        use_custom_font = self.mw.user_settings.get('use_custom_font')
+        if isinstance(use_custom_font, str):
+            use_custom_font = use_custom_font.lower() == 'true'
+        if use_custom_font is not None:
+            self.ui.customFontCheckBox.setChecked(bool(use_custom_font))
+
+        font_name = self.mw.user_settings.get('font_name')
+        if font_name:
+            self.ui.fontComboBox.setCurrentText(font_name)
+
+        font_size = self.mw.user_settings.get('font_size')
+        if font_size:
+            self.ui.fontSizeComboBox.setCurrentText(str(font_size))
