@@ -1,4 +1,7 @@
 import ast
+import base64
+import binascii
+import zlib
 
 from PySide2 import QtWidgets
 from PySide2.QtCore import QEventLoop, Slot, QByteArray
@@ -63,6 +66,8 @@ class MainWindow(QtWidgets.QMainWindow):
     ADMIN_ROLE = '_role_200'
     USER_ROLE = '_role_100'
     DEVELOPER_ROLE = '_role_1000'
+
+    _MAX_DB_STRING_LENGTH = 255
 
     def __init__(self):
 
@@ -464,14 +469,22 @@ class MainWindow(QtWidgets.QMainWindow):
         sp.set_user_default_value(None, None, None, 'active_plugins', str(active_plugins))
 
         try:
-            geometry = bytes(self.saveGeometry().toBase64()).decode('ascii')
-            sp.set_user_default_value(None, None, None, 'main_window_geometry', geometry)
+            geometry = self._encode_window_data(self.saveGeometry())
+            if geometry is not None:
+                sp.set_user_default_value(None, None, None, 'main_window_geometry', geometry)
+            else:
+                logger.warning('Не удалось сохранить геометрию окна: строка превышает %s символов',
+                               self._MAX_DB_STRING_LENGTH)
         except Exception as exc:
             logger.warning('Не удалось сохранить геометрию окна: %s', exc)
 
         try:
-            state = bytes(self.saveState().toBase64()).decode('ascii')
-            sp.set_user_default_value(None, None, None, 'main_window_state', state)
+            state = self._encode_window_data(self.saveState())
+            if state is not None:
+                sp.set_user_default_value(None, None, None, 'main_window_state', state)
+            else:
+                logger.warning('Не удалось сохранить состояние окна: строка превышает %s символов',
+                               self._MAX_DB_STRING_LENGTH)
         except Exception as exc:
             logger.warning('Не удалось сохранить состояние окна: %s', exc)
 
@@ -479,7 +492,7 @@ class MainWindow(QtWidgets.QMainWindow):
         geometry = self.user_settings.get('main_window_geometry')
         if geometry:
             try:
-                geometry_bytes = QByteArray.fromBase64(geometry.encode('ascii'))
+                geometry_bytes = self._decode_window_data(geometry)
                 if not geometry_bytes.isEmpty():
                     self.restoreGeometry(geometry_bytes)
             except Exception as exc:
@@ -488,7 +501,7 @@ class MainWindow(QtWidgets.QMainWindow):
         window_state = self.user_settings.get('main_window_state')
         if window_state:
             try:
-                state_bytes = QByteArray.fromBase64(window_state.encode('ascii'))
+                state_bytes = self._decode_window_data(window_state)
                 if not state_bytes.isEmpty():
                     self.restoreState(state_bytes)
             except Exception as exc:
@@ -504,6 +517,48 @@ class MainWindow(QtWidgets.QMainWindow):
                         self.project.autoopen_project_id = active_project
                 self.activate_tree(getattr(self, plugin), getattr(self, plugin + '_tree_dock_widget'),
                                    getattr(self, plugin.upper() + '_TREE'))
+
+    @classmethod
+    def _encode_window_data(cls, data: QByteArray):
+        if not data or data.isEmpty():
+            return ''
+
+        try:
+            raw_bytes = bytes(data)
+            compressed = zlib.compress(raw_bytes)
+            encoded = base64.b64encode(compressed).decode('ascii')
+        except Exception as exc:
+            logger.warning('Ошибка при кодировании состояния окна: %s', exc)
+            return None
+
+        if len(encoded) > cls._MAX_DB_STRING_LENGTH:
+            try:
+                fallback = data.toBase64().data().decode('ascii')
+            except Exception:
+                fallback = None
+
+            if fallback and len(fallback) <= cls._MAX_DB_STRING_LENGTH:
+                return fallback
+
+            return None
+
+        return encoded
+
+    @staticmethod
+    def _decode_window_data(encoded: str) -> QByteArray:
+        if not encoded:
+            return QByteArray()
+
+        try:
+            compressed = base64.b64decode(encoded.encode('ascii'))
+            raw_bytes = zlib.decompress(compressed)
+            return QByteArray(raw_bytes)
+        except (binascii.Error, zlib.error, ValueError):
+            try:
+                return QByteArray.fromBase64(encoded.encode('ascii'))
+            except Exception:
+                logger.warning('Ошибка при декодировании состояния окна')
+                return QByteArray()
 
     # slots:
     def import_files(self, type_):
