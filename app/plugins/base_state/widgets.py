@@ -1659,7 +1659,11 @@ class TableItem(QTableWidgetItem):
                     indices = [int(index)] if index.isdigit() else []
 
             if not indices:
+                search_pos = match.end()
                 continue
+
+            replacement = None
+            new_search_pos = match.end()
 
             if full_row_reference:
                 if param not in tw.ord_rows:
@@ -1692,34 +1696,38 @@ class TableItem(QTableWidgetItem):
                 else:
                     replacement = ';'.join(values)
                 formula = formula[:match.start()] + replacement + formula[match.end():]
-                search_pos = match.start() + len(replacement)
-                continue
+                new_search_pos = match.start() + len(replacement)
+            else:
+                for index in indices:
+                    if index < 1 or index > len(tw.ord_columns):
+                        self.update_cell('cformula', 'Неверный индекс')
+                        break
 
-            for index in indices:
-                if index < 1 or index > len(tw.ord_columns):
-                    self.update_cell('cformula', 'Неверный индекс')
+                    if param not in tw.ord_rows:
+                        return self.update_cell('cformula', 'Параметр отсутствует в таблице')
+
+                    row_idx = tw.ord_rows.index(param)
+                    column = tw.ord_columns[index - 1]
+                    cell = tw.item(row_idx, index - 1)
+
+                    if cell is None:
+                        return self.update_cell('cformula', 'Параметр отсутствует в таблице')
+
+                    if not _register_dependency(cell):
+                        break
+
+                    replacement = str(_get_cell_numeric_value(cell))
+                    formula = formula[:match.start()] + replacement + formula[match.end():]
+                    new_search_pos = match.start() + len(replacement)
                     break
 
-                if param not in tw.ord_rows:
-                    return self.update_cell('cformula', 'Параметр отсутствует в таблице')
-
-                row_idx = tw.ord_rows.index(param)
-                column = tw.ord_columns[index - 1]
-                cell = tw.item(row_idx, index - 1)
-
-                if cell is None:
-                    return self.update_cell('cformula', 'Параметр отсутствует в таблице')
-
-                if not _register_dependency(cell):
-                    break
-
-                replacement = str(_get_cell_numeric_value(cell))
-                formula = formula[:match.start()] + replacement + formula[match.end():]
-                search_pos = match.start() + len(replacement)
-                continue
             if cycle_detected:
                 break
-            search_pos = match.end()
+
+            if replacement is None:
+                search_pos = match.end()
+            else:
+                search_pos = new_search_pos
         if cycle_detected:
             self.cells_in_formula = previous_cells
             self.update_cell('cformula', 'Циклическая ссылка')
