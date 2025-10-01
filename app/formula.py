@@ -17,7 +17,19 @@ class FormulaDelegate(QStyledItemDelegate):
             'МИН()',
             'МАКС()',
             'СЧЁТ()',
-            'ЕСЛИ()'
+            'ЕСЛИ(; ; )',
+            'ABS()',
+            'МОДУЛЬ()',
+            'POWER(, )',
+            'СТЕПЕНЬ(, )',
+            'ROUND(, )',
+            'ОКРУГЛ(, )',
+            'AND(, )',
+            'И(, )',
+            'OR(, )',
+            'ИЛИ(, )',
+            'NOT()',
+            'НЕ()'
         ]
 
     def createEditor(self, parent, option, index):
