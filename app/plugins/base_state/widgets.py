@@ -1586,15 +1586,6 @@ class TableItem(QTableWidgetItem):
                 formula = row_formula
                 row_formula_applied = True
 
-        if row_formula_applied and column_number is not None:
-            pattern = r'"((?:[^"\\]|\\.)*?)\[\]"'
-
-            def _replace_current_column(match):
-                inner = match.group(1)
-                return f'"{inner}[{column_number}]"'
-
-            formula = re.sub(pattern, _replace_current_column, formula)
-
         if not formula or formula.strip() in {'', '='}:
             self.update_cell('cformula', '')
             self.clear_unused_dependencies([], previous_cells)
