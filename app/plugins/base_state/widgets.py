@@ -1601,7 +1601,38 @@ class TableItem(QTableWidgetItem):
             self.clear_unused_dependencies([], previous_cells)
             return None
 
-        for m in re.findall(r'"(?:[^\\"]|\\.)*"', formula):
+        aggregator_funcs = {
+            'СУММ', 'SUM', 'СРЗНАЧ', 'AVERAGE', 'МАКС', 'MAX', 'МИН', 'MIN',
+            'СЧЁТ', 'СЧЕТ', 'COUNT'
+        }
+
+        pattern = re.compile(r'"(?:[^\\"]|\\.)*"')
+        search_pos = 0
+
+        def _is_aggregator_context(_formula, match_start):
+            if match_start is None or match_start <= 0:
+                return False
+            idx = match_start - 1
+            while idx >= 0 and _formula[idx].isspace():
+                idx -= 1
+            if idx < 0 or _formula[idx] != '(':
+                return False
+            idx -= 1
+            while idx >= 0 and _formula[idx].isspace():
+                idx -= 1
+            if idx < 0:
+                return False
+            end_idx = idx
+            while idx >= 0 and (re.match(r'[A-Za-zА-Яа-яЁё_]', _formula[idx]) or _formula[idx].isdigit()):
+                idx -= 1
+            func_name = _formula[idx + 1:end_idx + 1].upper()
+            return func_name in aggregator_funcs
+
+        while True:
+            match = pattern.search(formula, search_pos)
+            if not match:
+                break
+            m = match.group(0)
             param_index = m[1:-1]
             full_row_reference = '[' not in param_index and ']' not in param_index
             if full_row_reference:
@@ -1623,7 +1654,8 @@ class TableItem(QTableWidgetItem):
                     return self.update_cell('cformula', 'Параметр отсутствует в таблице')
                 row_idx = tw.ord_rows.index(param)
                 values = []
-                if row_formula_applied and column_number is not None:
+                aggregator_context = _is_aggregator_context(formula, match.start()) if row_formula_applied else False
+                if row_formula_applied and column_number is not None and not aggregator_context:
                     target_offsets = [column_number - 1]
                 else:
                     target_offsets = list(range(len(tw.ord_columns)))
@@ -1643,8 +1675,9 @@ class TableItem(QTableWidgetItem):
                 if cycle_detected:
                     break
 
-                replacement = values[0] if row_formula_applied and column_number is not None else ';'.join(values)
-                formula = formula.replace(m, replacement, 1)
+                replacement = values[0] if row_formula_applied and column_number is not None and not aggregator_context else ';'.join(values)
+                formula = formula[:match.start()] + replacement + formula[match.end():]
+                search_pos = match.start() + len(replacement)
                 continue
 
             for index in indices:
@@ -1659,9 +1692,13 @@ class TableItem(QTableWidgetItem):
                 if not _register_dependency(cell):
                     break
 
-                formula = formula.replace(m, str(_get_cell_numeric_value(cell)), 1)
+                replacement = str(_get_cell_numeric_value(cell))
+                formula = formula[:match.start()] + replacement + formula[match.end():]
+                search_pos = match.start() + len(replacement)
+                continue
             if cycle_detected:
                 break
+            search_pos = match.end()
         if cycle_detected:
             self.cells_in_formula = previous_cells
             self.update_cell('cformula', 'Циклическая ссылка')
