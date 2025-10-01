@@ -1,5 +1,6 @@
 import ast
 import re
+from collections.abc import Iterable
 from copy import copy
 from datetime import datetime
 
@@ -1536,15 +1537,16 @@ class TableItem(QTableWidgetItem):
                 cell.update_dependencies()
 
     def calculate_formula(self):
-        formula = self.get('formula', str, '')
+        tw = self.tableWidget()
+        if tw is None:
+            return None
+
+        formula = self.get('formula', str, '') or ''
         previous_cells = list(self.cells_in_formula)
         self.cells_in_formula = []
         used_cells = []
         collected_cells = []
         cycle_detected = False
-        tw = self.tableWidget()
-        if tw is None:
-            return None
 
         def _register_dependency(cell_item):
             nonlocal cycle_detected
@@ -1572,29 +1574,103 @@ class TableItem(QTableWidgetItem):
             raw_value = cell_item.get('value', float, 0)
             return raw_value + plus_val if plus_val else raw_value * mul_val
 
-        for m in re.findall(r'"(?:[^\\"]|\\.)*"', formula):
+        row_formula_applied = False
+        try:
+            column_number = tw.ord_columns.index(self.key[1]) + 1
+        except ValueError:
+            column_number = None
+
+        if not formula or formula.strip() in {'', '='}:
+            row_formula = tw.get_row_prop(self.key[0], 'row_formula', str, '')
+            if row_formula:
+                formula = row_formula
+                row_formula_applied = True
+
+        if not formula or formula.strip() in {'', '='}:
+            self.update_cell('cformula', '')
+            self.clear_unused_dependencies([], previous_cells)
+            return None
+
+        aggregator_funcs = {
+            'СУММ', 'SUM', 'СРЗНАЧ', 'AVERAGE', 'МАКС', 'MAX', 'МИН', 'MIN',
+            'СЧЁТ', 'СЧЕТ', 'COUNT'
+        }
+
+        pattern = re.compile(r'"(?:[^\\"]|\\.)*"')
+        search_pos = 0
+
+        def _is_aggregator_context(_formula, match_start):
+            if match_start is None or match_start <= 0:
+                return False
+            idx = match_start - 1
+            depth = 0
+            while idx >= 0:
+                char = _formula[idx]
+                if char == ')':
+                    depth += 1
+                elif char == '(':
+                    if depth == 0:
+                        j = idx - 1
+                        while j >= 0 and _formula[j].isspace():
+                            j -= 1
+                        if j < 0:
+                            return False
+                        end_idx = j
+                        while j >= 0 and (re.match(r'[A-Za-zА-Яа-яЁё_]', _formula[j]) or _formula[j].isdigit()):
+                            j -= 1
+                        func_name = _formula[j + 1:end_idx + 1].upper()
+                        return func_name in aggregator_funcs
+                    else:
+                        depth -= 1
+                idx -= 1
+            return False
+
+        while True:
+            match = pattern.search(formula, search_pos)
+            if not match:
+                break
+            m = match.group(0)
             param_index = m[1:-1]
             full_row_reference = '[' not in param_index and ']' not in param_index
             if full_row_reference:
-                param = param_index.replace('\\', '')
+                param = param_index.replace('\\', '').strip()
                 indices = list(range(1, len(tw.ord_columns) + 1))
             else:
-                param_index = param_index.split('[', 1)
-                if len(param_index) != 2:
+                param_index_parts = param_index.split('[', 1)
+                if len(param_index_parts) != 2:
                     self.update_cell('cformula', 'Неверный синтаксис')
-                param = param_index[0].replace('\\', '')
-                index = param_index[1][:-1]
-                indices = [int(index)] if index and index.isdigit() else []
+                    search_pos = match.end()
+                    continue
+                param = param_index_parts[0].replace('\\', '').strip()
+                index = param_index_parts[1][:-1].strip()
+                if index == '':
+                    full_row_reference = True
+                    indices = list(range(1, len(tw.ord_columns) + 1))
+                else:
+                    indices = [int(index)] if index.isdigit() else []
 
             if not indices:
+                search_pos = match.end()
                 continue
+
+            replacement = None
+            new_search_pos = match.end()
 
             if full_row_reference:
                 if param not in tw.ord_rows:
                     return self.update_cell('cformula', 'Параметр отсутствует в таблице')
                 row_idx = tw.ord_rows.index(param)
                 values = []
-                for offset, column in enumerate(tw.ord_columns):
+                aggregator_context = _is_aggregator_context(formula, match.start())
+                if not aggregator_context and column_number is not None:
+                    target_offsets = [column_number - 1]
+                else:
+                    target_offsets = list(range(len(tw.ord_columns)))
+
+                for offset in target_offsets:
+                    if offset < 0 or offset >= len(tw.ord_columns):
+                        continue
+                    column = tw.ord_columns[offset]
                     if (param, column) not in tw.table.keys():
                         continue
                     cell = tw.item(row_idx, offset)
@@ -1605,35 +1681,98 @@ class TableItem(QTableWidgetItem):
                     return self.update_cell('cformula', 'Параметр отсутствует в таблице')
                 if cycle_detected:
                     break
-                formula = formula.replace(m, ';'.join(values), 1)
-                continue
 
-            for index in indices:
-                if len(tw.ord_columns) + 1 < index or index < 0:
-                    self.update_cell('cformula', 'Неверный индекс')
+                if not aggregator_context and column_number is not None:
+                    replacement = values[0]
+                else:
+                    replacement = ';'.join(values)
+                    if match.start() > 0 and formula[match.start() - 1] in {';', ','}:
+                        replacement = ' ' + replacement
+                formula = formula[:match.start()] + replacement + formula[match.end():]
+                new_search_pos = match.start() + len(replacement)
+            else:
+                for index in indices:
+                    if index < 1 or index > len(tw.ord_columns):
+                        self.update_cell('cformula', 'Неверный индекс')
+                        break
+
+                    if param not in tw.ord_rows:
+                        return self.update_cell('cformula', 'Параметр отсутствует в таблице')
+
+                    row_idx = tw.ord_rows.index(param)
+                    column = tw.ord_columns[index - 1]
+                    cell = tw.item(row_idx, index - 1)
+
+                    if cell is None:
+                        return self.update_cell('cformula', 'Параметр отсутствует в таблице')
+
+                    if not _register_dependency(cell):
+                        break
+
+                    replacement = str(_get_cell_numeric_value(cell))
+                    formula = formula[:match.start()] + replacement + formula[match.end():]
+                    new_search_pos = match.start() + len(replacement)
                     break
-                column = tw.ord_columns[index - 1]
 
-                if (param, column) not in tw.table.keys():
-                    return self.update_cell('cformula', 'Параметр отсутствует в таблице')
-                cell = tw.item(tw.ord_rows.index(param), index - 1)
-                if not _register_dependency(cell):
-                    break
-
-                formula = formula.replace(m, str(_get_cell_numeric_value(cell)), 1)
             if cycle_detected:
                 break
+
+            if replacement is None:
+                search_pos = match.end()
+            else:
+                search_pos = new_search_pos
         if cycle_detected:
             self.cells_in_formula = previous_cells
             self.update_cell('cformula', 'Циклическая ссылка')
             return None
-        formula = formula.replace('=', '')
-        if formula.replace(' ', '') == '':
+
+        normalized_formula = formula[1:] if formula.startswith('=') else formula
+        if normalized_formula.replace(' ', '') == '':
             self.update_cell('cformula', '')
+            self.clear_unused_dependencies([], previous_cells)
             return None
-        evaled = str(eval_expr(formula.replace('=', '')))
-        if evaled:
-            self.update_cell('cformula', evaled)
+
+        eval_result = eval_expr(normalized_formula)
+        evaled_value = eval_result
+
+        if row_formula_applied:
+            column_index = column_number - 1 if column_number is not None else None
+            if eval_result is None:
+                evaled_value = ''
+            elif isinstance(eval_result, (list, tuple)):
+                values = [str(value) for value in eval_result]
+                if column_index is None:
+                    evaled_value = values[0] if values else ''
+                elif 0 <= column_index < len(values):
+                    evaled_value = values[column_index]
+                else:
+                    evaled_value = ''
+            elif isinstance(eval_result, Iterable) and not isinstance(eval_result, (str, bytes, dict)):
+                values = []
+                for item in list(eval_result):
+                    if isinstance(item, Iterable) and not isinstance(item, (str, bytes, dict)):
+                        values.extend(str(inner) for inner in list(item))
+                    else:
+                        values.append(str(item))
+                if column_index is None:
+                    evaled_value = values[0] if values else ''
+                elif 0 <= column_index < len(values):
+                    evaled_value = values[column_index]
+                else:
+                    evaled_value = ''
+            else:
+                eval_result_str = str(eval_result)
+                if ';' in eval_result_str:
+                    values = [value.strip() for value in eval_result_str.split(';')]
+                    if column_index is None:
+                        evaled_value = values[0] if values else ''
+                    elif 0 <= column_index < len(values):
+                        evaled_value = values[column_index]
+                    else:
+                        evaled_value = ''
+
+        evaled = '' if evaled_value is None else str(evaled_value)
+        self.update_cell('cformula', evaled)
         self.cells_in_formula = collected_cells
         self.update_cell('cells_in_formula',
                          str([(_c[0], _c[1].strftime("%Y-%m-%d %H:%M:%S.%f")) for _c in
