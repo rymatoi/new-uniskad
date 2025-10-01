@@ -1574,6 +1574,7 @@ class TableItem(QTableWidgetItem):
             return raw_value + plus_val if plus_val else raw_value * mul_val
 
         row_formula_applied = False
+        column_number = None
         if not formula or formula.strip() in {'', '='}:
             row_formula = tw.get_row_prop(self.key[0], 'row_formula', str, '')
             if row_formula:
@@ -1662,7 +1663,17 @@ class TableItem(QTableWidgetItem):
             return None
 
         evaled = str(eval_expr(normalized_formula))
-        if evaled:
+        if row_formula_applied and evaled is not None:
+            column_index = column_number - 1 if column_number is not None else None
+            if ';' in evaled or (column_index is not None and column_index != 0):
+                values = [value.strip() for value in evaled.split(';')]
+                if column_index is None:
+                    evaled = values[0] if values else ''
+                elif 0 <= column_index < len(values):
+                    evaled = values[column_index]
+                else:
+                    evaled = ''
+        if evaled or evaled == '':
             self.update_cell('cformula', evaled)
         self.cells_in_formula = collected_cells
         self.update_cell('cells_in_formula',
