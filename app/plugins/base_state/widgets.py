@@ -1575,26 +1575,25 @@ class TableItem(QTableWidgetItem):
             return raw_value + plus_val if plus_val else raw_value * mul_val
 
         row_formula_applied = False
-        column_number = None
+        try:
+            column_number = tw.ord_columns.index(self.key[1]) + 1
+        except ValueError:
+            column_number = None
+
         if not formula or formula.strip() in {'', '='}:
             row_formula = tw.get_row_prop(self.key[0], 'row_formula', str, '')
             if row_formula:
                 formula = row_formula
                 row_formula_applied = True
 
-        if row_formula_applied:
-            try:
-                column_number = tw.ord_columns.index(self.key[1]) + 1
-            except ValueError:
-                column_number = None
-            if column_number is not None:
-                pattern = r'"((?:[^"\\]|\\.)*?)\[\]"'
+        if row_formula_applied and column_number is not None:
+            pattern = r'"((?:[^"\\]|\\.)*?)\[\]"'
 
-                def _replace_current_column(match):
-                    inner = match.group(1)
-                    return f'"{inner}[{column_number}]"'
+            def _replace_current_column(match):
+                inner = match.group(1)
+                return f'"{inner}[{column_number}]"'
 
-                formula = re.sub(pattern, _replace_current_column, formula)
+            formula = re.sub(pattern, _replace_current_column, formula)
 
         if not formula or formula.strip() in {'', '='}:
             self.update_cell('cformula', '')
@@ -1613,20 +1612,27 @@ class TableItem(QTableWidgetItem):
             if match_start is None or match_start <= 0:
                 return False
             idx = match_start - 1
-            while idx >= 0 and _formula[idx].isspace():
+            depth = 0
+            while idx >= 0:
+                char = _formula[idx]
+                if char == ')':
+                    depth += 1
+                elif char == '(':
+                    if depth == 0:
+                        j = idx - 1
+                        while j >= 0 and _formula[j].isspace():
+                            j -= 1
+                        if j < 0:
+                            return False
+                        end_idx = j
+                        while j >= 0 and (re.match(r'[A-Za-zА-Яа-яЁё_]', _formula[j]) or _formula[j].isdigit()):
+                            j -= 1
+                        func_name = _formula[j + 1:end_idx + 1].upper()
+                        return func_name in aggregator_funcs
+                    else:
+                        depth -= 1
                 idx -= 1
-            if idx < 0 or _formula[idx] != '(':
-                return False
-            idx -= 1
-            while idx >= 0 and _formula[idx].isspace():
-                idx -= 1
-            if idx < 0:
-                return False
-            end_idx = idx
-            while idx >= 0 and (re.match(r'[A-Za-zА-Яа-яЁё_]', _formula[idx]) or _formula[idx].isdigit()):
-                idx -= 1
-            func_name = _formula[idx + 1:end_idx + 1].upper()
-            return func_name in aggregator_funcs
+            return False
 
         while True:
             match = pattern.search(formula, search_pos)
@@ -1654,8 +1660,8 @@ class TableItem(QTableWidgetItem):
                     return self.update_cell('cformula', 'Параметр отсутствует в таблице')
                 row_idx = tw.ord_rows.index(param)
                 values = []
-                aggregator_context = _is_aggregator_context(formula, match.start()) if row_formula_applied else False
-                if row_formula_applied and column_number is not None and not aggregator_context:
+                aggregator_context = _is_aggregator_context(formula, match.start())
+                if not aggregator_context and column_number is not None:
                     target_offsets = [column_number - 1]
                 else:
                     target_offsets = list(range(len(tw.ord_columns)))
@@ -1675,7 +1681,10 @@ class TableItem(QTableWidgetItem):
                 if cycle_detected:
                     break
 
-                replacement = values[0] if row_formula_applied and column_number is not None and not aggregator_context else ';'.join(values)
+                if not aggregator_context and column_number is not None:
+                    replacement = values[0]
+                else:
+                    replacement = ';'.join(values)
                 formula = formula[:match.start()] + replacement + formula[match.end():]
                 search_pos = match.start() + len(replacement)
                 continue
