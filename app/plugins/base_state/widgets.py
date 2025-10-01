@@ -1623,7 +1623,15 @@ class TableItem(QTableWidgetItem):
                     return self.update_cell('cformula', 'Параметр отсутствует в таблице')
                 row_idx = tw.ord_rows.index(param)
                 values = []
-                for offset, column in enumerate(tw.ord_columns):
+                if row_formula_applied and column_number is not None:
+                    target_offsets = [column_number - 1]
+                else:
+                    target_offsets = list(range(len(tw.ord_columns)))
+
+                for offset in target_offsets:
+                    if offset < 0 or offset >= len(tw.ord_columns):
+                        continue
+                    column = tw.ord_columns[offset]
                     if (param, column) not in tw.table.keys():
                         continue
                     cell = tw.item(row_idx, offset)
@@ -1634,7 +1642,9 @@ class TableItem(QTableWidgetItem):
                     return self.update_cell('cformula', 'Параметр отсутствует в таблице')
                 if cycle_detected:
                     break
-                formula = formula.replace(m, ';'.join(values), 1)
+
+                replacement = values[0] if row_formula_applied and column_number is not None else ';'.join(values)
+                formula = formula.replace(m, replacement, 1)
                 continue
 
             for index in indices:
