@@ -130,6 +130,7 @@ class EpureItem(pg.ItemGroup):
         legend_proxy.opts.update({
             'size': symbol_size,
             'pen': line_pen,
+            'brush': symbol_brush,
             'symbol': symbol,
             'symbolBrush': symbol_brush,
             'symbolPen': symbol_pen
@@ -138,6 +139,7 @@ class EpureItem(pg.ItemGroup):
         # Используем фиктивные данные и явные настройки, чтобы легенда отображала и линию, и точку
         legend_proxy.setData([0, 1], [0, 0])
         legend_proxy.setPen(line_pen)
+        legend_proxy.setBrush(symbol_brush)
         legend_proxy.setSymbol(symbol)
         legend_proxy.setSymbolSize(symbol_size)
         legend_proxy.setSymbolBrush(symbol_brush)
