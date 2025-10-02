@@ -427,7 +427,10 @@ class PlotContextMenuMixin:
 
         background_color = QColor(self.legend_settings.get('background_color', QColor(255, 255, 255)))
         opacity_percent = max(0, min(100, int(self.legend_settings.get('background_opacity', 100))))
-        alpha = int(round(opacity_percent / 100 * 255))
+        if opacity_percent >= 100:
+            alpha = 255
+        else:
+            alpha = int(round(opacity_percent * 2.55))
         background_color.setAlpha(alpha)
         legend.setBrush(pg.mkBrush(background_color))
 

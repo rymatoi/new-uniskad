@@ -189,7 +189,11 @@ class CustomLegend(pg.LegendItem):
     def _apply_settings(self):
         background = QColor(self._legend_settings.get('background_color', QColor(255, 255, 255)))
         opacity_percent = max(0, min(100, int(self._legend_settings.get('background_opacity', 100))))
-        background.setAlpha(int(round(opacity_percent / 100 * 255)))
+        if opacity_percent >= 100:
+            alpha = 255
+        else:
+            alpha = int(round(opacity_percent * 2.55))
+        background.setAlpha(alpha)
         self.setBrush(pg.mkBrush(background))
 
         border_color = QColor(self._legend_settings.get('border_color', QColor(100, 100, 100)))

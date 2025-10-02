@@ -41,9 +41,9 @@ class LegendSettingsDialog(BaseDialog):
         background_layout.addStretch()
         layout.addLayout(background_layout)
 
-        # Прозрачность фона
+        # Непрозрачность фона
         opacity_layout = QHBoxLayout()
-        opacity_layout.addWidget(QLabel("Прозрачность:"))
+        opacity_layout.addWidget(QLabel("Непрозрачность:"))
         self.opacity_slider = QSlider(Qt.Horizontal)
         self.opacity_slider.setRange(0, 100)
         self.opacity_slider.setSingleStep(5)
@@ -112,6 +112,7 @@ class LegendSettingsDialog(BaseDialog):
 
     def accept(self) -> None:  # type: ignore[override]
         background_color = QColor(self.background_color_button.color())
+        background_color.setAlpha(255)
         opacity_percent = self.opacity_spinbox.value()
         border_color = QColor(self.border_color_button.color())
         border_width = self.border_width_spinbox.value()
