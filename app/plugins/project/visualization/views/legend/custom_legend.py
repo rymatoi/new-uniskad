@@ -4,7 +4,7 @@ from PySide2.QtWidgets import QMenu
 from pyqtgraph import Point
 import pyqtgraph as pg
 
-from app import _menu, basic_funcs
+from app import _menu
 from app.history_manager.events import LegendPositionChangeEvent
 from db import sp
 
@@ -88,4 +88,5 @@ class CustomLegend(pg.LegendItem):
             getattr(self, action_name).triggered.connect(lambda: func(*args))
 
     def edit_legend(self, pos):
-        basic_funcs.info('Внимание!', 'Данное действие находится в разработке.')
+        if hasattr(self._parent, 'open_legend_settings_dialog'):
+            self._parent.open_legend_settings_dialog()

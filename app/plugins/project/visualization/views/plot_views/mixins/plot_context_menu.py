@@ -13,6 +13,7 @@ from db import sp
 from app.plugins.project.dialogs.create_approx import ApproxDialog
 from app.plugins.project.dialogs.create_interpolation import InterpDialog
 from app.plugins.project.dialogs.extrapolation_dialog import ExtrapolationDialog
+from app.plugins.project.dialogs.legend_appearance import LegendAppearanceDialog
 
 
 class PlotContextMenuMixin:
@@ -358,7 +359,7 @@ class PlotContextMenuMixin:
             self.action_states['legend'] = checked
             # Создаем легенду, если её ещё нет
             if not hasattr(self.plotItem, 'legend') or self.plotItem.legend is None:
-                self.plotItem.addLegend()
+                self.ensure_legend()
             # Просто скрываем/показываем легенду
             self.plotItem.legend.setVisible(checked)
 
@@ -410,11 +411,10 @@ class PlotContextMenuMixin:
             self.plotItem.ctrl.gridCheck.setChecked(True)
 
         # Инициализируем легенду
-        if not hasattr(self.plotItem, 'legend') or self.plotItem.legend is None:
-            self.plotItem.addLegend()
+        legend = self.ensure_legend()
         self.action_states['legend'] = True
-        self.plotItem.legend.setVisible(True)
-        
+        legend.setVisible(True)
+
         # Добавляем обработку кликов по легенде
         if hasattr(self.plotItem, 'legend'):
             self.plotItem.legend.scene().sigMouseClicked.connect(self._handle_legend_click)
@@ -435,7 +435,7 @@ class PlotContextMenuMixin:
         
         # Проходим по всем элементам легенды
         for sample, label in legend.items:
-            if label.sceneBoundingRect().contains(pos):
+            if label.sceneBoundingRect().contains(pos) or sample.sceneBoundingRect().contains(pos):
                 # Находим соответствующую кривую
                 curve = next((c for c in self.curve_items if c.name() == label.text), None)
                 if curve:
@@ -446,6 +446,13 @@ class PlotContextMenuMixin:
                     # Предотвращаем дальнейшую обработку события
                     event.accept()
                 break
+        else:
+            menu = QMenu(self)
+            settings_action = menu.addAction("Настройки легенды…")
+            chosen_action = menu.exec_(QCursor.pos())
+            if chosen_action == settings_action:
+                self.open_legend_settings_dialog()
+            event.accept()
 
     def _on_plot_action_triggered(self, checked):
         """Обработчик сигнала triggered для действий графика"""
@@ -461,3 +468,22 @@ class PlotContextMenuMixin:
             'curve': action.property('curve')
         }
         self._handle_curve_action(data, checked)
+
+    def open_legend_settings_dialog(self):
+        legend = getattr(self.plotItem, 'legend', None)
+        if legend is None:
+            legend = self.ensure_legend()
+        dialog = LegendAppearanceDialog(
+            getattr(self, '_legend_brush_color', None),
+            getattr(self, '_legend_pen_color', None),
+            getattr(self, '_legend_opacity', 255),
+            parent=self
+        )
+        if dialog.exec_():
+            result = dialog.get_result()
+            if result:
+                self.update_legend_appearance(
+                    result['background'],
+                    result['border'],
+                    result['opacity']
+                )

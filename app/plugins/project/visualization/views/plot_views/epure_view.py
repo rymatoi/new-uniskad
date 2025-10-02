@@ -15,6 +15,9 @@ class EpureView(BasePlotView):
         self.addItem(epure)
         self.curve_items.append(epure)
         self.selected_points[epure] = set()
+        legend = self.ensure_legend()
+        if legend is not None:
+            legend.addItem(epure.legend_proxy, epure.name())
         return epure
 
     @timing_decorator
