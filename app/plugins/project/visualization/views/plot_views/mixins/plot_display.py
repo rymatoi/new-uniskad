@@ -4,7 +4,6 @@ import types
 import numpy as np
 import pyqtgraph as pg
 from PySide2.QtGui import QSurfaceFormat
-from pyqtgraph import PlotWidget
 
 from app.basic_funcs import to_bool
 from app.plugins.project.plot.ruler import Ruler
@@ -72,11 +71,6 @@ class PlotDisplayMixin:
         if legend is not None:
             legend.setBrush(pg.mkBrush(255, 255, 255, 255))
             self._ensure_overlay_order()
-
-    def showGrid(self, *args, **kwargs):
-        result = PlotWidget.showGrid(self, *args, **kwargs)
-        self._ensure_overlay_order()
-        return result
 
     @property
     def legend(self):
