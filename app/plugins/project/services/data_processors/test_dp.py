@@ -5,12 +5,29 @@ class TestProcessor:
     @staticmethod
     @lru_cache(maxsize=None)
     def collect_tests(item):
-        parent = item.parent().parent()
-        test_folder = next(
-            child for child in parent.children
-            if child.internal_type() == 'product_folder'
-        )
-        return TestProcessor._inspect_children(test_folder)
+        node = item
+        visited_ids = set()
+        while node is not None and id(node) not in visited_ids:
+            visited_ids.add(id(node))
+            parent_getter = getattr(node, 'parent', None)
+            if parent_getter is None:
+                break
+            parent = parent_getter()
+            if parent is None:
+                break
+            internal_type_getter = getattr(parent, 'internal_type', None)
+            if internal_type_getter is not None and internal_type_getter() == 'product_folder':
+                return TestProcessor._inspect_children(parent)
+
+            children = getattr(parent, 'children', []) or []
+            for child in children:
+                internal_type_getter = getattr(child, 'internal_type', None)
+                if internal_type_getter is None:
+                    continue
+                if internal_type_getter() == 'product_folder':
+                    return TestProcessor._inspect_children(child)
+            node = parent
+        return {}
 
     @staticmethod
     def get_item_style(item):  # TODO надо будет учитывать настройки отображений по условиям

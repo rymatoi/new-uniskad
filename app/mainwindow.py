@@ -1,7 +1,8 @@
 import ast
+import json
 
 from PySide2 import QtWidgets
-from PySide2.QtCore import QEventLoop, Slot, QByteArray, qCompress, qUncompress
+from PySide2.QtCore import QEventLoop, Slot
 from PySide2.QtGui import QIcon, QCloseEvent, Qt, QKeySequence
 from PySide2.QtWidgets import QMenu, QToolBar, QHBoxLayout, QToolButton, QWidget, QDialog, QShortcut, QDockWidget, \
     QAction, QProgressBar, QLabel
@@ -64,8 +65,6 @@ class MainWindow(QtWidgets.QMainWindow):
     USER_ROLE = '_role_100'
     DEVELOPER_ROLE = '_role_1000'
 
-    _MAX_DB_STRING_LENGTH = 255
-
     def __init__(self):
 
         self.version = '250425'
@@ -74,6 +73,9 @@ class MainWindow(QtWidgets.QMainWindow):
         super(MainWindow, self).__init__()
 
         self.user_settings = UserSettings()
+        self._tree_states_to_restore = {}
+        self._pending_window_state_bytes = None
+        self._pending_central_window_state_bytes = None
 
         config.config.app.enable_timer(self.user_settings.get('application_close_timeout', 30))
         config.config.app._main_window_initialized = True  # TODO test
@@ -202,6 +204,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def init_toolbar(self):
         toolbar = QToolBar(self)
         toolbar.setWindowTitle('Панель инструментов')
+        toolbar.setObjectName('main_window_toolbar')
 
         # self._move_up = QAction(QIcon(":up.png"), 'Переместить вверх', self, )
         # self._move_down = QAction(QIcon(":down.png"), 'Переместить вниз', self, )
@@ -288,6 +291,7 @@ class MainWindow(QtWidgets.QMainWindow):
         """
         for dock_name, dock_data in self.dock_widgets.items():
             dock_widget = dock_data.dock_class(dock_data.title, dock_data.tree_name, dock_name, self)
+            dock_widget.setObjectName(f'{dock_name}_dock_widget')
             setattr(self, f"{dock_name}_tree_dock_widget", dock_widget)
             dock_widget.setWindowTitle(dock_data.title)
             dock_widget.setWidget(TreeView(self))
@@ -456,150 +460,209 @@ class MainWindow(QtWidgets.QMainWindow):
 
         return self.result
 
+    @staticmethod
+    def _coerce_tree_states(raw_value):
+        def normalize_dict(mapping):
+            normalized = {}
+            for key, value in mapping.items():
+                if isinstance(value, dict):
+                    normalized[str(key)] = value
+            return normalized
+
+        if isinstance(raw_value, dict):
+            return normalize_dict(raw_value)
+
+        if isinstance(raw_value, list):
+            result = {}
+            for entry in raw_value:
+                if not isinstance(entry, dict):
+                    continue
+                plugin = entry.get('plugin') or entry.get('name') or entry.get('key')
+                state = entry.get('state') or entry.get('value')
+                if plugin and isinstance(state, dict):
+                    result[str(plugin)] = state
+            return result
+
+        if isinstance(raw_value, str):
+            for parser in (json.loads, ast.literal_eval):
+                try:
+                    parsed = parser(raw_value)
+                except Exception:
+                    continue
+                return MainWindow._coerce_tree_states(parsed)
+            return {}
+
+        return {}
+
+    def _restore_tree_view_state(self, plugin_name, tree_widget):
+        if not plugin_name or not isinstance(tree_widget, TreeView):
+            return
+        state = self._tree_states_to_restore.get(str(plugin_name))
+        if not isinstance(state, dict):
+            return
+        try:
+            accepted = tree_widget.schedule_state_restore(state)
+        except Exception as exc:
+            logger.warning('Не удалось восстановить состояние дерева "%s": %s', plugin_name, exc)
+            return
+        if accepted:
+            self._tree_states_to_restore.pop(str(plugin_name), None)
+
+    def _apply_pending_window_state(self):
+        state_bytes = self._pending_window_state_bytes
+        central_bytes = self._pending_central_window_state_bytes
+
+        if state_bytes is None and central_bytes is None:
+            return
+
+        try:
+            if state_bytes is not None:
+                if hasattr(state_bytes, 'isEmpty') and state_bytes.isEmpty():
+                    state_bytes = None
+                else:
+                    restored_main = self.restoreState(state_bytes)
+                    logger.debug('Результат восстановления состояния окна: %s', restored_main)
+        except Exception as exc:
+            logger.warning('Не удалось восстановить состояние окна: %s', exc)
+
+        try:
+            if central_bytes is not None:
+                if hasattr(central_bytes, 'isEmpty') and central_bytes.isEmpty():
+                    central_bytes = None
+                else:
+                    restored_central = self.ui.centralWidget.restoreState(central_bytes)
+                    logger.debug('Результат восстановления центрального окна: %s', restored_central)
+        except Exception as exc:
+            logger.warning('Не удалось восстановить состояние центрального окна: %s', exc)
+        finally:
+            self._pending_window_state_bytes = None
+            self._pending_central_window_state_bytes = None
+
     def save_windows_state(self):
         active_plugins = []
+        active_project_id = None
         for dw in self.findChildren(QDockWidget):
             if not dw.isHidden() and hasattr(dw, 'plugin_name'):
-                active_plugins.append(dw.plugin_name)
-                if dw.plugin_name == 'project':
-                    sp.set_user_default_value(None, None, None, 'active_project', str(dw.project_id))
-        sp.set_user_default_value(None, None, None, 'active_plugins', str(active_plugins))
+                plugin_name = dw.plugin_name
+                active_plugins.append(plugin_name)
+                if plugin_name == 'project' and hasattr(dw, 'project_id') and dw.project_id is not None:
+                    active_project_id = str(dw.project_id)
+
+        if active_project_id is None and hasattr(self, 'project_tree_dock_widget'):
+            project_dock = self.project_tree_dock_widget
+            if hasattr(project_dock, 'project_id') and project_dock.project_id is not None:
+                active_project_id = str(project_dock.project_id)
+
+        if active_plugins:
+            ordered_unique_plugins = list(dict.fromkeys(active_plugins))
+        else:
+            ordered_unique_plugins = []
+
+        self.user_settings.set('active_plugins', ordered_unique_plugins)
+
+        if active_project_id is not None:
+            self.user_settings.set('active_project', active_project_id)
+        else:
+            self.user_settings.remove('active_project')
 
         try:
             geometry_bytes = self.saveGeometry()
-            geometry = self._encode_window_data(geometry_bytes)
-            if geometry is not None:
-                logger.debug('Сохраняем геометрию окна: длина raw=%s, длина закодированных данных=%s',
-                             geometry_bytes.size(), len(geometry))
-                sp.set_user_default_value(None, None, None, 'main_window_geometry', geometry)
-            else:
-                logger.warning('Не удалось сохранить геометрию окна: строка превышает %s символов',
-                               self._MAX_DB_STRING_LENGTH)
+            logger.debug('Сохраняем геометрию окна: длина raw=%s', geometry_bytes.size())
+            self.user_settings.set('main_window_geometry', geometry_bytes)
         except Exception as exc:
             logger.warning('Не удалось сохранить геометрию окна: %s', exc)
 
         try:
             state_bytes = self.saveState()
-            state = self._encode_window_data(state_bytes)
-            if state is not None:
-                logger.debug('Сохраняем состояние окна: длина raw=%s, длина закодированных данных=%s',
-                             state_bytes.size(), len(state))
-                sp.set_user_default_value(None, None, None, 'main_window_state', state)
-            else:
-                logger.warning('Не удалось сохранить состояние окна: строка превышает %s символов',
-                               self._MAX_DB_STRING_LENGTH)
+            logger.debug('Сохраняем состояние окна: длина raw=%s', state_bytes.size())
+            self.user_settings.set('main_window_state', state_bytes)
         except Exception as exc:
             logger.warning('Не удалось сохранить состояние окна: %s', exc)
 
-    def restore_windows_state(self):
-        geometry = self.user_settings.get('main_window_geometry')
-        if geometry:
-            logger.debug('Восстановление геометрии окна: длина сохраненной строки=%s, префикс=%s',
-                         len(geometry), geometry[:2])
+        try:
+            central_state_bytes = self.ui.centralWidget.saveState()
+            logger.debug('Сохраняем состояние центрального окна: длина raw=%s', central_state_bytes.size())
+            self.user_settings.set('central_window_state', central_state_bytes)
+        except Exception as exc:
+            logger.warning('Не удалось сохранить состояние центрального окна: %s', exc)
+
+        existing_states = self._coerce_tree_states(self.user_settings.get('tree_states', {}))
+        tree_states = dict(existing_states)
+
+        for dock_name, dock_data in self.dock_widgets.items():
+            dock_widget = getattr(self, f'{dock_name}_tree_dock_widget', None)
+            if dock_widget is None:
+                continue
+            tree_widget = dock_widget.widget()
+            if not isinstance(tree_widget, TreeView):
+                continue
+            if tree_widget.model() is None:
+                continue
+            plugin_key = getattr(dock_widget, 'plugin_name', dock_name)
+            if not plugin_key:
+                continue
             try:
-                geometry_bytes = self._decode_window_data(geometry)
+                state = tree_widget.capture_persistent_state()
+            except Exception:
+                logger.exception('Не удалось сохранить состояние дерева для режима "%s".', plugin_key)
+                continue
+            tree_states[str(plugin_key)] = state
+
+        if tree_states:
+            try:
+                serialized = json.dumps(tree_states, ensure_ascii=False)
+                self.user_settings.set('tree_states', serialized)
+            except (TypeError, ValueError) as exc:
+                logger.warning('Не удалось сериализовать состояние деревьев: %s', exc)
+        else:
+            self.user_settings.remove('tree_states')
+
+    def restore_windows_state(self):
+        geometry_bytes = self.user_settings.get_bytes('main_window_geometry')
+        if not geometry_bytes.isEmpty():
+            try:
                 if not geometry_bytes.isEmpty():
                     restored = self.restoreGeometry(geometry_bytes)
                     logger.debug('Результат восстановления геометрии окна: %s', restored)
                 else:
-                    logger.debug('Геометрия окна после декодирования пуста')
+                    logger.debug('Геометрия окна пуста, пропускаем восстановление')
             except Exception as exc:
                 logger.warning('Не удалось восстановить геометрию окна: %s', exc)
 
-        window_state = self.user_settings.get('main_window_state')
-        if window_state:
-            logger.debug('Восстановление состояния окна: длина сохраненной строки=%s, префикс=%s',
-                         len(window_state), window_state[:2])
-            try:
-                state_bytes = self._decode_window_data(window_state)
-                if not state_bytes.isEmpty():
-                    restored = self.restoreState(state_bytes)
-                    logger.debug('Результат восстановления состояния окна: %s', restored)
-                else:
-                    logger.debug('Состояние окна после декодирования пусто')
-            except Exception as exc:
-                logger.warning('Не удалось восстановить состояние окна: %s', exc)
+        window_state = self.user_settings.get_bytes('main_window_state')
+        if not window_state.isEmpty():
+            self._pending_window_state_bytes = window_state
+        else:
+            self._pending_window_state_bytes = None
+
+        central_state = self.user_settings.get_bytes('central_window_state')
+        if not central_state.isEmpty():
+            self._pending_central_window_state_bytes = central_state
+        else:
+            self._pending_central_window_state_bytes = None
+
+        self._tree_states_to_restore = self._coerce_tree_states(self.user_settings.get('tree_states', {}))
+
+        active_project_setting = self.user_settings.get('active_project')
+        if active_project_setting and hasattr(self, 'project') and self.project is not None:
+            self.project.autoopen_project_id = str(active_project_setting)
 
         active_plugins = self.user_settings.get('active_plugins')
-        if active_plugins:
-            active_plugins = ast.literal_eval(active_plugins)
-            for plugin in active_plugins:
-                if plugin == 'project':
-                    active_project = self.user_settings.get('active_project')
-                    if active_project:
-                        self.project.autoopen_project_id = active_project
+        if isinstance(active_plugins, str):
+            try:
+                active_plugins = ast.literal_eval(active_plugins)
+            except (ValueError, SyntaxError):
+                active_plugins = [active_plugins]
+
+        if not isinstance(active_plugins, (list, tuple)):
+            active_plugins = []
+
+        for plugin in active_plugins:
+            if hasattr(self, plugin) and hasattr(self, f'{plugin}_tree_dock_widget'):
                 self.activate_tree(getattr(self, plugin), getattr(self, plugin + '_tree_dock_widget'),
                                    getattr(self, plugin.upper() + '_TREE'))
 
-    @classmethod
-    def _encode_window_data(cls, data: QByteArray):
-        if data is None or data.isNull() or data.isEmpty():
-            return ''
-
-        logger.debug('Кодирование состояния окна: исходная длина=%s', data.size())
-
-        try:
-            compressed = qCompress(data, 9)
-            encoded_bytes = compressed.toBase64()
-            encoded = 'z:' + bytes(encoded_bytes).decode('ascii')
-            logger.debug('Сжатые данные: длина=%s, длина строки=%s', compressed.size(), len(encoded))
-        except Exception as exc:
-            logger.warning('Ошибка при кодировании состояния окна: %s', exc)
-            encoded = None
-
-        if encoded and len(encoded) <= cls._MAX_DB_STRING_LENGTH:
-            return encoded
-
-        if encoded:
-            logger.debug('Сжатая строка длиной %s превышает лимит %s символов',
-                         len(encoded), cls._MAX_DB_STRING_LENGTH)
-
-        try:
-            fallback_bytes = data.toBase64()
-            fallback = bytes(fallback_bytes).decode('ascii')
-            logger.debug('Используем fallback base64: длина строки=%s', len(fallback))
-        except Exception:
-            fallback = None
-
-        if fallback and len(fallback) <= cls._MAX_DB_STRING_LENGTH:
-            return fallback
-
-        if fallback:
-            logger.debug('Fallback строка длиной %s превышает лимит %s символов',
-                         len(fallback), cls._MAX_DB_STRING_LENGTH)
-
-        return None
-
-    @staticmethod
-    def _decode_window_data(encoded: str) -> QByteArray:
-        if not encoded:
-            return QByteArray()
-
-        if encoded.startswith('z:'):
-            payload = encoded[2:]
-            try:
-                compressed = QByteArray.fromBase64(payload.encode('ascii'))
-                logger.debug('Декодирование сжатой строки: длина base64=%s, длина сжатых данных=%s',
-                             len(payload), compressed.size())
-                decompressed = qUncompress(compressed)
-                if decompressed.isNull():
-                    logger.debug('Результат распаковки NULL, возвращаем пустой QByteArray')
-                    return QByteArray()
-                result = QByteArray()
-                result.append(decompressed)
-                logger.debug('Распакованные данные: длина=%s', result.size())
-                return result
-            except Exception as exc:
-                logger.warning('Ошибка при декодировании сжатого состояния окна: %s', exc)
-
-        try:
-            decoded = QByteArray.fromBase64(encoded.encode('ascii'))
-            logger.debug('Декодирование base64 без сжатия: длина строки=%s, длина результата=%s',
-                         len(encoded), decoded.size())
-            return decoded
-        except Exception:
-            logger.warning('Ошибка при декодировании состояния окна')
-            return QByteArray()
+        self._apply_pending_window_state()
 
     # slots:
     def import_files(self, type_):
@@ -650,8 +713,11 @@ class MainWindow(QtWidgets.QMainWindow):
         if dock_widget.widget().model() is None or getattr(self, tree_name).isChecked():
             if obj.activate():
                 dock_widget.init_menu()
-                dock_widget.setWidget(obj.tree_view())
-                obj.tree_view().init_dock_widget(dock_widget)
+                tree_widget = obj.tree_view()
+                if tree_widget is not None:
+                    dock_widget.setWidget(tree_widget)
+                    tree_widget.init_dock_widget(dock_widget)
+                    self._restore_tree_view_state(getattr(dock_widget, 'plugin_name', tree_name), tree_widget)
                 if obj.dock_widget_name:
                     dock_widget.set_title_label(obj.dock_widget_name)
                 if hasattr(self, tree_name):
