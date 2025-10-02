@@ -90,8 +90,13 @@ class PlotContextMenuMixin:
             legend = self.plotItem.legend
             for sample, label in legend.items:
                 if label.sceneBoundingRect().contains(pos):
-                    # Если клик по легенде - прерываем обработку
+                    # Если клик по элементу легенды - прерываем обработку
                     return
+
+            legend_rect = legend.mapRectToScene(legend.boundingRect())
+            if legend_rect.contains(pos):
+                # Если клик по фону легенды - прерываем обработку
+                return
 
         mouse_point = self.plotItem.vb.mapSceneToView(pos)
 
@@ -439,13 +444,30 @@ class PlotContextMenuMixin:
                 # Находим соответствующую кривую
                 curve = next((c for c in self.curve_items if c.name() == label.text), None)
                 if curve:
-                    # Создаем и показываем меню
-                    menu = QMenu(self)
-                    self._add_curve_specific_actions(menu, curve=curve)
+                    menu = self._create_legend_context_menu(curve)
                     menu.exec_(QCursor.pos())
-                    # Предотвращаем дальнейшую обработку события
                     event.accept()
-                break
+                return
+
+        # Если клик по фону легенды, показываем меню настроек легенды
+        menu = self._create_legend_context_menu()
+        if not menu.isEmpty():
+            menu.exec_(QCursor.pos())
+            event.accept()
+
+    def _create_legend_context_menu(self, curve=None) -> QMenu:
+        menu = QMenu(self)
+
+        if curve is not None:
+            self._add_curve_specific_actions(menu, curve=curve)
+            if not menu.isEmpty():
+                menu.addSeparator()
+
+        if hasattr(self.plotItem, 'legend') and self.plotItem.legend is not None:
+            action = menu.addAction("Настройка легенды…")
+            action.triggered.connect(self.plotItem.legend.open_settings_dialog)
+
+        return menu
 
     def _on_plot_action_triggered(self, checked):
         """Обработчик сигнала triggered для действий графика"""

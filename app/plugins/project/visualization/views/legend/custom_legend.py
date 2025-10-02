@@ -36,6 +36,10 @@ class CustomLegend(pg.LegendItem):
         self.setZValue(10_000)
         self._apply_style()
 
+    def open_settings_dialog(self):
+        """Открывает диалог настроек легенды."""
+        self.edit_legend(None)
+
     def _load_menu(self, mode, location):
         menu = sp.get_user_menu_(mode, location)
         self.available_actions += [action.name for action in menu]
@@ -88,6 +92,11 @@ class CustomLegend(pg.LegendItem):
         menu = QMenu(self.getViewWidget())
         _menu.init_menu(self.legend_menu, self, menu)
         self.connect_triggered_funcs(pos)
+
+        if '_edit_legend' not in self.available_actions:
+            action = menu.addAction("Настройка легенды…")
+            action.triggered.connect(lambda: self.edit_legend(pos))
+
         return menu
 
     def connect_triggered_funcs(self, pos):
