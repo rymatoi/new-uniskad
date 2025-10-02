@@ -89,13 +89,16 @@ class EpureItem(pg.ItemGroup):
 
     def init_legend_proxy(self):
         legend_proxy = LegendProxyPlotDataItem([], [], name=self._name, style=self._style_config)
+        legend_proxy.setData([0, 1], [0, 0])
         legend_proxy.setVisible(True)
         legend_proxy.opts.update({
-            'size': self._style_config.get('symbol_size', GraphConstants.DEFAULT_STYLE['symbol_size']),
+            'symbolSize': self._style_config.get('symbol_size', GraphConstants.DEFAULT_STYLE['symbol_size']),
             'pen': pg.mkPen(color=self._style_config['color'],
                             style=GraphConstants.resolve_pen_style(self._style_config.get('line_style'))),
             'brush': pg.mkBrush(self._style_config['fill_color']),
-            'symbolPen': pg.mkPen(self._style_config.get('symbol_color', self._style_config['color']))
+            'symbolPen': pg.mkPen(self._style_config.get('symbol_color', self._style_config['color'])),
+            'symbolBrush': pg.mkBrush(self._style_config.get('fill_color', self._style_config['color'])),
+            'symbol': self._style_config.get('symbol', GraphConstants.DEFAULT_STYLE['symbol'])
         })
         return legend_proxy
 

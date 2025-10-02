@@ -1,12 +1,15 @@
 import PySide2
 from PySide2.QtCore import QEvent
+from PySide2.QtGui import QColor
 from PySide2.QtWidgets import QMenu
 from pyqtgraph import Point
 import pyqtgraph as pg
 
-from app import _menu, basic_funcs
+from app import _menu
 from app.history_manager.events import LegendPositionChangeEvent
 from db import sp
+
+from app.plugins.project.dialogs.legend_style import LegendStyleDialog
 
 
 class CustomLegend(pg.LegendItem):
@@ -16,14 +19,21 @@ class CustomLegend(pg.LegendItem):
     """
 
     def __init__(self, parent=None, *args, **kwargs):
+        offset = kwargs.get('offset', (0, 0))
         super().__init__(*args, **kwargs)
         self._parent = parent
         self.old_pos = None
-        self.last_pos_offset = None  # смещение от начальной точки
+        self.last_pos_offset = Point(offset)  # смещение от начальной точки
         self.current_pos = None  # текущее положение легенды
+
+        self._background_color = QColor(255, 255, 255)
+        self._border_color = QColor(100, 100, 100)
+        self._opacity = 1.0
 
         self.available_actions = []
         self.legend_menu = self._load_menu('any', 'legend')
+
+        self._apply_style_settings()
 
     def _load_menu(self, mode, location):
         menu = sp.get_user_menu_(mode, location)
@@ -88,4 +98,39 @@ class CustomLegend(pg.LegendItem):
             getattr(self, action_name).triggered.connect(lambda: func(*args))
 
     def edit_legend(self, pos):
-        basic_funcs.info('Внимание!', 'Данное действие находится в разработке.')
+        dialog = LegendStyleDialog(self, parent=self.getViewWidget())
+        if dialog.exec_():
+            background_color, border_color, opacity = dialog.get_values()
+            self.apply_style_settings(background_color=background_color,
+                                      border_color=border_color,
+                                      opacity=opacity)
+
+    @property
+    def background_color(self) -> QColor:
+        return QColor(self._background_color)
+
+    @property
+    def border_color(self) -> QColor:
+        return QColor(self._border_color)
+
+    @property
+    def opacity(self) -> float:
+        return float(self._opacity)
+
+    def apply_style_settings(self, background_color: QColor = None,
+                              border_color: QColor = None,
+                              opacity: float = None):
+        if background_color is not None:
+            self._background_color = QColor(background_color)
+        if border_color is not None:
+            self._border_color = QColor(border_color)
+        if opacity is not None:
+            self._opacity = max(0.0, min(1.0, float(opacity)))
+
+        self._apply_style_settings()
+
+    def _apply_style_settings(self):
+        brush_color = QColor(self._background_color)
+        brush_color.setAlphaF(self._opacity)
+        self.setBrush(pg.mkBrush(brush_color))
+        self.setPen(pg.mkPen(self._border_color))
