@@ -3,6 +3,8 @@ import time
 import pyqtgraph as pg
 from PySide2 import QtCore, QtGui
 
+from app.plugins.project.visualization.views.legend.custom_legend import CustomLegend
+
 
 class FPSPlotWidget(pg.PlotWidget):
     """Оболочка для трекинга производительности PlotWidget"""
@@ -45,3 +47,22 @@ class FPSPlotWidget(pg.PlotWidget):
             painter.setFont(font)
             painter.setPen(QtGui.QColor(0, 0, 0))  # Белый цвет текста
             painter.drawText(10, 20, f"FPS: {self.fps:.1f}")  # Позиция текста (x, y)
+
+    def addLegend(self, offset=(30, 30), **kwargs):
+        """Создаёт или возвращает легенду, гарантируя использование кастомного класса."""
+        legend = getattr(self.plotItem, 'legend', None)
+        if legend is not None and not isinstance(legend, CustomLegend):
+            if legend.scene() is not None:
+                legend.scene().removeItem(legend)
+            legend = None
+
+        if not isinstance(legend, CustomLegend):
+            legend = CustomLegend(parent=self, offset=offset, **kwargs)
+            legend.setParentItem(self.plotItem.vb)
+            self.plotItem.legend = legend
+        else:
+            legend.setOffset(offset)
+
+        legend.raise_legend()
+        legend.setVisible(True)
+        return legend

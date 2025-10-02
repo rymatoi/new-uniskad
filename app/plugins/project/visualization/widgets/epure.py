@@ -80,6 +80,10 @@ class EpureItem(pg.ItemGroup):
         self.addItem(self.curve)
         self.addItem(self.scatter)
 
+        # Обеспечиваем явную видимость элементов эпюры
+        self.curve.setVisible(True)
+        self.scatter.setVisible(True)
+
         # Синхронизация видимости
         self.legend_proxy.visibilityChanged.connect(self.set_visible)
 
@@ -90,13 +94,19 @@ class EpureItem(pg.ItemGroup):
     def init_legend_proxy(self):
         legend_proxy = LegendProxyPlotDataItem([], [], name=self._name, style=self._style_config)
         legend_proxy.setVisible(True)
-        legend_proxy.opts.update({
-            'size': self._style_config.get('symbol_size', GraphConstants.DEFAULT_STYLE['symbol_size']),
-            'pen': pg.mkPen(color=self._style_config['color'],
-                            style=GraphConstants.resolve_pen_style(self._style_config.get('line_style'))),
-            'brush': pg.mkBrush(self._style_config['fill_color']),
-            'symbolPen': pg.mkPen(self._style_config.get('symbol_color', self._style_config['color']))
-        })
+
+        pen = pg.mkPen(
+            color=self._style_config['color'],
+            style=GraphConstants.resolve_pen_style(self._style_config.get('line_style'))
+        )
+        symbol_pen = pg.mkPen(self._style_config.get('symbol_color', self._style_config['color']))
+        symbol_brush = pg.mkBrush(self._style_config.get('fill_color', self._style_config['color']))
+
+        legend_proxy.setPen(pen)
+        legend_proxy.setSymbol(self._style_config.get('symbol', GraphConstants.DEFAULT_STYLE['symbol']))
+        legend_proxy.setSymbolSize(self._style_config.get('symbol_size', GraphConstants.DEFAULT_STYLE['symbol_size']))
+        legend_proxy.setSymbolPen(symbol_pen)
+        legend_proxy.setSymbolBrush(symbol_brush)
         return legend_proxy
 
     def _create_curve(self, plot_data):
