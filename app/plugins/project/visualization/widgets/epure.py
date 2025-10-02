@@ -104,46 +104,46 @@ class EpureItem(pg.ItemGroup):
         return self._style_config
 
     def init_legend_proxy(self):
-        legend_proxy = LegendProxyPlotDataItem([], [], name=self._name, style=self._style_config)
+        style = self._style_config.copy()
+        legend_proxy = LegendProxyPlotDataItem([], [], name=self._name, style=style)
         legend_proxy.setVisible(True)
 
-        symbol_pen_width = self._style_config.get('symbol_pen_width', 1)
+        symbol_pen_width = style.get('symbol_pen_width', 1)
         try:
             symbol_pen_width = int(symbol_pen_width)
         except (TypeError, ValueError):
             symbol_pen_width = 1
         symbol_pen_width = max(1, symbol_pen_width)
 
-        symbol = self._style_config.get('symbol', GraphConstants.DEFAULT_STYLE['symbol'])
-        symbol_size = self._style_config.get('symbol_size', GraphConstants.DEFAULT_STYLE['symbol_size'])
+        symbol = style.get('symbol', GraphConstants.DEFAULT_STYLE['symbol'])
+        symbol_size = style.get('symbol_size', GraphConstants.DEFAULT_STYLE['symbol_size'])
         line_pen = pg.mkPen(
-            color=self._style_config['color'],
-            style=GraphConstants.resolve_pen_style(self._style_config.get('line_style')),
-            width=self._style_config.get('width', GraphConstants.DEFAULT_STYLE['width'])
+            color=style['color'],
+            style=GraphConstants.resolve_pen_style(style.get('line_style')),
+            width=style.get('width', GraphConstants.DEFAULT_STYLE['width'])
         )
-        symbol_brush = pg.mkBrush(self._style_config['fill_color'])
+        symbol_brush = pg.mkBrush(style['fill_color'])
         symbol_pen = pg.mkPen(
-            self._style_config.get('symbol_color', self._style_config['color']),
+            style.get('symbol_color', style['color']),
             width=symbol_pen_width
         )
 
-        legend_proxy.opts.update({
-            'size': symbol_size,
-            'pen': line_pen,
-            'brush': symbol_brush,
-            'symbol': symbol,
-            'symbolBrush': symbol_brush,
-            'symbolPen': symbol_pen
-        })
-
-        # Используем фиктивные данные и явные настройки, чтобы легенда отображала и линию, и точку
-        legend_proxy.setData([0, 1], [0, 0])
         legend_proxy.setPen(line_pen)
-        legend_proxy.setBrush(symbol_brush)
         legend_proxy.setSymbol(symbol)
         legend_proxy.setSymbolSize(symbol_size)
         legend_proxy.setSymbolBrush(symbol_brush)
         legend_proxy.setSymbolPen(symbol_pen)
+
+        # Поддерживаем доступ к обновленному словарю параметров через opts
+        legend_proxy.opts.update({
+            'pen': line_pen,
+            'symbol': symbol,
+            'symbolBrush': symbol_brush,
+            'symbolPen': symbol_pen,
+            'symbolSize': symbol_size,
+            'brush': symbol_brush,
+        })
+
         return legend_proxy
 
     def _create_curve(self, plot_data):
