@@ -9,6 +9,7 @@ from app.basic_funcs import to_bool
 from app.plugins.project.plot.ruler import Ruler
 from app.plugins.project.services.data_processors.base_dp import DataProcessor
 from app.plugins.project.services.data_processors.plot_dp import PlotProcessor
+from app.plugins.project.visualization.views.legend.custom_legend import CustomLegend
 
 
 class PlotDisplayMixin:
@@ -45,6 +46,8 @@ class PlotDisplayMixin:
             }
         }
 
+        self._legend_default_offset = (50, 50)
+
         self.init_view()
 
     @staticmethod
@@ -61,7 +64,22 @@ class PlotDisplayMixin:
         return abs(numeric)
 
     def init_legend(self):
-        self.addLegend()
+        scene = self.plotItem.scene()
+        if scene is None:
+            return
+
+        existing = getattr(self.plotItem, 'legend', None)
+        if existing is not None:
+            try:
+                scene.removeItem(existing)
+            except Exception:
+                pass
+
+        legend = CustomLegend(parent=self, offset=self._legend_default_offset)
+        scene.addItem(legend)
+        legend.setParentItem(self.plotItem.graphicsItem())
+        legend.setVisible(True)
+        self.plotItem.legend = legend
 
     @property
     def legend(self):

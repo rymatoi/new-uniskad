@@ -8,6 +8,7 @@ class LegendProxyPlotDataItem(CurveItem):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._isVisible = True  # Трекер текущего состояния видимости
+        self.setData([0, 1], [0, 0])
 
     def setVisible(self, visible):
         if self._isVisible != visible:  # Проверяем, изменилось ли состояние видимости
