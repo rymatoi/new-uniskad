@@ -20,6 +20,8 @@ class EpureItem(pg.ItemGroup):
             self._style_config['width'] = GraphConstants.DEFAULT_STYLE['width']
         if 'symbol' not in self._style_config:
             self._style_config['symbol'] = GraphConstants.DEFAULT_STYLE['symbol']
+        if 'symbol_color' not in self._style_config:
+            self._style_config['symbol_color'] = self._style_config['color']
         self._name = self._style_config.get('name', 'Epure')
 
         # Прокси-элемент для легенды (невидимый на графике)
@@ -90,8 +92,10 @@ class EpureItem(pg.ItemGroup):
         legend_proxy.setVisible(True)
         legend_proxy.opts.update({
             'size': self._style_config.get('symbol_size', GraphConstants.DEFAULT_STYLE['symbol_size']),
-            'pen': pg.mkPen(color=self._style_config['color']),
-            'brush': pg.mkBrush(self._style_config['fill_color'])
+            'pen': pg.mkPen(color=self._style_config['color'],
+                            style=GraphConstants.resolve_pen_style(self._style_config.get('line_style'))),
+            'brush': pg.mkBrush(self._style_config['fill_color']),
+            'symbolPen': pg.mkPen(self._style_config.get('symbol_color', self._style_config['color']))
         })
         return legend_proxy
 
@@ -103,7 +107,8 @@ class EpureItem(pg.ItemGroup):
             connect='finite',
             pen=pg.mkPen(
                 color=self._style_config['color'],
-                width=self._style_config.get('width', 2)
+                width=self._style_config.get('width', 2),
+                style=GraphConstants.resolve_pen_style(self._style_config.get('line_style'))
             )
         )
 
@@ -115,7 +120,7 @@ class EpureItem(pg.ItemGroup):
             symbol=self._style_config['symbol'],
             size=self._style_config.get('symbol_size', 8),
             brush=pg.mkBrush(self._style_config['fill_color']),
-            pen=pg.mkPen(color=self._style_config['color'])
+            pen=pg.mkPen(color=self._style_config.get('symbol_color', self._style_config['color']))
         )
 
     @property

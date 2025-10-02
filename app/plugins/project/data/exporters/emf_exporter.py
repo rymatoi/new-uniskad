@@ -25,6 +25,14 @@ class PlotEMFExporter:
             'd': 'D',  # Призма
             'x': 'X',  # Крест
         }
+        self.line_style_map = {
+            Qt.NoPen: 'none',
+            Qt.SolidLine: '-',
+            Qt.DashLine: '--',
+            Qt.DotLine: ':',
+            Qt.DashDotLine: '-.',
+            Qt.DashDotDotLine: (0, (3, 5, 1, 5, 1, 5)),
+        }
 
     def _clean_axes(self, ax):
         """Очищает лишние элементы осей."""
@@ -61,27 +69,22 @@ class PlotEMFExporter:
 
         # Отрисовываем каждую кривую
         for curve in plot_view.plotItem.curves:
-            print(f"Processing curve: {curve.name()}")
 
             # Получаем данные
             x = curve.xData
             y = curve.yData
 
-            print(f"Data points: x={len(x)}, y={len(y)}")
-            print(f"X range: {min(x)} to {max(x)}")
-            print(f"Y range: {min(y)} to {max(y)}")
-
             if x is None or y is None or len(x) == 0 or len(y) == 0:
-                print("Skipping curve - no data")
                 continue
 
             opts = curve.opts
             pen = fn.mkPen(opts['pen'])
-            line_style = '' if pen.style() == Qt.NoPen else '-'
+            qt_pen_style = pen.style()
+            line_style = self.line_style_map.get(qt_pen_style, '-')
+            line_width = pen.width()
+            if line_style == 'none':
+                line_width = 0
             color = tuple([c / 255. for c in fn.colorTuple(pen.color())])
-
-            print(f"Line style: {line_style}")
-            print(f"Color: {color}")
 
             symbol = opts['symbol']
             symbol_pen = fn.mkPen(opts['symbolPen'])
@@ -91,15 +94,10 @@ class PlotEMFExporter:
                 symbol_brush = fn.mkBrush(symbol_color)
                 marker_face_color = tuple([c / 255. for c in fn.colorTuple(symbol_brush.color())])
             else:
-                marker_face_color = None
+                marker_face_color = 'none'
 
             marker_edge_color = tuple([c / 255. for c in fn.colorTuple(symbol_pen.color())])
             marker_size = opts['symbolSize']
-
-            print(f"Symbol: {symbol}")
-            print(f"Marker size: {marker_size}")
-            print(f"Marker face color: {marker_face_color}")
-            print(f"Marker edge color: {marker_edge_color}")
 
             # Сначала отрисовываем выделенные точки
             if curve in plot_view.selected_points and plot_view.selected_points[curve]:
@@ -123,7 +121,7 @@ class PlotEMFExporter:
             ax.plot(x, y,
                     marker=self.symbol_mapping.get(symbol, symbol),
                     color=color,
-                    linewidth=pen.width(),
+                    linewidth=line_width,
                     linestyle=line_style,
                     markeredgecolor=marker_edge_color,
                     markerfacecolor=marker_face_color,
@@ -133,7 +131,6 @@ class PlotEMFExporter:
 
         # Устанавливаем пределы осей
         xr, yr = plot_view.plotItem.viewRange()
-        print(f"View range: x={xr}, y={yr}")
         ax.set_xbound(*xr)
         ax.set_ybound(*yr)
 
