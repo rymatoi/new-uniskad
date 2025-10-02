@@ -1,4 +1,5 @@
 from typing import TYPE_CHECKING, cast, Any, Tuple, Dict, Callable, Optional
+import types
 
 import numpy as np
 import pyqtgraph as pg
@@ -29,6 +30,9 @@ class PlotDisplayMixin:
     addLegend: Callable
     enableAutoRange: Callable
 
+    _legend_z_value: int = 1_000_000
+    _grid_z_value: int = -1_000_000
+
     def __init__(self):
         self._display_settings: dict = {
             'x_range': (None, None),
@@ -45,6 +49,8 @@ class PlotDisplayMixin:
             }
         }
 
+        self._grid_wrapper_installed = False
+        self._wrap_plotitem_show_grid()
         self.init_view()
 
     @staticmethod
@@ -65,7 +71,12 @@ class PlotDisplayMixin:
 
         if legend is not None:
             legend.setBrush(pg.mkBrush(255, 255, 255, 255))
-            legend.setZValue(1_000_000)
+            self._ensure_overlay_order()
+
+    def showGrid(self, *args, **kwargs):
+        result = PlotWidget.showGrid(self, *args, **kwargs)
+        self._ensure_overlay_order()
+        return result
 
     @property
     def legend(self):
@@ -88,6 +99,113 @@ class PlotDisplayMixin:
         self.setLabel('left', self.item.graph_label_x)
         self.setLabel('bottom', self.item.graph_label_y)
         self.plotItem.setMenuEnabled(False)
+        self._ensure_overlay_order()
+
+    def _ensure_overlay_order(self):
+        """Гарантирует, что сетка остается под легендой."""
+        legend = getattr(self.plotItem, 'legend', None)
+        if legend is not None:
+            self._prepare_legend_for_foreground(legend)
+
+        self._push_grid_to_background()
+
+    def _prepare_legend_for_foreground(self, legend):
+        self._set_item_z_recursively(legend, self._legend_z_value)
+
+    def _push_grid_to_background(self):
+        plot_item = getattr(self, 'plotItem', None)
+
+        if plot_item is None:
+            return
+
+        view_box_getter = getattr(plot_item, 'getViewBox', None)
+
+        if not callable(view_box_getter):
+            return
+
+        view_box = plot_item.getViewBox()
+
+        if view_box is None:
+            return
+
+        candidates = []
+
+        for name in ('grid', '_grid', '_gridItems'):
+            grid_obj = getattr(view_box, name, None)
+
+            if not grid_obj:
+                continue
+
+            if isinstance(grid_obj, dict):
+                candidates.extend(grid_obj.values())
+            elif isinstance(grid_obj, (list, tuple, set)):
+                candidates.extend(grid_obj)
+            else:
+                candidates.append(grid_obj)
+
+        for name in ('xGrid', 'yGrid'):
+            grid_obj = getattr(view_box, name, None)
+
+            if grid_obj is not None:
+                candidates.append(grid_obj)
+
+        processed = set()
+
+        for item in candidates:
+            if isinstance(item, (list, tuple, set)):
+                for sub_item in item:
+                    self._set_item_z_recursively(sub_item, self._grid_z_value, processed)
+            else:
+                self._set_item_z_recursively(item, self._grid_z_value, processed)
+
+    def _set_item_z_recursively(self, item, value, processed=None):
+        if item is None:
+            return
+
+        if processed is None:
+            processed = set()
+
+        item_id = id(item)
+
+        if item_id in processed:
+            return
+
+        processed.add(item_id)
+
+        setter = getattr(item, 'setZValue', None)
+
+        if callable(setter):
+            setter(value)
+
+        children_getter = getattr(item, 'childItems', None)
+
+        if callable(children_getter):
+            for child in children_getter():
+                self._set_item_z_recursively(child, value, processed)
+
+    def _wrap_plotitem_show_grid(self):
+        if getattr(self, '_grid_wrapper_installed', False):
+            return
+
+        plot_item = getattr(self, 'plotItem', None)
+
+        if plot_item is None:
+            return
+
+        original_show_grid = getattr(plot_item, 'showGrid', None)
+
+        if not callable(original_show_grid):
+            return
+
+        owner = self
+
+        def wrapped_show_grid(*args, **kwargs):
+            result = original_show_grid(*args, **kwargs)
+            owner._ensure_overlay_order()
+            return result
+
+        plot_item.showGrid = types.MethodType(wrapped_show_grid, plot_item)
+        self._grid_wrapper_installed = True
 
     def update_display_settings_from_item(self):
         """Обновление настроек отображения из item"""
