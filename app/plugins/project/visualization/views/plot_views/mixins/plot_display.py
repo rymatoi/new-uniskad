@@ -61,7 +61,11 @@ class PlotDisplayMixin:
         return abs(numeric)
 
     def init_legend(self):
-        self.addLegend()
+        legend = self.addLegend()
+
+        if legend is not None:
+            legend.setBrush(pg.mkBrush(255, 255, 255, 255))
+            legend.setZValue(1_000_000)
 
     @property
     def legend(self):
