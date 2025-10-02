@@ -1,8 +1,12 @@
 from typing import Optional
 
 import pyqtgraph as pg
-from pyqtgraph.functions import drawSymbol
 from pyqtgraph.graphicsItems.LegendItem import ItemSample
+
+try:  # pyqtgraph>=0.12.4
+    from pyqtgraph.graphicsItems.ScatterPlotItem import drawSymbol
+except ImportError:  # pragma: no cover - older pyqtgraph
+    from pyqtgraph.functions import drawSymbol
 
 from PySide2.QtCore import QRectF, Signal
 
