@@ -97,6 +97,8 @@ class ItemProcessor:
         for test_id, values in plot_data.items():
             # Получаем и модифицируем стиль
             style = TestProcessor.get_item_style(test_nodes[test_id])
+            style = style.copy()
+            style['test_id'] = test_id
             scatter_values = []
             curve_values = []
             # Группируем и обрабатываем данные за один проход
@@ -133,7 +135,7 @@ class ItemProcessor:
                     scatter_values.append((y_values, x_values))
                     curve_values.append(curve_segment)
             if scatter_values and curve_values:
-                yield scatter_values, curve_values, style
+                yield test_id, scatter_values, curve_values, style
 
     @staticmethod
     def _calculate_epure_point_count(point_count: int) -> int:
