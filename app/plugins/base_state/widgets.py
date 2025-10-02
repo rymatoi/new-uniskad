@@ -5,7 +5,8 @@ from copy import copy
 from datetime import datetime
 
 from PySide2 import QtCore, QtWidgets
-from PySide2.QtCore import Qt, QSortFilterProxyModel, QSize, QLocale, QTimer, QPersistentModelIndex, QModelIndex
+from PySide2.QtCore import Qt, QSortFilterProxyModel, QSize, QLocale, QTimer, QPersistentModelIndex, QModelIndex, \
+    QItemSelectionModel
 from PySide2.QtGui import QIcon, QCursor, QColor, QFont, QBrush, QKeySequence
 from PySide2.QtWidgets import QTreeView, QMenu, QColorDialog, QInputDialog, QDockWidget, \
     QHBoxLayout, QToolButton, QWidget, QLabel, QAbstractItemView, QAction, QLineEdit, QShortcut, \
@@ -31,6 +32,22 @@ class Tab(QDockWidget):
         self.item = index.internalPointer()
         self.setWindowTitle(self.item.data())
         self.ui = None
+
+        plugin_name = None
+        dock_widget = getattr(self._parent, 'dock_widget', None)
+        if dock_widget is not None:
+            plugin_name = getattr(dock_widget, 'plugin_name', None)
+
+        node_id = None
+        data = getattr(self.item, '_data', None)
+        for attr in ('id', 'uuid', 'guid'):
+            if data is not None and hasattr(data, attr):
+                node_id = getattr(data, attr)
+                if node_id is not None:
+                    break
+
+        if plugin_name and node_id is not None:
+            self.setObjectName(f'{plugin_name}_tab_{node_id}')
 
     def setupUi(self, ui):
         widget = QWidget(self)
@@ -97,6 +114,8 @@ class TreeView(QTreeView):
 
         self._opened_tabs = {}
 
+        self._pending_restore_state = None
+
         self._search_text = ''
         self._search_results = []
         self._search_expanded_state = None
@@ -142,6 +161,19 @@ class TreeView(QTreeView):
         self.resizeColumnToContents(0)
         self.refresh()
         self._reset_tree_state()
+        try:
+            model.modelReset.connect(self._apply_pending_state)
+        except AttributeError:
+            pass
+        except TypeError:
+            pass
+        try:
+            model.layoutChanged.connect(self._apply_pending_state)
+        except AttributeError:
+            pass
+        except TypeError:
+            pass
+        self._apply_pending_state()
 
     def _reset_tree_state(self):
         self._search_text = ''
@@ -152,6 +184,184 @@ class TreeView(QTreeView):
         self._sort_snapshot = None
         self._is_sorted = False
         self._sort_order = None
+
+    def _node_identifier(self, index):
+        if not index or not index.isValid():
+            return None
+        node = index.internalPointer()
+        if node is None:
+            return None
+        data = getattr(node, '_data', None)
+        if data is None:
+            return None
+        for attr in ('id', 'uuid', 'guid'):
+            if hasattr(data, attr):
+                value = getattr(data, attr)
+                if value is not None:
+                    return str(value)
+        return None
+
+    def _build_index_map(self):
+        model = self.model()
+        if model is None:
+            return {}
+        index_map = {}
+
+        def recurse(parent_index=QtCore.QModelIndex()):
+            for row in range(model.rowCount(parent_index)):
+                index = model.index(row, 0, parent_index)
+                identifier = self._node_identifier(index)
+                if identifier is not None and identifier not in index_map:
+                    index_map[identifier] = index
+                recurse(index)
+
+        recurse()
+        return index_map
+
+    def _collect_expanded_ids(self):
+        expanded = []
+        seen = set()
+        model = self.model()
+        if model is None:
+            return expanded
+
+        def recurse(parent_index=QtCore.QModelIndex()):
+            for row in range(model.rowCount(parent_index)):
+                index = model.index(row, 0, parent_index)
+                if self.isExpanded(index):
+                    identifier = self._node_identifier(index)
+                    if identifier and identifier not in seen:
+                        seen.add(identifier)
+                        expanded.append(identifier)
+                recurse(index)
+
+        recurse()
+        return expanded
+
+    def _collect_selected_ids(self):
+        selection_model = self.selectionModel()
+        if selection_model is None:
+            return []
+        selected = []
+        seen = set()
+        for index in selection_model.selectedIndexes():
+            identifier = self._node_identifier(index)
+            if identifier and identifier not in seen:
+                seen.add(identifier)
+                selected.append(identifier)
+        return selected
+
+    def _collect_open_tab_ids(self):
+        opened = []
+        seen = set()
+        for index in list(self._opened_tabs.keys()):
+            if index and index.isValid():
+                identifier = self._node_identifier(index)
+                if identifier and identifier not in seen:
+                    seen.add(identifier)
+                    opened.append(identifier)
+        return opened
+
+    def capture_persistent_state(self):
+        model = self.model()
+        if model is None:
+            return {}
+
+        state = {
+            'expanded': self._collect_expanded_ids(),
+            'selected': self._collect_selected_ids(),
+            'current': self._node_identifier(self.currentIndex()),
+            'scroll': {
+                'h': self.horizontalScrollBar().value(),
+                'v': self.verticalScrollBar().value()
+            },
+            'open_tabs': self._collect_open_tab_ids(),
+            'sort': None
+        }
+
+        if self.has_active_sort():
+            order = self.current_sort_order()
+            if order == Qt.DescendingOrder:
+                state['sort'] = 'desc'
+            else:
+                state['sort'] = 'asc'
+
+        return state
+
+    def schedule_state_restore(self, state):
+        if not isinstance(state, dict):
+            return False
+        self._pending_restore_state = state
+        applied = self._apply_pending_state()
+        return applied or isinstance(self._pending_restore_state, dict)
+
+    def _apply_pending_state(self):
+        if not isinstance(self._pending_restore_state, dict):
+            return False
+        model = self.model()
+        if model is None:
+            return False
+
+        state = self._pending_restore_state
+
+        needs_nodes = bool(state.get('expanded') or state.get('selected') or state.get('open_tabs') or
+                            state.get('current'))
+        if model.rowCount(QtCore.QModelIndex()) == 0 and needs_nodes:
+            return False
+
+        sort_order = state.get('sort')
+        if sort_order == 'asc':
+            self.sort_items(Qt.AscendingOrder)
+        elif sort_order == 'desc':
+            self.sort_items(Qt.DescendingOrder)
+
+        index_map = self._build_index_map()
+
+        expanded = state.get('expanded') or []
+        for identifier in expanded:
+            index = index_map.get(str(identifier))
+            if index is not None:
+                self.setExpanded(index, True)
+
+        selected = state.get('selected') or []
+        selection_model = self.selectionModel()
+        if selection_model is not None:
+            selection_model.clearSelection()
+            for identifier in selected:
+                index = index_map.get(str(identifier))
+                if index is not None:
+                    selection_model.select(index, QItemSelectionModel.Select | QItemSelectionModel.Rows)
+
+        current = state.get('current')
+        if current:
+            current_index = index_map.get(str(current))
+            if current_index is not None:
+                self.setCurrentIndex(current_index)
+
+        open_tabs = state.get('open_tabs') or []
+        for identifier in open_tabs:
+            index = index_map.get(str(identifier))
+            if index is not None:
+                try:
+                    self.open_item(index)
+                except Exception:
+                    logger.exception('Не удалось восстановить вкладку для узла "%s".', identifier)
+
+        scroll_state = state.get('scroll') or {}
+
+        def apply_scroll():
+            try:
+                if 'v' in scroll_state:
+                    self.verticalScrollBar().setValue(int(scroll_state['v']))
+                if 'h' in scroll_state:
+                    self.horizontalScrollBar().setValue(int(scroll_state['h']))
+            except Exception:
+                logger.exception('Не удалось восстановить положение прокрутки дерева.')
+
+        QTimer.singleShot(0, apply_scroll)
+
+        self._pending_restore_state = None
+        return True
 
     def refresh(self):
         for row in range(self.model().rowCount()):

@@ -1,4 +1,5 @@
 import ast
+import json
 
 from PySide2 import QtWidgets
 from PySide2.QtCore import QEventLoop, Slot
@@ -72,6 +73,8 @@ class MainWindow(QtWidgets.QMainWindow):
         super(MainWindow, self).__init__()
 
         self.user_settings = UserSettings()
+        self._tree_states_to_restore = {}
+        self._pending_window_state_bytes = None
 
         config.config.app.enable_timer(self.user_settings.get('application_close_timeout', 30))
         config.config.app._main_window_initialized = True  # TODO test
@@ -456,6 +459,69 @@ class MainWindow(QtWidgets.QMainWindow):
 
         return self.result
 
+    @staticmethod
+    def _coerce_tree_states(raw_value):
+        def normalize_dict(mapping):
+            normalized = {}
+            for key, value in mapping.items():
+                if isinstance(value, dict):
+                    normalized[str(key)] = value
+            return normalized
+
+        if isinstance(raw_value, dict):
+            return normalize_dict(raw_value)
+
+        if isinstance(raw_value, list):
+            result = {}
+            for entry in raw_value:
+                if not isinstance(entry, dict):
+                    continue
+                plugin = entry.get('plugin') or entry.get('name') or entry.get('key')
+                state = entry.get('state') or entry.get('value')
+                if plugin and isinstance(state, dict):
+                    result[str(plugin)] = state
+            return result
+
+        if isinstance(raw_value, str):
+            for parser in (json.loads, ast.literal_eval):
+                try:
+                    parsed = parser(raw_value)
+                except Exception:
+                    continue
+                return MainWindow._coerce_tree_states(parsed)
+            return {}
+
+        return {}
+
+    def _restore_tree_view_state(self, plugin_name, tree_widget):
+        if not plugin_name or not isinstance(tree_widget, TreeView):
+            return
+        state = self._tree_states_to_restore.get(str(plugin_name))
+        if not isinstance(state, dict):
+            return
+        try:
+            accepted = tree_widget.schedule_state_restore(state)
+        except Exception as exc:
+            logger.warning('Не удалось восстановить состояние дерева "%s": %s', plugin_name, exc)
+            return
+        if accepted:
+            self._tree_states_to_restore.pop(str(plugin_name), None)
+
+    def _apply_pending_window_state(self):
+        if self._pending_window_state_bytes is None:
+            return
+        try:
+            if hasattr(self._pending_window_state_bytes, 'isEmpty') and \
+                    self._pending_window_state_bytes.isEmpty():
+                self._pending_window_state_bytes = None
+                return
+            restored = self.restoreState(self._pending_window_state_bytes)
+            logger.debug('Результат восстановления состояния окна: %s', restored)
+        except Exception as exc:
+            logger.warning('Не удалось восстановить состояние окна: %s', exc)
+        finally:
+            self._pending_window_state_bytes = None
+
     def save_windows_state(self):
         active_plugins = []
         active_project_id = None
@@ -497,6 +563,37 @@ class MainWindow(QtWidgets.QMainWindow):
         except Exception as exc:
             logger.warning('Не удалось сохранить состояние окна: %s', exc)
 
+        existing_states = self._coerce_tree_states(self.user_settings.get('tree_states', {}))
+        tree_states = dict(existing_states)
+
+        for dock_name, dock_data in self.dock_widgets.items():
+            dock_widget = getattr(self, f'{dock_name}_tree_dock_widget', None)
+            if dock_widget is None:
+                continue
+            tree_widget = dock_widget.widget()
+            if not isinstance(tree_widget, TreeView):
+                continue
+            if tree_widget.model() is None:
+                continue
+            plugin_key = getattr(dock_widget, 'plugin_name', dock_name)
+            if not plugin_key:
+                continue
+            try:
+                state = tree_widget.capture_persistent_state()
+            except Exception:
+                logger.exception('Не удалось сохранить состояние дерева для режима "%s".', plugin_key)
+                continue
+            tree_states[str(plugin_key)] = state
+
+        if tree_states:
+            try:
+                serialized = json.dumps(tree_states, ensure_ascii=False)
+                self.user_settings.set('tree_states', serialized)
+            except (TypeError, ValueError) as exc:
+                logger.warning('Не удалось сериализовать состояние деревьев: %s', exc)
+        else:
+            self.user_settings.remove('tree_states')
+
     def restore_windows_state(self):
         geometry_bytes = self.user_settings.get_bytes('main_window_geometry')
         if not geometry_bytes.isEmpty():
@@ -511,11 +608,11 @@ class MainWindow(QtWidgets.QMainWindow):
 
         window_state = self.user_settings.get_bytes('main_window_state')
         if not window_state.isEmpty():
-            try:
-                restored = self.restoreState(window_state)
-                logger.debug('Результат восстановления состояния окна: %s', restored)
-            except Exception as exc:
-                logger.warning('Не удалось восстановить состояние окна: %s', exc)
+            self._pending_window_state_bytes = window_state
+        else:
+            self._pending_window_state_bytes = None
+
+        self._tree_states_to_restore = self._coerce_tree_states(self.user_settings.get('tree_states', {}))
 
         active_project_setting = self.user_settings.get('active_project')
         if active_project_setting and hasattr(self, 'project') and self.project is not None:
@@ -529,12 +626,14 @@ class MainWindow(QtWidgets.QMainWindow):
                 active_plugins = [active_plugins]
 
         if not isinstance(active_plugins, (list, tuple)):
-            return
+            active_plugins = []
 
         for plugin in active_plugins:
             if hasattr(self, plugin) and hasattr(self, f'{plugin}_tree_dock_widget'):
                 self.activate_tree(getattr(self, plugin), getattr(self, plugin + '_tree_dock_widget'),
                                    getattr(self, plugin.upper() + '_TREE'))
+
+        self._apply_pending_window_state()
 
     # slots:
     def import_files(self, type_):
@@ -585,8 +684,11 @@ class MainWindow(QtWidgets.QMainWindow):
         if dock_widget.widget().model() is None or getattr(self, tree_name).isChecked():
             if obj.activate():
                 dock_widget.init_menu()
-                dock_widget.setWidget(obj.tree_view())
-                obj.tree_view().init_dock_widget(dock_widget)
+                tree_widget = obj.tree_view()
+                if tree_widget is not None:
+                    dock_widget.setWidget(tree_widget)
+                    tree_widget.init_dock_widget(dock_widget)
+                    self._restore_tree_view_state(getattr(dock_widget, 'plugin_name', tree_name), tree_widget)
                 if obj.dock_widget_name:
                     dock_widget.set_title_label(obj.dock_widget_name)
                 if hasattr(self, tree_name):
