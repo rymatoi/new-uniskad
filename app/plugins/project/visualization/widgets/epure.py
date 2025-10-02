@@ -26,6 +26,7 @@ class EpureItem(pg.ItemGroup):
 
         # Прокси-элемент для легенды (невидимый на графике)
         self.legend_proxy = self.init_legend_proxy()
+        self.legend_proxy.proxied_item = self
 
         scatter_pairs = [
             (np.asarray(x, dtype=float), np.asarray(y, dtype=float))
@@ -81,6 +82,7 @@ class EpureItem(pg.ItemGroup):
         self.addItem(self.scatter)
 
         # Синхронизация видимости
+        self._updating_visibility = False
         self.legend_proxy.visibilityChanged.connect(self.set_visible)
 
     @property
@@ -93,8 +95,11 @@ class EpureItem(pg.ItemGroup):
         legend_proxy.opts.update({
             'size': self._style_config.get('symbol_size', GraphConstants.DEFAULT_STYLE['symbol_size']),
             'pen': pg.mkPen(color=self._style_config['color'],
+                            width=self._style_config.get('width', GraphConstants.DEFAULT_STYLE['width']),
                             style=GraphConstants.resolve_pen_style(self._style_config.get('line_style'))),
             'brush': pg.mkBrush(self._style_config['fill_color']),
+            'symbol': self._style_config.get('symbol', GraphConstants.DEFAULT_STYLE['symbol']),
+            'symbolBrush': pg.mkBrush(self._style_config['fill_color']),
             'symbolPen': pg.mkPen(self._style_config.get('symbol_color', self._style_config['color']))
         })
         return legend_proxy
@@ -144,15 +149,35 @@ class EpureItem(pg.ItemGroup):
             return ints
         return interface in ints
 
-    def set_visible(self, visible):
-        """Переопределение видимости для всей группы"""
-        self.setVisible(visible)
-        self.legend_proxy.setVisible(visible)
-        # Явно устанавливаем видимость для подэлементов
+    def _apply_visibility(self, visible, sync_proxy=True):
         if self.curve:
             self.curve.setVisible(visible)
         if self.scatter:
             self.scatter.setVisible(visible)
+        if sync_proxy and self.legend_proxy and self.legend_proxy.isVisible() != visible:
+            self.legend_proxy.setVisible(visible)
+
+    def setVisible(self, visible):
+        if self._updating_visibility:
+            super().setVisible(visible)
+            return
+        self._updating_visibility = True
+        try:
+            super().setVisible(visible)
+            self._apply_visibility(visible, sync_proxy=True)
+        finally:
+            self._updating_visibility = False
+
+    def set_visible(self, visible):
+        """Переопределение видимости для всей группы"""
+        if self._updating_visibility:
+            return
+        self._updating_visibility = True
+        try:
+            super().setVisible(visible)
+            self._apply_visibility(visible, sync_proxy=False)
+        finally:
+            self._updating_visibility = False
 
     def dataBounds(self, axis, frac=1.0, orthoRange=None):
         """Для корректного авто-масштабирования"""

@@ -2,13 +2,14 @@ from typing import TYPE_CHECKING, cast, Any, Tuple, Dict, Callable, Optional
 
 import numpy as np
 import pyqtgraph as pg
-from PySide2.QtGui import QSurfaceFormat
+from PySide2.QtGui import QSurfaceFormat, QColor
 from pyqtgraph import PlotWidget
 
 from app.basic_funcs import to_bool
 from app.plugins.project.plot.ruler import Ruler
 from app.plugins.project.services.data_processors.base_dp import DataProcessor
 from app.plugins.project.services.data_processors.plot_dp import PlotProcessor
+from app.plugins.project.visualization.views.legend.custom_legend import CustomLegend
 
 
 class PlotDisplayMixin:
@@ -45,6 +46,11 @@ class PlotDisplayMixin:
             }
         }
 
+        self._legend_brush_color = QColor(255, 255, 255)
+        self._legend_pen_color = QColor(100, 100, 100)
+        self._legend_opacity = 255
+        self._legend_default_offset = (50, 50)
+
         self.init_view()
 
     @staticmethod
@@ -61,7 +67,37 @@ class PlotDisplayMixin:
         return abs(numeric)
 
     def init_legend(self):
-        self.addLegend()
+        self.create_legend()
+
+    def create_legend(self):
+        legend = CustomLegend(offset=self._legend_default_offset, parent=self)
+        legend.setParentItem(self.plotItem.vb)
+        legend.setZValue(1000)
+        self.plotItem.legend = legend
+        self._apply_legend_style(legend)
+        legend.setVisible(True)
+        return legend
+
+    def ensure_legend(self):
+        legend = getattr(self.plotItem, 'legend', None)
+        if legend is None:
+            legend = self.create_legend()
+        return legend
+
+    def _apply_legend_style(self, legend):
+        if legend is None:
+            return
+        brush_color = QColor(self._legend_brush_color)
+        brush_color.setAlpha(self._legend_opacity)
+        legend.setBrush(pg.mkBrush(brush_color))
+        legend.setPen(pg.mkPen(QColor(self._legend_pen_color)))
+
+    def update_legend_appearance(self, background: QColor, border: QColor, opacity: int):
+        self._legend_brush_color = QColor(background) if background is not None else QColor(255, 255, 255)
+        self._legend_pen_color = QColor(border) if border is not None else QColor(100, 100, 100)
+        self._legend_opacity = max(0, min(255, opacity))
+        legend = getattr(self.plotItem, 'legend', None)
+        self._apply_legend_style(legend)
 
     @property
     def legend(self):
