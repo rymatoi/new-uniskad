@@ -81,7 +81,7 @@ class EpureItem(pg.ItemGroup):
         self.addItem(self.scatter)
 
         # Синхронизация видимости
-        self.legend_proxy.visibilityChanged.connect(self.set_visible)
+        self.legend_proxy.visibilityChanged.connect(self._on_legend_visibility_changed)
 
     @property
     def style_config(self):
@@ -90,13 +90,19 @@ class EpureItem(pg.ItemGroup):
     def init_legend_proxy(self):
         legend_proxy = LegendProxyPlotDataItem([], [], name=self._name, style=self._style_config)
         legend_proxy.setVisible(True)
-        legend_proxy.opts.update({
-            'size': self._style_config.get('symbol_size', GraphConstants.DEFAULT_STYLE['symbol_size']),
-            'pen': pg.mkPen(color=self._style_config['color'],
-                            style=GraphConstants.resolve_pen_style(self._style_config.get('line_style'))),
-            'brush': pg.mkBrush(self._style_config['fill_color']),
-            'symbolPen': pg.mkPen(self._style_config.get('symbol_color', self._style_config['color']))
-        })
+        legend_proxy.apply_style()
+        legend_proxy.setSymbol(self._style_config.get('symbol'))
+        legend_proxy.setSymbolSize(self._style_config.get('symbol_size', GraphConstants.DEFAULT_STYLE['symbol_size']))
+        legend_proxy.setSymbolBrush(pg.mkBrush(self._style_config['fill_color']))
+        symbol_pen = pg.mkPen(self._style_config.get('symbol_color', self._style_config['color']))
+        if symbol_pen.widthF() == 0:
+            symbol_pen.setWidthF(1.0)
+        legend_proxy.setSymbolPen(symbol_pen)
+        legend_proxy.setPen(pg.mkPen(
+            color=self._style_config['color'],
+            width=self._style_config.get('width', 2),
+            style=GraphConstants.resolve_pen_style(self._style_config.get('line_style'))
+        ))
         return legend_proxy
 
     def _create_curve(self, plot_data):
@@ -144,15 +150,24 @@ class EpureItem(pg.ItemGroup):
             return ints
         return interface in ints
 
-    def set_visible(self, visible):
-        """Переопределение видимости для всей группы"""
-        self.setVisible(visible)
-        self.legend_proxy.setVisible(visible)
-        # Явно устанавливаем видимость для подэлементов
+    def attach_to_legend(self, legend):
+        if legend is not None:
+            legend.addItem(self.legend_proxy, self._name)
+
+    def _apply_visibility(self, visible):
+        pg.ItemGroup.setVisible(self, visible)
         if self.curve:
             self.curve.setVisible(visible)
         if self.scatter:
             self.scatter.setVisible(visible)
+
+    def _on_legend_visibility_changed(self, visible):
+        self._apply_visibility(visible)
+
+    def setVisible(self, visible):
+        self._apply_visibility(visible)
+        if self.legend_proxy.isVisible() != visible:
+            self.legend_proxy.setVisible(visible)
 
     def dataBounds(self, axis, frac=1.0, orthoRange=None):
         """Для корректного авто-масштабирования"""

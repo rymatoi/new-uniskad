@@ -13,6 +13,7 @@ class EpureView(BasePlotView):
     def add_curve(self, scatter_data, plot_data, **style):
         epure = EpureItem(scatter_data, plot_data, style=style)
         self.addItem(epure)
+        epure.attach_to_legend(self.legend)
         self.curve_items.append(epure)
         self.selected_points[epure] = set()
         return epure

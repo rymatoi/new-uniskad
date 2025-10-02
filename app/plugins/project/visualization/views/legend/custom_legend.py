@@ -1,5 +1,6 @@
 import PySide2
 from PySide2.QtCore import QEvent
+from PySide2.QtGui import QColor
 from PySide2.QtWidgets import QMenu
 from pyqtgraph import Point
 import pyqtgraph as pg
@@ -25,10 +26,34 @@ class CustomLegend(pg.LegendItem):
         self.available_actions = []
         self.legend_menu = self._load_menu('any', 'legend')
 
+        self._background_color = QColor(255, 255, 255)
+        self._border_color = QColor(100, 100, 100)
+        self._opacity = 1.0
+        self.apply_appearance()
+
     def _load_menu(self, mode, location):
         menu = sp.get_user_menu_(mode, location)
         self.available_actions += [action.name for action in menu]
         return menu
+
+    def apply_appearance(self):
+        background = QColor(self._background_color)
+        background.setAlphaF(self._opacity)
+        self.setBrush(pg.mkBrush(background))
+        self.setPen(pg.mkPen(self._border_color))
+
+    def update_appearance(self, background: QColor, border: QColor, opacity: float):
+        self._background_color = QColor(background)
+        self._border_color = QColor(border)
+        self._opacity = max(0.0, min(opacity, 1.0))
+        self.apply_appearance()
+
+    def appearance(self):
+        return {
+            'background': QColor(self._background_color),
+            'border': QColor(self._border_color),
+            'opacity': float(self._opacity),
+        }
 
     def setOffset(self, offset):
         super().setOffset(offset)

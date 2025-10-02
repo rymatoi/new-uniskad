@@ -9,6 +9,7 @@ from app.basic_funcs import to_bool
 from app.plugins.project.plot.ruler import Ruler
 from app.plugins.project.services.data_processors.base_dp import DataProcessor
 from app.plugins.project.services.data_processors.plot_dp import PlotProcessor
+from app.plugins.project.visualization.views.legend.custom_legend import CustomLegend
 
 
 class PlotDisplayMixin:
@@ -62,6 +63,20 @@ class PlotDisplayMixin:
 
     def init_legend(self):
         self.addLegend()
+
+    def addLegend(self, offset=(50, 50)):
+        if hasattr(self.plotItem, 'legend') and self.plotItem.legend:
+            return self.plotItem.legend
+
+        legend = CustomLegend(parent=self, offset=offset)
+        legend.setParentItem(self.plotItem.vb)
+        legend.setOffset(offset)
+        legend.setZValue(1000)
+        legend.apply_appearance()
+        legend.setVisible(True)
+
+        self.plotItem.legend = legend
+        return legend
 
     @property
     def legend(self):
