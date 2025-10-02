@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Sequence, Tuple
 
 from PySide2.QtCore import QSettings
 from PySide2.QtGui import QColor
@@ -8,6 +8,8 @@ from PySide2.QtGui import QColor
 ORGANIZATION = "Uniskad"
 APPLICATION = "NewUniskad"
 SETTINGS_GROUP = "Legend"
+OFFSET_X_KEY = "offset_x"
+OFFSET_Y_KEY = "offset_y"
 
 
 def default_legend_settings() -> Dict[str, object]:
@@ -116,3 +118,65 @@ def save_legend_settings(settings: Dict[str, object]) -> Dict[str, object]:
     qsettings.sync()
 
     return normalized
+
+
+def _coerce_offset(value: Any) -> Optional[Tuple[float, float]]:
+    if value is None:
+        return None
+
+    if isinstance(value, (tuple, list)):
+        if len(value) >= 2:
+            try:
+                return float(value[0]), float(value[1])
+            except (TypeError, ValueError):
+                return None
+        return None
+
+    if isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
+        try:
+            first, second = value[0], value[1]
+        except IndexError:
+            return None
+        try:
+            return float(first), float(second)
+        except (TypeError, ValueError):
+            return None
+
+    if hasattr(value, "x") and hasattr(value, "y"):
+        try:
+            return float(value.x()), float(value.y())
+        except TypeError:
+            return None
+
+    return None
+
+
+def load_legend_offset(default: Optional[Tuple[float, float]] = None) -> Optional[Tuple[float, float]]:
+    """Загружает сохраненный сдвиг легенды из QSettings."""
+    qsettings = QSettings(ORGANIZATION, APPLICATION)
+    qsettings.beginGroup(SETTINGS_GROUP)
+    x_value = qsettings.value(OFFSET_X_KEY, None, type=float)
+    y_value = qsettings.value(OFFSET_Y_KEY, None, type=float)
+    qsettings.endGroup()
+
+    if x_value is None or y_value is None:
+        return default
+
+    try:
+        return float(x_value), float(y_value)
+    except (TypeError, ValueError):
+        return default
+
+
+def save_legend_offset(offset: Any) -> None:
+    """Сохраняет сдвиг легенды в QSettings."""
+    coords = _coerce_offset(offset)
+    if coords is None:
+        return
+
+    qsettings = QSettings(ORGANIZATION, APPLICATION)
+    qsettings.beginGroup(SETTINGS_GROUP)
+    qsettings.setValue(OFFSET_X_KEY, coords[0])
+    qsettings.setValue(OFFSET_Y_KEY, coords[1])
+    qsettings.endGroup()
+    qsettings.sync()

@@ -1,4 +1,4 @@
-from typing import Dict
+from typing import Dict, Optional
 
 import PySide2
 from PySide2.QtCore import QEvent, Qt
@@ -13,8 +13,10 @@ from db import sp
 from app.plugins.project.dialogs.legend_settings_dialog import LegendSettingsDialog
 from app.plugins.project.visualization.views.legend.settings_store import (
     default_legend_settings,
+    load_legend_offset,
     load_legend_settings,
     normalize_legend_settings,
+    save_legend_offset,
     save_legend_settings,
 )
 
@@ -37,9 +39,11 @@ class CustomLegend(pg.LegendItem):
         base_settings = self._collect_settings()
         self._legend_settings = load_legend_settings(base_settings)
         self._background_brush = None
+        self._pending_offset: Optional[Point] = None
         # Делает легенду поверх остальных элементов графика
-        self.setZValue(10_000)
+        self._enforce_zvalue()
         self._apply_settings()
+        self._restore_offset()
         self._ensure_last_offset()
 
     def apply_settings(self, settings: Dict[str, object]) -> Dict[str, object]:
@@ -58,12 +62,24 @@ class CustomLegend(pg.LegendItem):
     def setOffset(self, offset):
         super().setOffset(offset)
         self.last_pos_offset = self._normalize_offset(offset)
+        save_legend_offset(self.last_pos_offset)
         self.calculate_pos()
+
+    def setParentItem(self, parent):  # type: ignore[override]
+        super().setParentItem(parent)
+        self._enforce_zvalue()
+        if self._pending_offset is not None:
+            self.setOffset(self._pending_offset)
+            self._pending_offset = None
+        else:
+            self.calculate_pos()
+            save_legend_offset(self._ensure_last_offset())
 
     def event(self, event: PySide2.QtCore.QEvent) -> bool:
         if event.type() == QEvent.UngrabMouse:
             self._parent.main_window.event_stack.add_event(
                 LegendPositionChangeEvent(self, self.old_pos, self.current_pos))
+            save_legend_offset(self._ensure_last_offset())
         return super().event(event)
 
     def mouseDragEvent(self, ev):
@@ -77,6 +93,10 @@ class CustomLegend(pg.LegendItem):
         self.last_pos_offset = offset + (ev.pos() - ev.lastPos())
 
     def calculate_pos(self):
+        parent_item = self.parentItem()
+        if parent_item is None:
+            return
+
         offset = self._ensure_last_offset()
 
         anchorx = 1 if offset.x() <= 0 else 0
@@ -86,7 +106,7 @@ class CustomLegend(pg.LegendItem):
         o = self.mapToParent(Point(0, 0))
         a = self.boundingRect().bottomRight() * Point(anchor)
         a = self.mapToParent(a)
-        p = self.parentItem().boundingRect().bottomRight() * Point(anchor)
+        p = parent_item.boundingRect().bottomRight() * Point(anchor)
         off = Point(offset)
 
         self.old_pos = self.current_pos
@@ -190,10 +210,27 @@ class CustomLegend(pg.LegendItem):
                 return Point(0, 0)
 
     def _ensure_last_offset(self) -> Point:
-        if self.last_pos_offset is None:
-            offset = self.opts.get('offset') if hasattr(self, 'opts') else None
+        offset = None
+        if hasattr(self, 'opts'):
+            offset = self.opts.get('offset')
+
+        if offset is not None:
             self.last_pos_offset = self._normalize_offset(offset)
+        elif self.last_pos_offset is None:
+            self.last_pos_offset = Point(0, 0)
+
         return Point(self.last_pos_offset)
+
+    def _restore_offset(self) -> None:
+        saved_offset = load_legend_offset()
+        if saved_offset is None:
+            self._pending_offset = None
+            return
+
+        self._pending_offset = self._normalize_offset(saved_offset)
+
+    def _enforce_zvalue(self) -> None:
+        self.setZValue(10_000)
 
     def paint(self, painter, *args):  # type: ignore[override]
         if self._background_brush is not None:
