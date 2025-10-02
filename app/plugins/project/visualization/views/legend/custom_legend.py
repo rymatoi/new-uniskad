@@ -27,6 +27,8 @@ class CustomLegend(pg.LegendItem):
         self.available_actions = []
         self.legend_menu = self._load_menu('any', 'legend')
         self._legend_settings = self._collect_settings()
+        # Делает легенду поверх остальных элементов графика
+        self.setZValue(10_000)
         self._apply_settings()
 
     def _load_menu(self, mode, location):

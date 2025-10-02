@@ -241,7 +241,8 @@ class PlotView(pg.PlotWidget):
         self.plotItem.legend.setPen(pg.mkPen(100, 100, 100))
         self.plotItem.legend.setParentItem(self.plotItem.graphicsItem())
 
-        self.plotItem.legend.setZValue(1)
+        # Размещаем легенду выше сетки и других элементов графика
+        self.plotItem.legend.setZValue(10_000)
 
         # self.plotItem.getAxis('left').setZValue(0)
         # self.plotItem.getAxis('bottom').setZValue(0)
