@@ -37,6 +37,7 @@ class TestProcessor:
             'line_style': int(item.curve_line_style),
             'symbol_size': int(item.curve_point_size),
             'symbol': item.curve_point_symbol,
+            'symbol_color': getattr(item, 'curve_symbol_color', item.curve_color),
             'fill_color': item.curve_symbol_fill_color,
             'name': item.curve_name if item.curve_name else item.name
         }

@@ -1,10 +1,12 @@
+import math
+
 import matplotlib
 
 matplotlib.use('module://app.utils.backend_emf')
 import matplotlib.pyplot as plt
 import pyqtgraph.functions as fn
+from matplotlib.ticker import MultipleLocator
 from PySide2.QtCore import Qt
-import numpy as np
 
 
 class PlotEMFExporter:
@@ -24,6 +26,14 @@ class PlotEMFExporter:
             '+': '+',  # Плюс
             'd': 'D',  # Призма
             'x': 'X',  # Крест
+        }
+        self.line_style_map = {
+            Qt.NoPen: 'none',
+            Qt.SolidLine: '-',
+            Qt.DashLine: '--',
+            Qt.DotLine: ':',
+            Qt.DashDotLine: '-.',
+            Qt.DashDotDotLine: (0, (3, 5, 1, 5, 1, 5)),
         }
 
     def _clean_axes(self, ax):
@@ -51,37 +61,73 @@ class PlotEMFExporter:
         ax = fig.add_subplot(111, title=title)
         ax.clear()
 
-        # Настройка сетки
-        if hasattr(plot_view, 'graph_x_major_step') and plot_view.graph_x_major_step:
-            ax.xaxis.set_major_locator(plt.MultipleLocator(float(plot_view.graph_x_major_step)))
-        if hasattr(plot_view, 'graph_y_major_step') and plot_view.graph_y_major_step:
-            ax.yaxis.set_major_locator(plt.MultipleLocator(float(plot_view.graph_y_major_step)))
+        if hasattr(plot_view, 'get_effective_grid_settings'):
+            grid_settings = plot_view.get_effective_grid_settings()
+        elif hasattr(plot_view, 'get_grid_settings'):
+            grid_settings = plot_view.get_grid_settings()
+        else:
+            grid_settings = {}
+        x_grid = grid_settings.get('x', {'auto': True})
+        y_grid = grid_settings.get('y', {'auto': True})
 
-        ax.grid(True)
+        def _sanitize(value):
+            try:
+                numeric = float(value)
+            except (TypeError, ValueError):
+                return None
+
+            if math.isclose(numeric, 0.0, abs_tol=1e-12):
+                return None
+
+            return abs(numeric)
+
+        x_major = _sanitize(x_grid.get('major')) if x_grid else None
+        y_major = _sanitize(y_grid.get('major')) if y_grid else None
+        x_minor = _sanitize(x_grid.get('minor')) if x_grid else None
+        y_minor = _sanitize(y_grid.get('minor')) if y_grid else None
+
+        if x_major is not None:
+            ax.xaxis.set_major_locator(MultipleLocator(x_major))
+        if y_major is not None:
+            ax.yaxis.set_major_locator(MultipleLocator(y_major))
+
+        if x_minor is None and x_major is not None:
+            x_minor = x_major / 5
+        if y_minor is None and y_major is not None:
+            y_minor = y_major / 5
+
+        minor_enabled = False
+        if x_minor is not None:
+            ax.xaxis.set_minor_locator(MultipleLocator(x_minor))
+            minor_enabled = True
+        if y_minor is not None:
+            ax.yaxis.set_minor_locator(MultipleLocator(y_minor))
+            minor_enabled = True
+
+        ax.grid(True, which='major')
+        if minor_enabled:
+            ax.grid(True, which='minor', linestyle=':', linewidth=0.5, alpha=0.6)
+        else:
+            ax.grid(False, which='minor')
 
         # Отрисовываем каждую кривую
         for curve in plot_view.plotItem.curves:
-            print(f"Processing curve: {curve.name()}")
 
             # Получаем данные
             x = curve.xData
             y = curve.yData
 
-            print(f"Data points: x={len(x)}, y={len(y)}")
-            print(f"X range: {min(x)} to {max(x)}")
-            print(f"Y range: {min(y)} to {max(y)}")
-
             if x is None or y is None or len(x) == 0 or len(y) == 0:
-                print("Skipping curve - no data")
                 continue
 
             opts = curve.opts
             pen = fn.mkPen(opts['pen'])
-            line_style = '' if pen.style() == Qt.NoPen else '-'
+            qt_pen_style = pen.style()
+            line_style = self.line_style_map.get(qt_pen_style, '-')
+            line_width = pen.width()
+            if line_style == 'none':
+                line_width = 0
             color = tuple([c / 255. for c in fn.colorTuple(pen.color())])
-
-            print(f"Line style: {line_style}")
-            print(f"Color: {color}")
 
             symbol = opts['symbol']
             symbol_pen = fn.mkPen(opts['symbolPen'])
@@ -91,15 +137,10 @@ class PlotEMFExporter:
                 symbol_brush = fn.mkBrush(symbol_color)
                 marker_face_color = tuple([c / 255. for c in fn.colorTuple(symbol_brush.color())])
             else:
-                marker_face_color = None
+                marker_face_color = 'none'
 
             marker_edge_color = tuple([c / 255. for c in fn.colorTuple(symbol_pen.color())])
             marker_size = opts['symbolSize']
-
-            print(f"Symbol: {symbol}")
-            print(f"Marker size: {marker_size}")
-            print(f"Marker face color: {marker_face_color}")
-            print(f"Marker edge color: {marker_edge_color}")
 
             # Сначала отрисовываем выделенные точки
             if curve in plot_view.selected_points and plot_view.selected_points[curve]:
@@ -123,7 +164,7 @@ class PlotEMFExporter:
             ax.plot(x, y,
                     marker=self.symbol_mapping.get(symbol, symbol),
                     color=color,
-                    linewidth=pen.width(),
+                    linewidth=line_width,
                     linestyle=line_style,
                     markeredgecolor=marker_edge_color,
                     markerfacecolor=marker_face_color,
@@ -133,7 +174,6 @@ class PlotEMFExporter:
 
         # Устанавливаем пределы осей
         xr, yr = plot_view.plotItem.viewRange()
-        print(f"View range: x={xr}, y={yr}")
         ax.set_xbound(*xr)
         ax.set_ybound(*yr)
 

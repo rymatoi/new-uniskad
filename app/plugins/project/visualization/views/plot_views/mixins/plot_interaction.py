@@ -55,9 +55,10 @@ class PlotInteractionMixin:
 
         # Ось X
         x_axis = self.plotItem.getAxis('bottom')
-        if x_config['major'] is not None:
+        if x_config['major']:
             # Ручной режим
-            x_axis.setTickSpacing(major=x_config['major'], minor=x_config['minor'] or x_config['major'] / 5)
+            minor = x_config['minor'] or x_config['major'] / 5
+            x_axis.setTickSpacing(major=x_config['major'], minor=minor)
         else:
             # Автоматический режим
             x_axis.enableAutoSIPrefix(True)
@@ -69,9 +70,10 @@ class PlotInteractionMixin:
 
         # Ось Y
         y_axis = self.plotItem.getAxis('left')
-        if y_config['major'] is not None:
+        if y_config['major']:
             # Ручной режим
-            y_axis.setTickSpacing(major=y_config['major'], minor=y_config['minor'] or y_config['major'] / 5)
+            minor = y_config['minor'] or y_config['major'] / 5
+            y_axis.setTickSpacing(major=y_config['major'], minor=minor)
         else:
             # Автоматический режим
             y_axis.enableAutoSIPrefix(True)
@@ -328,16 +330,14 @@ class PlotInteractionMixin:
 
     def _get_grid_config(self, axis: str) -> dict:
         """Получает конфигурацию сетки для оси"""
-        is_auto = getattr(self.item, f'graph_{axis}_step_auto')
-        if to_bool(is_auto):
+        grid_settings = self.get_grid_settings()
+        axis_settings = grid_settings.get(axis, {'auto': True})
+        if axis_settings.get('auto', True):
             return {'major': None, 'minor': None}
 
-        major = getattr(self.item, f'graph_{axis}_major_step')
-        minor = getattr(self.item, f'graph_{axis}_minor_step')
-
         return {
-            'major': float(major) if major else None,
-            'minor': float(minor) if minor else None
+            'major': axis_settings.get('major'),
+            'minor': axis_settings.get('minor')
         }
 
     def addItem(self, item: Any) -> None:
