@@ -67,8 +67,12 @@ class Tab(QDockWidget):
         pass
 
     def closeEvent(self, event) -> None:
-        del self._parent._opened_tabs[self.index]
-        self.close()
+        if self._parent is not None:
+            try:
+                self._parent._handle_tab_closed(self.index)
+            except Exception:
+                logger.exception('Не удалось обработать закрытие вкладки.')
+        super().closeEvent(event)
 
     def add_data(self, obj_list):
         pass
@@ -113,6 +117,8 @@ class TreeView(QTreeView):
         self.removed_items_menu = self._load_menu('any', 'removed_items')
 
         self._opened_tabs = {}
+        self._active_tab_identifier = None
+        self._restoring_tabs = False
 
         self._pending_restore_state = None
 
@@ -259,7 +265,7 @@ class TreeView(QTreeView):
                 identifier = self._node_identifier(index)
                 if identifier and identifier not in seen:
                     seen.add(identifier)
-                    opened.append(identifier)
+                    opened.append(str(identifier))
         return opened
 
     def capture_persistent_state(self):
@@ -276,6 +282,7 @@ class TreeView(QTreeView):
                 'v': self.verticalScrollBar().value()
             },
             'open_tabs': self._collect_open_tab_ids(),
+            'active_tab': self._active_tab_identifier,
             'sort': None
         }
 
@@ -339,13 +346,34 @@ class TreeView(QTreeView):
                 self.setCurrentIndex(current_index)
 
         open_tabs = state.get('open_tabs') or []
-        for identifier in open_tabs:
-            index = index_map.get(str(identifier))
-            if index is not None:
-                try:
-                    self.open_item(index)
-                except Exception:
-                    logger.exception('Не удалось восстановить вкладку для узла "%s".', identifier)
+        active_identifier = state.get('active_tab')
+        if not active_identifier:
+            self._active_tab_identifier = None
+        previous_flag = self._restoring_tabs
+        self._restoring_tabs = True
+        try:
+            for identifier in open_tabs:
+                index = index_map.get(str(identifier))
+                if index is not None:
+                    try:
+                        self.open_item(index)
+                    except Exception:
+                        logger.exception('Не удалось восстановить вкладку для узла "%s".', identifier)
+        finally:
+            self._restoring_tabs = previous_flag
+
+        if active_identifier:
+            target_index = index_map.get(str(active_identifier))
+            tab_widget = self._opened_tabs.get(target_index)
+            if tab_widget is not None:
+                def raise_tab():
+                    try:
+                        tab_widget.raise_()
+                        tab_widget.activateWindow()
+                    except Exception:
+                        logger.exception('Не удалось активировать вкладку "%s".', active_identifier)
+                QTimer.singleShot(0, raise_tab)
+                self._active_tab_identifier = str(active_identifier)
 
         scroll_state = state.get('scroll') or {}
 
@@ -362,6 +390,25 @@ class TreeView(QTreeView):
 
         self._pending_restore_state = None
         return True
+
+    def _handle_tab_visibility_change(self, identifier, visible):
+        if identifier is None:
+            return
+        if self._restoring_tabs:
+            return
+        identifier = str(identifier)
+        if visible:
+            self._active_tab_identifier = identifier
+        elif self._active_tab_identifier == identifier:
+            self._active_tab_identifier = None
+
+    def _handle_tab_closed(self, index):
+        tab = self._opened_tabs.pop(index, None)
+        if not index or not index.isValid():
+            return
+        identifier = self._node_identifier(index)
+        if identifier and self._active_tab_identifier == str(identifier):
+            self._active_tab_identifier = None
 
     def refresh(self):
         for row in range(self.model().rowCount()):
@@ -1113,6 +1160,9 @@ class TreeView(QTreeView):
 
         if self._opened_tabs.get(index, None):
             self._opened_tabs[index].raise_()
+            identifier = self._node_identifier(index)
+            if identifier:
+                self._active_tab_identifier = str(identifier)
             return
 
         item = index.internalPointer()
@@ -1126,6 +1176,23 @@ class TreeView(QTreeView):
 
         tab = self._link_dict.get(item_type, self._default_tab)(index, self, self.main_window)
         self._opened_tabs[index] = tab
+
+        identifier = self._node_identifier(index)
+        if identifier:
+            identifier_str = str(identifier)
+
+            def _on_visibility_changed(visible, ident=identifier_str):
+                try:
+                    self._handle_tab_visibility_change(ident, visible)
+                except Exception:
+                    logger.exception('Не удалось обновить активную вкладку для узла "%s".', ident)
+
+            try:
+                tab.visibilityChanged.connect(_on_visibility_changed)
+            except Exception:
+                logger.exception('Не удалось подписаться на изменение видимости вкладки "%s".', identifier_str)
+            if not self._restoring_tabs:
+                self._active_tab_identifier = identifier_str
 
         if children:
             self._parent.ui.centralWidget.tabifyDockWidget(children[0], tab)

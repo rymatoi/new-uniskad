@@ -75,6 +75,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.user_settings = UserSettings()
         self._tree_states_to_restore = {}
         self._pending_window_state_bytes = None
+        self._pending_central_window_state_bytes = None
 
         config.config.app.enable_timer(self.user_settings.get('application_close_timeout', 30))
         config.config.app._main_window_initialized = True  # TODO test
@@ -508,19 +509,34 @@ class MainWindow(QtWidgets.QMainWindow):
             self._tree_states_to_restore.pop(str(plugin_name), None)
 
     def _apply_pending_window_state(self):
-        if self._pending_window_state_bytes is None:
+        state_bytes = self._pending_window_state_bytes
+        central_bytes = self._pending_central_window_state_bytes
+
+        if state_bytes is None and central_bytes is None:
             return
+
         try:
-            if hasattr(self._pending_window_state_bytes, 'isEmpty') and \
-                    self._pending_window_state_bytes.isEmpty():
-                self._pending_window_state_bytes = None
-                return
-            restored = self.restoreState(self._pending_window_state_bytes)
-            logger.debug('Результат восстановления состояния окна: %s', restored)
+            if state_bytes is not None:
+                if hasattr(state_bytes, 'isEmpty') and state_bytes.isEmpty():
+                    state_bytes = None
+                else:
+                    restored_main = self.restoreState(state_bytes)
+                    logger.debug('Результат восстановления состояния окна: %s', restored_main)
         except Exception as exc:
             logger.warning('Не удалось восстановить состояние окна: %s', exc)
+
+        try:
+            if central_bytes is not None:
+                if hasattr(central_bytes, 'isEmpty') and central_bytes.isEmpty():
+                    central_bytes = None
+                else:
+                    restored_central = self.ui.centralWidget.restoreState(central_bytes)
+                    logger.debug('Результат восстановления центрального окна: %s', restored_central)
+        except Exception as exc:
+            logger.warning('Не удалось восстановить состояние центрального окна: %s', exc)
         finally:
             self._pending_window_state_bytes = None
+            self._pending_central_window_state_bytes = None
 
     def save_windows_state(self):
         active_plugins = []
@@ -562,6 +578,13 @@ class MainWindow(QtWidgets.QMainWindow):
             self.user_settings.set('main_window_state', state_bytes)
         except Exception as exc:
             logger.warning('Не удалось сохранить состояние окна: %s', exc)
+
+        try:
+            central_state_bytes = self.ui.centralWidget.saveState()
+            logger.debug('Сохраняем состояние центрального окна: длина raw=%s', central_state_bytes.size())
+            self.user_settings.set('central_window_state', central_state_bytes)
+        except Exception as exc:
+            logger.warning('Не удалось сохранить состояние центрального окна: %s', exc)
 
         existing_states = self._coerce_tree_states(self.user_settings.get('tree_states', {}))
         tree_states = dict(existing_states)
@@ -611,6 +634,12 @@ class MainWindow(QtWidgets.QMainWindow):
             self._pending_window_state_bytes = window_state
         else:
             self._pending_window_state_bytes = None
+
+        central_state = self.user_settings.get_bytes('central_window_state')
+        if not central_state.isEmpty():
+            self._pending_central_window_state_bytes = central_state
+        else:
+            self._pending_central_window_state_bytes = None
 
         self._tree_states_to_restore = self._coerce_tree_states(self.user_settings.get('tree_states', {}))
 
