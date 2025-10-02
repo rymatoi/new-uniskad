@@ -1,8 +1,10 @@
 import numpy as np
 
+from PySide2.QtCore import Qt
+import pyqtgraph as pg
+
 from app.plugins.project.core.constants import GraphConstants
 from app.plugins.project.visualization.widgets.legend_proxy import LegendProxyPlotDataItem
-import pyqtgraph as pg
 
 
 class EpureItem(pg.ItemGroup):
@@ -22,6 +24,20 @@ class EpureItem(pg.ItemGroup):
             self._style_config['symbol'] = GraphConstants.DEFAULT_STYLE['symbol']
         if 'symbol_color' not in self._style_config:
             self._style_config['symbol_color'] = self._style_config['color']
+
+        # Линия эпюры должна быть видимой независимо от исходного стиля
+        resolved_pen_style = GraphConstants.resolve_pen_style(self._style_config.get('line_style'))
+        if resolved_pen_style == Qt.NoPen:
+            self._style_config['line_style'] = GraphConstants.DEFAULT_STYLE['line_style']
+
+        width_value = self._style_config.get('width', GraphConstants.DEFAULT_STYLE['width'])
+        try:
+            width_value = int(width_value)
+        except (TypeError, ValueError):
+            width_value = GraphConstants.DEFAULT_STYLE['width']
+        if width_value <= 0:
+            width_value = GraphConstants.DEFAULT_STYLE['width']
+        self._style_config['width'] = width_value
         self._name = self._style_config.get('name', 'Epure')
 
         # Прокси-элемент для легенды (невидимый на графике)
@@ -90,12 +106,27 @@ class EpureItem(pg.ItemGroup):
     def init_legend_proxy(self):
         legend_proxy = LegendProxyPlotDataItem([], [], name=self._name, style=self._style_config)
         legend_proxy.setVisible(True)
+
+        symbol_pen_width = self._style_config.get('symbol_pen_width', 1)
+        try:
+            symbol_pen_width = int(symbol_pen_width)
+        except (TypeError, ValueError):
+            symbol_pen_width = 1
+        symbol_pen_width = max(1, symbol_pen_width)
+
         legend_proxy.opts.update({
             'size': self._style_config.get('symbol_size', GraphConstants.DEFAULT_STYLE['symbol_size']),
-            'pen': pg.mkPen(color=self._style_config['color'],
-                            style=GraphConstants.resolve_pen_style(self._style_config.get('line_style'))),
-            'brush': pg.mkBrush(self._style_config['fill_color']),
-            'symbolPen': pg.mkPen(self._style_config.get('symbol_color', self._style_config['color']))
+            'pen': pg.mkPen(
+                color=self._style_config['color'],
+                style=GraphConstants.resolve_pen_style(self._style_config.get('line_style')),
+                width=self._style_config.get('width', GraphConstants.DEFAULT_STYLE['width'])
+            ),
+            'symbol': self._style_config.get('symbol', GraphConstants.DEFAULT_STYLE['symbol']),
+            'symbolBrush': pg.mkBrush(self._style_config['fill_color']),
+            'symbolPen': pg.mkPen(
+                self._style_config.get('symbol_color', self._style_config['color']),
+                width=symbol_pen_width
+            )
         })
         return legend_proxy
 
