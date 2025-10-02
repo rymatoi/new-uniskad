@@ -10,66 +10,44 @@ class EpureItem(pg.ItemGroup):
         super().__init__()
 
         self._style_config = kwargs.get('style', GraphConstants.DEFAULT_STYLE.copy()).copy()
-        if 'symbol_size' not in self._style_config:
-            self._style_config['symbol_size'] = GraphConstants.DEFAULT_STYLE['symbol_size']
-        if 'color' not in self._style_config:
-            self._style_config['color'] = GraphConstants.DEFAULT_STYLE['color']
-        if 'fill_color' not in self._style_config:
-            self._style_config['fill_color'] = self._style_config['color']
-        if 'width' not in self._style_config:
-            self._style_config['width'] = GraphConstants.DEFAULT_STYLE['width']
-        if 'symbol' not in self._style_config:
-            self._style_config['symbol'] = GraphConstants.DEFAULT_STYLE['symbol']
-        if 'symbol_color' not in self._style_config:
-            self._style_config['symbol_color'] = self._style_config['color']
+        defaults = GraphConstants.DEFAULT_STYLE
+        self._style_config.setdefault('symbol_size', defaults['symbol_size'])
+        self._style_config.setdefault('color', defaults['color'])
+        self._style_config.setdefault('width', defaults['width'])
+        self._style_config.setdefault('symbol', defaults['symbol'])
+        self._style_config.setdefault('symbol_color', self._style_config['color'])
+        self._style_config.setdefault('fill_color', self._style_config['symbol_color'])
         self._name = self._style_config.get('name', 'Epure')
 
         # Прокси-элемент для легенды (невидимый на графике)
         self.legend_proxy = self.init_legend_proxy()
 
-        scatter_pairs = [
-            (np.asarray(x, dtype=float), np.asarray(y, dtype=float))
-            for x, y in all_scatter_data
-        ]
+        scatter_x = []
+        scatter_y = []
+        for _, scatter_data in zip(all_plot_data, all_scatter_data):
+            x, y = scatter_data
+            scatter_x.extend(x)
+            scatter_y.extend(y)
 
-        if scatter_pairs:
-            scatter_x = np.concatenate([pair[0] for pair in scatter_pairs])
-            scatter_y = np.concatenate([pair[1] for pair in scatter_pairs])
-        else:
-            scatter_x = np.empty(0, dtype=float)
-            scatter_y = np.empty(0, dtype=float)
+        plot_segments_x = []
+        plot_segments_y = []
 
-        curve_pairs = [
-            (np.asarray(x, dtype=float), np.asarray(y, dtype=float))
-            for x, y in all_plot_data
-        ]
+        first = True
+        for plot_data, _ in zip(all_plot_data, all_scatter_data):
+            x, y = plot_data
+            if not first:
+                # Добавляем три NaN-точки между сегментами
+                plot_segments_x.extend([np.nan, np.nan, np.nan])
+                plot_segments_y.extend([np.nan, np.nan, np.nan])
+            plot_segments_x.extend(x)
+            plot_segments_y.extend(y)
+            first = False
 
-        if curve_pairs:
-            total_points = sum(pair[0].size for pair in curve_pairs)
-            gap_count = max(len(curve_pairs) - 1, 0)
-
-            x_arr = np.empty(total_points + gap_count, dtype=float)
-            y_arr = np.empty(total_points + gap_count, dtype=float)
-
-            position = 0
-            for index, (x_data, y_data) in enumerate(curve_pairs):
-                length = x_data.size
-                if length:
-                    x_arr[position:position + length] = x_data
-                    y_arr[position:position + length] = y_data
-                    position += length
-
-                if index < len(curve_pairs) - 1:
-                    x_arr[position] = np.nan
-                    y_arr[position] = np.nan
-                    position += 1
-
-            if position < x_arr.size:
-                x_arr = x_arr[:position]
-                y_arr = y_arr[:position]
-        else:
-            x_arr = np.empty(0, dtype=float)
-            y_arr = np.empty(0, dtype=float)
+        # Преобразуем в numpy массивы
+        scatter_x = np.asarray(scatter_x, dtype=float)
+        scatter_y = np.asarray(scatter_y, dtype=float)
+        x_arr = np.asarray(plot_segments_x, dtype=float)
+        y_arr = np.asarray(plot_segments_y, dtype=float)
 
         # Создаем один scatter для всех исходных точек
         self.scatter = self._create_scatter((scatter_x, scatter_y))
@@ -79,10 +57,6 @@ class EpureItem(pg.ItemGroup):
         # Добавляем элементы в обратном порядке, чтобы точки были поверх линий
         self.addItem(self.curve)
         self.addItem(self.scatter)
-
-        # Обеспечиваем явную видимость элементов эпюры
-        self.curve.setVisible(True)
-        self.scatter.setVisible(True)
 
         # Синхронизация видимости
         self.legend_proxy.visibilityChanged.connect(self.set_visible)
@@ -94,20 +68,7 @@ class EpureItem(pg.ItemGroup):
     def init_legend_proxy(self):
         legend_proxy = LegendProxyPlotDataItem([], [], name=self._name, style=self._style_config)
         legend_proxy.setVisible(True)
-
-        pen = pg.mkPen(
-            color=self._style_config['color'],
-            style=GraphConstants.resolve_pen_style(self._style_config.get('line_style'))
-        )
-        symbol_pen = pg.mkPen(self._style_config.get('symbol_color', self._style_config['color']))
-        symbol_brush = pg.mkBrush(self._style_config.get('fill_color', self._style_config['color']))
-
-        legend_proxy.setPen(pen)
-        legend_proxy.setSymbol(self._style_config.get('symbol', GraphConstants.DEFAULT_STYLE['symbol']))
-        legend_proxy.setSymbolSize(self._style_config.get('symbol_size', GraphConstants.DEFAULT_STYLE['symbol_size']))
-        legend_proxy.setSymbolPen(symbol_pen)
-        legend_proxy.setSymbolBrush(symbol_brush)
-        legend_proxy.refresh_legend_opts()
+        legend_proxy.update_style(self._style_config)
         return legend_proxy
 
     def _create_curve(self, plot_data):
