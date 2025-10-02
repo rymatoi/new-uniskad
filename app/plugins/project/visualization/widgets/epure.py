@@ -81,7 +81,7 @@ class EpureItem(pg.ItemGroup):
         self.addItem(self.scatter)
 
         # Синхронизация видимости
-        self.legend_proxy.visibilityChanged.connect(self.set_visible)
+        self.legend_proxy.visibilityChanged.connect(self._on_proxy_visibility_changed)
 
     @property
     def style_config(self):
@@ -144,15 +144,24 @@ class EpureItem(pg.ItemGroup):
             return ints
         return interface in ints
 
-    def set_visible(self, visible):
-        """Переопределение видимости для всей группы"""
-        self.setVisible(visible)
-        self.legend_proxy.setVisible(visible)
-        # Явно устанавливаем видимость для подэлементов
+    def _on_proxy_visibility_changed(self, visible: bool):
+        self._apply_visibility(visible, update_proxy=False)
+
+    def _apply_visibility(self, visible: bool, update_proxy: bool = True):
+        """Применяет изменение видимости ко всем связанным элементам."""
+        super().setVisible(visible)
+
         if self.curve:
             self.curve.setVisible(visible)
         if self.scatter:
             self.scatter.setVisible(visible)
+
+        if update_proxy and self.legend_proxy.isVisible() != visible:
+            self.legend_proxy.setVisible(visible)
+
+    def setVisible(self, visible: bool):  # noqa: N802 - соответствие Qt API
+        """Обеспечивает синхронизацию видимости с легендой."""
+        self._apply_visibility(visible, update_proxy=True)
 
     def dataBounds(self, axis, frac=1.0, orthoRange=None):
         """Для корректного авто-масштабирования"""
