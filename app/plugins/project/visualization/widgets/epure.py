@@ -114,20 +114,34 @@ class EpureItem(pg.ItemGroup):
             symbol_pen_width = 1
         symbol_pen_width = max(1, symbol_pen_width)
 
+        symbol = self._style_config.get('symbol', GraphConstants.DEFAULT_STYLE['symbol'])
+        symbol_size = self._style_config.get('symbol_size', GraphConstants.DEFAULT_STYLE['symbol_size'])
+        line_pen = pg.mkPen(
+            color=self._style_config['color'],
+            style=GraphConstants.resolve_pen_style(self._style_config.get('line_style')),
+            width=self._style_config.get('width', GraphConstants.DEFAULT_STYLE['width'])
+        )
+        symbol_brush = pg.mkBrush(self._style_config['fill_color'])
+        symbol_pen = pg.mkPen(
+            self._style_config.get('symbol_color', self._style_config['color']),
+            width=symbol_pen_width
+        )
+
         legend_proxy.opts.update({
-            'size': self._style_config.get('symbol_size', GraphConstants.DEFAULT_STYLE['symbol_size']),
-            'pen': pg.mkPen(
-                color=self._style_config['color'],
-                style=GraphConstants.resolve_pen_style(self._style_config.get('line_style')),
-                width=self._style_config.get('width', GraphConstants.DEFAULT_STYLE['width'])
-            ),
-            'symbol': self._style_config.get('symbol', GraphConstants.DEFAULT_STYLE['symbol']),
-            'symbolBrush': pg.mkBrush(self._style_config['fill_color']),
-            'symbolPen': pg.mkPen(
-                self._style_config.get('symbol_color', self._style_config['color']),
-                width=symbol_pen_width
-            )
+            'size': symbol_size,
+            'pen': line_pen,
+            'symbol': symbol,
+            'symbolBrush': symbol_brush,
+            'symbolPen': symbol_pen
         })
+
+        # Используем фиктивные данные и явные настройки, чтобы легенда отображала и линию, и точку
+        legend_proxy.setData([0, 1], [0, 0])
+        legend_proxy.setPen(line_pen)
+        legend_proxy.setSymbol(symbol)
+        legend_proxy.setSymbolSize(symbol_size)
+        legend_proxy.setSymbolBrush(symbol_brush)
+        legend_proxy.setSymbolPen(symbol_pen)
         return legend_proxy
 
     def _create_curve(self, plot_data):

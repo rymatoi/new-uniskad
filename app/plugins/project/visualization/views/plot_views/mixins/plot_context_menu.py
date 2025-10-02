@@ -6,6 +6,7 @@ from typing import Any, List, Tuple, Optional
 from functools import partial
 import json
 
+from app.plugins.project.dialogs.legend_settings import LegendSettingsDialog
 from app.plugins.project.services.data_processors.plot_dp import PlotProcessor
 from app.plugins.project.visualization.views.plot_views.menu_tools.plot_menu_actions import PlotMenuActions, \
     ActionTarget, get_available_actions
@@ -362,6 +363,9 @@ class PlotContextMenuMixin:
             # Просто скрываем/показываем легенду
             self.plotItem.legend.setVisible(checked)
 
+        elif action_name == PlotMenuActions.PLOT_LEGEND_SETTINGS.name:
+            self._open_legend_settings_dialog()
+
         elif action_name == PlotMenuActions.PLOT_RESET_VIEW.name:
             self.plotItem.getViewBox().autoRange()
 
@@ -438,14 +442,23 @@ class PlotContextMenuMixin:
             if label.sceneBoundingRect().contains(pos):
                 # Находим соответствующую кривую
                 curve = next((c for c in self.curve_items if c.name() == label.text), None)
+                menu = QMenu(self)
                 if curve:
-                    # Создаем и показываем меню
-                    menu = QMenu(self)
                     self._add_curve_specific_actions(menu, curve=curve)
+                    if not menu.isEmpty():
+                        menu.addSeparator()
+                self._add_legend_specific_actions(menu)
+                if not menu.isEmpty():
                     menu.exec_(QCursor.pos())
                     # Предотвращаем дальнейшую обработку события
                     event.accept()
-                break
+                return
+
+        menu = QMenu(self)
+        self._add_legend_specific_actions(menu)
+        if not menu.isEmpty():
+            menu.exec_(QCursor.pos())
+            event.accept()
 
     def _on_plot_action_triggered(self, checked):
         """Обработчик сигнала triggered для действий графика"""
@@ -461,3 +474,34 @@ class PlotContextMenuMixin:
             'curve': action.property('curve')
         }
         self._handle_curve_action(data, checked)
+
+    def _add_legend_specific_actions(self, menu: QMenu) -> None:
+        action = PlotMenuActions.PLOT_LEGEND_SETTINGS
+        qa = menu.addAction(action.translation)
+        qa.setCheckable(action.is_checkable)
+        qa.setProperty('action_name', action.name)
+        qa.triggered.connect(self._on_plot_action_triggered)
+
+    def _open_legend_settings_dialog(self) -> None:
+        if not hasattr(self.plotItem, 'legend') or self.plotItem.legend is None:
+            legend = self.plotItem.addLegend()
+            if legend is None:
+                return
+            if hasattr(self, '_apply_legend_style'):
+                self._apply_legend_style()
+
+        style = self.get_legend_style() if hasattr(self, 'get_legend_style') else None
+        if style is None:
+            return
+
+        dialog = LegendSettingsDialog(
+            background=style['background'],
+            border_color=style['border_color'],
+            border_width=style['border_width'],
+            parent=self
+        )
+
+        if dialog.exec_() == dialog.Accepted:
+            result = dialog.get_result()
+            if result:
+                self.set_legend_style(result)

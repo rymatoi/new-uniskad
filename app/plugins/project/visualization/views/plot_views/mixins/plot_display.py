@@ -3,7 +3,7 @@ import types
 
 import numpy as np
 import pyqtgraph as pg
-from PySide2.QtGui import QSurfaceFormat
+from PySide2.QtGui import QSurfaceFormat, QColor
 
 from app.basic_funcs import to_bool
 from app.plugins.project.plot.ruler import Ruler
@@ -48,6 +48,7 @@ class PlotDisplayMixin:
             }
         }
 
+        self._legend_style = self._default_legend_style()
         self._grid_wrapper_installed = False
         self._wrap_plotitem_show_grid()
         self.init_view()
@@ -69,12 +70,54 @@ class PlotDisplayMixin:
         legend = self.addLegend()
 
         if legend is not None:
-            legend.setBrush(pg.mkBrush(255, 255, 255, 255))
+            self._apply_legend_style()
             self._ensure_overlay_order()
 
     @property
     def legend(self):
         return self.plotItem.legend
+
+    @staticmethod
+    def _default_legend_style() -> Dict[str, Any]:
+        return {
+            'background': QColor(255, 255, 255, 255),
+            'border_color': QColor(100, 100, 100, 255),
+            'border_width': 1.0,
+        }
+
+    def _apply_legend_style(self):
+        legend = getattr(self.plotItem, 'legend', None)
+
+        if legend is None:
+            return
+
+        background: QColor = QColor(self._legend_style['background'])
+        border_color: QColor = QColor(self._legend_style['border_color'])
+        border_width: float = float(self._legend_style['border_width'])
+
+        legend.setBrush(pg.mkBrush(background))
+        legend.setPen(pg.mkPen(border_color, width=border_width))
+
+    def get_legend_style(self) -> Dict[str, Any]:
+        return {
+            'background': QColor(self._legend_style['background']),
+            'border_color': QColor(self._legend_style['border_color']),
+            'border_width': float(self._legend_style['border_width']),
+        }
+
+    def set_legend_style(self, style: Dict[str, Any]) -> None:
+        background = QColor(style.get('background', self._legend_style['background']))
+        border_color = QColor(style.get('border_color', self._legend_style['border_color']))
+        border_width = float(style.get('border_width', self._legend_style['border_width']))
+
+        self._legend_style = {
+            'background': background,
+            'border_color': border_color,
+            'border_width': border_width,
+        }
+
+        self._apply_legend_style()
+        self._ensure_overlay_order()
 
     def _fix_performance(self):
         """Оптимизация производительности"""
