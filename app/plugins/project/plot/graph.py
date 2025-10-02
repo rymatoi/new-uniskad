@@ -21,6 +21,7 @@ from app.plugins.project.dialogs.create_approx import ApproxDialog
 from app.plugins.project.dialogs.create_interpolation import InterpDialog
 from app.plugins.project.dialogs.edit_line import EditLineDialog
 from app.plugins.project.dialogs.extrapolation_dialog import ExtrapolationDialog
+from app.plugins.project.dialogs.legend_settings_dialog import LegendSettingsDialog
 from app.plugins.project.plot.ruler import Ruler
 from app.plugins.project.utils_ import compare_floats
 from db import sp
@@ -84,6 +85,8 @@ class CustomLegend(pg.LegendItem):
 
         self.available_actions = []
         self.legend_menu = self._load_menu('any', 'legend')
+        self._legend_settings = self._collect_settings()
+        self._apply_settings()
 
     def _load_menu(self, mode, location):
         menu = sp.get_user_menu_(mode, location)
@@ -148,8 +151,55 @@ class CustomLegend(pg.LegendItem):
             getattr(self, action_name).triggered.connect(lambda: func(*args))
 
     def edit_legend(self, pos):
+        dialog = LegendSettingsDialog(self._legend_settings, parent=self.getViewWidget())
+        if dialog.exec_():
+            settings = dialog.get_result()
+            if settings:
+                self._legend_settings.update(settings)
+                self._apply_settings()
 
-        basic_funcs.info('Внимание!', 'Данное действие находится в разработке.')
+    def _collect_settings(self):
+        brush = self.opts.get('brush')
+        pen = self.opts.get('pen')
+
+        background_color = QColor(255, 255, 255)
+        opacity = 100
+        border_color = QColor(100, 100, 100)
+        border_width = 1
+
+        if brush is not None:
+            color = brush.color()
+            background_color = QColor(color)
+            opacity = int(round(color.alpha() / 255 * 100))
+
+        if pen is not None:
+            border_color = QColor(pen.color())
+            if pen.style() == Qt.NoPen or pen.width() <= 0:
+                border_width = 0
+            else:
+                border_width = pen.width()
+
+        return {
+            'background_color': background_color,
+            'background_opacity': opacity,
+            'border_color': border_color,
+            'border_width': border_width
+        }
+
+    def _apply_settings(self):
+        background = QColor(self._legend_settings.get('background_color', QColor(255, 255, 255)))
+        opacity_percent = max(0, min(100, int(self._legend_settings.get('background_opacity', 100))))
+        background.setAlpha(int(round(opacity_percent / 100 * 255)))
+        self.setBrush(pg.mkBrush(background))
+
+        border_color = QColor(self._legend_settings.get('border_color', QColor(100, 100, 100)))
+        border_width = max(0, int(self._legend_settings.get('border_width', 1)))
+        if border_width == 0:
+            pen = pg.mkPen(border_color)
+            pen.setStyle(Qt.NoPen)
+        else:
+            pen = pg.mkPen(border_color, width=border_width)
+        self.setPen(pen)
 
 
 class PlotView(pg.PlotWidget):
