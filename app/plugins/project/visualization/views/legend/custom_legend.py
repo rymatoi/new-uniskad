@@ -40,11 +40,14 @@ class CustomLegend(pg.LegendItem):
         # Делает легенду поверх остальных элементов графика
         self.setZValue(10_000)
         self._apply_settings()
+        self._ensure_last_offset()
 
     def apply_settings(self, settings: Dict[str, object]) -> Dict[str, object]:
         """Применяет переданные настройки без дополнительного сохранения."""
         self._legend_settings = normalize_legend_settings({**self._legend_settings, **settings})
         self._apply_settings()
+        if hasattr(self._parent, "legend_settings"):
+            self._parent.legend_settings = self._legend_settings
         return self._legend_settings
 
     def _load_menu(self, mode, location):
@@ -54,7 +57,7 @@ class CustomLegend(pg.LegendItem):
 
     def setOffset(self, offset):
         super().setOffset(offset)
-        self.last_pos_offset = Point(offset)
+        self.last_pos_offset = self._normalize_offset(offset)
         self.calculate_pos()
 
     def event(self, event: PySide2.QtCore.QEvent) -> bool:
@@ -70,18 +73,21 @@ class CustomLegend(pg.LegendItem):
         super().mouseDragEvent(ev)
 
         self.calculate_pos()
-        self.last_pos_offset += ev.pos() - ev.lastPos()
+        offset = self._ensure_last_offset()
+        self.last_pos_offset = offset + (ev.pos() - ev.lastPos())
 
     def calculate_pos(self):
-        anchorx = 1 if self.last_pos_offset.x() <= 0 else 0
-        anchory = 1 if self.last_pos_offset.y() <= 0 else 0
+        offset = self._ensure_last_offset()
+
+        anchorx = 1 if offset.x() <= 0 else 0
+        anchory = 1 if offset.y() <= 0 else 0
         anchor = (anchorx, anchory)
 
         o = self.mapToParent(Point(0, 0))
         a = self.boundingRect().bottomRight() * Point(anchor)
         a = self.mapToParent(a)
         p = self.parentItem().boundingRect().bottomRight() * Point(anchor)
-        off = Point(self.last_pos_offset)
+        off = Point(offset)
 
         self.old_pos = self.current_pos
         self.current_pos = p + (o - a) + off
@@ -116,6 +122,8 @@ class CustomLegend(pg.LegendItem):
             if settings:
                 merged = {**self._legend_settings, **settings}
                 self._legend_settings = save_legend_settings(merged)
+                if hasattr(self._parent, "legend_settings"):
+                    self._parent.legend_settings = self._legend_settings
                 self._apply_settings()
 
     def _collect_settings(self):
@@ -169,6 +177,23 @@ class CustomLegend(pg.LegendItem):
         else:
             pen = pg.mkPen(border_color, width=border_width)
         self.setPen(pen)
+
+    def _normalize_offset(self, offset):
+        if offset is None:
+            return Point(0, 0)
+        try:
+            return Point(offset)
+        except TypeError:
+            try:
+                return Point(offset.x(), offset.y())  # type: ignore[attr-defined]
+            except Exception:
+                return Point(0, 0)
+
+    def _ensure_last_offset(self) -> Point:
+        if self.last_pos_offset is None:
+            offset = self.opts.get('offset') if hasattr(self, 'opts') else None
+            self.last_pos_offset = self._normalize_offset(offset)
+        return Point(self.last_pos_offset)
 
     def paint(self, painter, *args):  # type: ignore[override]
         if self._background_brush is not None:
