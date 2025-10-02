@@ -107,6 +107,7 @@ class EpureItem(pg.ItemGroup):
         legend_proxy.setSymbolSize(self._style_config.get('symbol_size', GraphConstants.DEFAULT_STYLE['symbol_size']))
         legend_proxy.setSymbolPen(symbol_pen)
         legend_proxy.setSymbolBrush(symbol_brush)
+        legend_proxy.refresh_legend_opts()
         return legend_proxy
 
     def _create_curve(self, plot_data):

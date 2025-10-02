@@ -33,7 +33,7 @@ class EpureView(BasePlotView):
         items_to_remove = []
         for sample, _label in list(getattr(legend, 'items', [])):
             linked_item = getattr(sample, 'item', None)
-            if linked_item in (epure.curve, epure.scatter):
+            if linked_item in (epure.curve, epure.scatter, epure.legend_proxy):
                 items_to_remove.append(linked_item)
 
         for item in items_to_remove:
