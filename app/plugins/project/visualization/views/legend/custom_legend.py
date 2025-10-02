@@ -1,19 +1,22 @@
-import PySide2
 from PySide2.QtCore import QEvent
+from PySide2.QtGui import QColor, QBrush, QPen
 from PySide2.QtWidgets import QMenu
 from pyqtgraph import Point
 import pyqtgraph as pg
 
-from app import _menu, basic_funcs
+from app import _menu
 from app.history_manager.events import LegendPositionChangeEvent
 from db import sp
+from dialogs.legend_style_dialog import LegendStyleDialog
 
 
 class CustomLegend(pg.LegendItem):
-    """
-    Класс легенды
+    """Кастомная легенда с управлением положением и стилем."""
 
-    """
+    Z_VALUE_ON_TOP = 1_000_000
+    DEFAULT_BACKGROUND = QColor(255, 255, 255)
+    DEFAULT_BORDER = QColor(0, 0, 0)
+    DEFAULT_OPACITY = 1.0
 
     def __init__(self, parent=None, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -25,6 +28,13 @@ class CustomLegend(pg.LegendItem):
         self.available_actions = []
         self.legend_menu = self._load_menu('any', 'legend')
 
+        self._background_color = QColor(self.DEFAULT_BACKGROUND)
+        self._border_color = QColor(self.DEFAULT_BORDER)
+        self._opacity = self.DEFAULT_OPACITY
+
+        self.apply_style()
+        self.raise_legend()
+
     def _load_menu(self, mode, location):
         menu = sp.get_user_menu_(mode, location)
         self.available_actions += [action.name for action in menu]
@@ -34,8 +44,9 @@ class CustomLegend(pg.LegendItem):
         super().setOffset(offset)
         self.last_pos_offset = Point(offset)
         self.calculate_pos()
+        self.raise_legend()
 
-    def event(self, event: PySide2.QtCore.QEvent) -> bool:
+    def event(self, event: QEvent) -> bool:
         if event.type() == QEvent.UngrabMouse:
             self._parent.main_window.event_stack.add_event(
                 LegendPositionChangeEvent(self, self.old_pos, self.current_pos))
@@ -88,4 +99,29 @@ class CustomLegend(pg.LegendItem):
             getattr(self, action_name).triggered.connect(lambda: func(*args))
 
     def edit_legend(self, pos):
-        basic_funcs.info('Внимание!', 'Данное действие находится в разработке.')
+        dialog = LegendStyleDialog(
+            background=self._background_color,
+            border=self._border_color,
+            opacity=self._opacity,
+            parent=self._parent
+        )
+
+        if dialog.exec_():
+            result = dialog.get_result()
+            if result:
+                self._background_color = QColor(result['background'])
+                self._border_color = QColor(result['border'])
+                self._opacity = max(0.0, min(1.0, float(result['opacity'])))
+                self.apply_style()
+                self.raise_legend()
+
+    def apply_style(self):
+        """Применяет текущие настройки отображения легенды."""
+        background = QColor(self._background_color)
+        background.setAlphaF(self._opacity)
+        self.setBrush(QBrush(background))
+        self.setPen(QPen(self._border_color))
+
+    def raise_legend(self):
+        """Выводит легенду поверх остальных элементов сцены."""
+        self.setZValue(self.Z_VALUE_ON_TOP)
