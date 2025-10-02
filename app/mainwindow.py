@@ -1,7 +1,7 @@
 import ast
 
 from PySide2 import QtWidgets
-from PySide2.QtCore import QEventLoop, Slot, QByteArray, qUncompress
+from PySide2.QtCore import QEventLoop, Slot
 from PySide2.QtGui import QIcon, QCloseEvent, Qt, QKeySequence
 from PySide2.QtWidgets import QMenu, QToolBar, QHBoxLayout, QToolButton, QWidget, QDialog, QShortcut, QDockWidget, \
     QAction, QProgressBar, QLabel
@@ -456,13 +456,20 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def save_windows_state(self):
         active_plugins = []
+        active_project_id = None
         for dw in self.findChildren(QDockWidget):
             if not dw.isHidden() and hasattr(dw, 'plugin_name'):
-                active_plugins.append(dw.plugin_name)
-                if dw.plugin_name == 'project' and hasattr(dw, 'project_id'):
-                    self.user_settings.set('active_project', dw.project_id)
+                plugin_name = dw.plugin_name
+                active_plugins.append(plugin_name)
+                if plugin_name == 'project' and hasattr(dw, 'project_id') and dw.project_id is not None:
+                    active_project_id = str(dw.project_id)
 
         self.user_settings.set('active_plugins', active_plugins)
+
+        if active_project_id is not None:
+            self.user_settings.set('active_project', active_project_id)
+        else:
+            self.user_settings.remove('active_project')
 
         try:
             geometry_bytes = self.saveGeometry()
@@ -479,10 +486,9 @@ class MainWindow(QtWidgets.QMainWindow):
             logger.warning('Не удалось сохранить состояние окна: %s', exc)
 
     def restore_windows_state(self):
-        geometry = self.user_settings.get('main_window_geometry')
-        if geometry is not None:
+        geometry_bytes = self.user_settings.get_bytes('main_window_geometry')
+        if not geometry_bytes.isEmpty():
             try:
-                geometry_bytes = self._prepare_window_data(geometry)
                 if not geometry_bytes.isEmpty():
                     restored = self.restoreGeometry(geometry_bytes)
                     logger.debug('Результат восстановления геометрии окна: %s', restored)
@@ -491,15 +497,11 @@ class MainWindow(QtWidgets.QMainWindow):
             except Exception as exc:
                 logger.warning('Не удалось восстановить геометрию окна: %s', exc)
 
-        window_state = self.user_settings.get('main_window_state')
-        if window_state is not None:
+        window_state = self.user_settings.get_bytes('main_window_state')
+        if not window_state.isEmpty():
             try:
-                state_bytes = self._prepare_window_data(window_state)
-                if not state_bytes.isEmpty():
-                    restored = self.restoreState(state_bytes)
-                    logger.debug('Результат восстановления состояния окна: %s', restored)
-                else:
-                    logger.debug('Состояние окна пусто, пропускаем восстановление')
+                restored = self.restoreState(window_state)
+                logger.debug('Результат восстановления состояния окна: %s', restored)
             except Exception as exc:
                 logger.warning('Не удалось восстановить состояние окна: %s', exc)
 
@@ -517,51 +519,10 @@ class MainWindow(QtWidgets.QMainWindow):
             if plugin == 'project':
                 active_project = self.user_settings.get('active_project')
                 if active_project:
-                    self.project.autoopen_project_id = active_project
+                    self.project.autoopen_project_id = str(active_project)
             if hasattr(self, plugin) and hasattr(self, f'{plugin}_tree_dock_widget'):
                 self.activate_tree(getattr(self, plugin), getattr(self, plugin + '_tree_dock_widget'),
                                    getattr(self, plugin.upper() + '_TREE'))
-
-    @staticmethod
-    def _prepare_window_data(value) -> QByteArray:
-        if isinstance(value, QByteArray):
-            return value
-        if isinstance(value, (bytes, bytearray)):
-            return QByteArray(value)
-        if isinstance(value, str):
-            return MainWindow._decode_window_data(value)
-        return QByteArray()
-
-    @staticmethod
-    def _decode_window_data(encoded: str) -> QByteArray:
-        if not encoded:
-            return QByteArray()
-
-        if encoded.startswith('z:'):
-            payload = encoded[2:]
-            try:
-                compressed = QByteArray.fromBase64(payload.encode('ascii'))
-                logger.debug('Декодирование сжатой строки: длина base64=%s, длина сжатых данных=%s',
-                             len(payload), compressed.size())
-                decompressed = qUncompress(compressed)
-                if decompressed.isNull():
-                    logger.debug('Результат распаковки NULL, возвращаем пустой QByteArray')
-                    return QByteArray()
-                result = QByteArray()
-                result.append(decompressed)
-                logger.debug('Распакованные данные: длина=%s', result.size())
-                return result
-            except Exception as exc:
-                logger.warning('Ошибка при декодировании сжатого состояния окна: %s', exc)
-
-        try:
-            decoded = QByteArray.fromBase64(encoded.encode('ascii'))
-            logger.debug('Декодирование base64 без сжатия: длина строки=%s, длина результата=%s',
-                         len(encoded), decoded.size())
-            return decoded
-        except Exception:
-            logger.warning('Ошибка при декодировании состояния окна')
-            return QByteArray()
 
     # slots:
     def import_files(self, type_):
