@@ -14,6 +14,11 @@ from app.plugins.project.dialogs.create_approx import ApproxDialog
 from app.plugins.project.dialogs.create_interpolation import InterpDialog
 from app.plugins.project.dialogs.extrapolation_dialog import ExtrapolationDialog
 from app.plugins.project.dialogs.legend_settings_dialog import LegendSettingsDialog
+from app.plugins.project.visualization.views.legend.settings_store import (
+    default_legend_settings,
+    load_legend_settings,
+    save_legend_settings,
+)
 
 
 class PlotContextMenuMixin:
@@ -86,10 +91,11 @@ class PlotContextMenuMixin:
         """Формирует начальные настройки легенды."""
         legend = getattr(self.plotItem, 'legend', None)
 
-        default_background = QColor(255, 255, 255)
-        default_opacity = 100
-        default_border_color = QColor(100, 100, 100)
-        default_border_width = 1
+        defaults = default_legend_settings()
+        default_background = defaults['background_color']
+        default_opacity = defaults['background_opacity']
+        default_border_color = defaults['border_color']
+        default_border_width = defaults['border_width']
 
         if legend is not None and hasattr(legend, 'opts'):
             brush = legend.opts.get('brush')
@@ -106,12 +112,14 @@ class PlotContextMenuMixin:
                 else:
                     default_border_width = pen.width()
 
-        return {
+        base_settings = {
             'background_color': default_background,
             'background_opacity': default_opacity,
             'border_color': default_border_color,
             'border_width': default_border_width
         }
+
+        return load_legend_settings(base_settings)
 
     def onContextMenuRequested(self, evt):
         """Обрабатывает запрос на показ контекстного меню"""
@@ -421,20 +429,21 @@ class PlotContextMenuMixin:
         if not hasattr(self.plotItem, 'legend') or self.plotItem.legend is None:
             return
 
-        self.legend_settings.update(settings)
+        self.legend_settings = save_legend_settings({**self.legend_settings, **settings})
 
         legend = self.plotItem.legend
 
-        background_color = QColor(self.legend_settings.get('background_color', QColor(255, 255, 255)))
-        opacity_percent = max(0, min(100, int(self.legend_settings.get('background_opacity', 100))))
+        background_color = QColor(self.legend_settings.get('background_color'))
+        opacity_percent = self.legend_settings.get('background_opacity', 100)
         if opacity_percent >= 100:
             alpha = 255
         else:
             alpha = int(round(opacity_percent * 2.55))
         background_color.setAlpha(alpha)
         legend.setBrush(pg.mkBrush(background_color))
+        legend.update()
 
-        border_color = QColor(self.legend_settings.get('border_color', QColor(100, 100, 100)))
+        border_color = QColor(self.legend_settings.get('border_color'))
         border_width = max(0, int(self.legend_settings.get('border_width', 1)))
         if border_width == 0:
             pen = pg.mkPen(border_color)

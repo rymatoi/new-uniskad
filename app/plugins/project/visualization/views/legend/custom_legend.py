@@ -9,6 +9,12 @@ from app import _menu
 from app.history_manager.events import LegendPositionChangeEvent
 from db import sp
 from app.plugins.project.dialogs.legend_settings_dialog import LegendSettingsDialog
+from app.plugins.project.visualization.views.legend.settings_store import (
+    default_legend_settings,
+    load_legend_settings,
+    normalize_legend_settings,
+    save_legend_settings,
+)
 
 
 class CustomLegend(pg.LegendItem):
@@ -26,7 +32,9 @@ class CustomLegend(pg.LegendItem):
 
         self.available_actions = []
         self.legend_menu = self._load_menu('any', 'legend')
-        self._legend_settings = self._collect_settings()
+        base_settings = self._collect_settings()
+        self._legend_settings = load_legend_settings(base_settings)
+        self._background_brush = None
         # Делает легенду поверх остальных элементов графика
         self.setZValue(10_000)
         self._apply_settings()
@@ -98,17 +106,19 @@ class CustomLegend(pg.LegendItem):
         if dialog.exec_():
             settings = dialog.get_result()
             if settings:
-                self._legend_settings.update(settings)
+                merged = {**self._legend_settings, **settings}
+                self._legend_settings = save_legend_settings(merged)
                 self._apply_settings()
 
     def _collect_settings(self):
         brush = self.opts.get('brush')
         pen = self.opts.get('pen')
 
-        background_color = QColor(255, 255, 255)
-        opacity = 100
-        border_color = QColor(100, 100, 100)
-        border_width = 1
+        defaults = default_legend_settings()
+        background_color = defaults['background_color']
+        opacity = defaults['background_opacity']
+        border_color = defaults['border_color']
+        border_width = defaults['border_width']
 
         if brush is not None:
             color = brush.color()
@@ -130,16 +140,20 @@ class CustomLegend(pg.LegendItem):
         }
 
     def _apply_settings(self):
-        background = QColor(self._legend_settings.get('background_color', QColor(255, 255, 255)))
-        opacity_percent = max(0, min(100, int(self._legend_settings.get('background_opacity', 100))))
+        self._legend_settings = normalize_legend_settings(self._legend_settings)
+
+        background = QColor(self._legend_settings.get('background_color'))
+        opacity_percent = self._legend_settings.get('background_opacity', 100)
         if opacity_percent >= 100:
             alpha = 255
         else:
             alpha = int(round(opacity_percent * 2.55))
         background.setAlpha(alpha)
-        self.setBrush(pg.mkBrush(background))
+        self._background_brush = pg.mkBrush(background)
+        self.setBrush(self._background_brush)
+        self.update()
 
-        border_color = QColor(self._legend_settings.get('border_color', QColor(100, 100, 100)))
+        border_color = QColor(self._legend_settings.get('border_color'))
         border_width = max(0, int(self._legend_settings.get('border_width', 1)))
         if border_width == 0:
             pen = pg.mkPen(border_color)
@@ -147,3 +161,13 @@ class CustomLegend(pg.LegendItem):
         else:
             pen = pg.mkPen(border_color, width=border_width)
         self.setPen(pen)
+
+    def paint(self, painter, *args):  # type: ignore[override]
+        if self._background_brush is not None:
+            painter.save()
+            painter.setPen(Qt.NoPen)
+            painter.setBrush(self._background_brush)
+            painter.drawRect(self.boundingRect())
+            painter.restore()
+
+        super().paint(painter, *args)

@@ -22,6 +22,12 @@ from app.plugins.project.dialogs.create_interpolation import InterpDialog
 from app.plugins.project.dialogs.edit_line import EditLineDialog
 from app.plugins.project.dialogs.extrapolation_dialog import ExtrapolationDialog
 from app.plugins.project.dialogs.legend_settings_dialog import LegendSettingsDialog
+from app.plugins.project.visualization.views.legend.settings_store import (
+    default_legend_settings,
+    load_legend_settings,
+    normalize_legend_settings,
+    save_legend_settings,
+)
 from app.plugins.project.plot.ruler import Ruler
 from app.plugins.project.utils_ import compare_floats
 from db import sp
@@ -85,7 +91,10 @@ class CustomLegend(pg.LegendItem):
 
         self.available_actions = []
         self.legend_menu = self._load_menu('any', 'legend')
-        self._legend_settings = self._collect_settings()
+        base_settings = self._collect_settings()
+        self._legend_settings = load_legend_settings(base_settings)
+        self._background_brush = None
+        self.setZValue(10_000)
         self._apply_settings()
 
     def _load_menu(self, mode, location):
@@ -155,17 +164,19 @@ class CustomLegend(pg.LegendItem):
         if dialog.exec_():
             settings = dialog.get_result()
             if settings:
-                self._legend_settings.update(settings)
+                merged = {**self._legend_settings, **settings}
+                self._legend_settings = save_legend_settings(merged)
                 self._apply_settings()
 
     def _collect_settings(self):
         brush = self.opts.get('brush')
         pen = self.opts.get('pen')
 
-        background_color = QColor(255, 255, 255)
-        opacity = 100
-        border_color = QColor(100, 100, 100)
-        border_width = 1
+        defaults = default_legend_settings()
+        background_color = defaults['background_color']
+        opacity = defaults['background_opacity']
+        border_color = defaults['border_color']
+        border_width = defaults['border_width']
 
         if brush is not None:
             color = brush.color()
@@ -187,16 +198,20 @@ class CustomLegend(pg.LegendItem):
         }
 
     def _apply_settings(self):
-        background = QColor(self._legend_settings.get('background_color', QColor(255, 255, 255)))
-        opacity_percent = max(0, min(100, int(self._legend_settings.get('background_opacity', 100))))
+        self._legend_settings = normalize_legend_settings(self._legend_settings)
+
+        background = QColor(self._legend_settings.get('background_color'))
+        opacity_percent = self._legend_settings.get('background_opacity', 100)
         if opacity_percent >= 100:
             alpha = 255
         else:
             alpha = int(round(opacity_percent * 2.55))
         background.setAlpha(alpha)
-        self.setBrush(pg.mkBrush(background))
+        self._background_brush = pg.mkBrush(background)
+        self.setBrush(self._background_brush)
+        self.update()
 
-        border_color = QColor(self._legend_settings.get('border_color', QColor(100, 100, 100)))
+        border_color = QColor(self._legend_settings.get('border_color'))
         border_width = max(0, int(self._legend_settings.get('border_width', 1)))
         if border_width == 0:
             pen = pg.mkPen(border_color)
@@ -204,6 +219,16 @@ class CustomLegend(pg.LegendItem):
         else:
             pen = pg.mkPen(border_color, width=border_width)
         self.setPen(pen)
+
+    def paint(self, painter, *args):  # type: ignore[override]
+        if self._background_brush is not None:
+            painter.save()
+            painter.setPen(Qt.NoPen)
+            painter.setBrush(self._background_brush)
+            painter.drawRect(self.boundingRect())
+            painter.restore()
+
+        super().paint(painter, *args)
 
 
 class PlotView(pg.PlotWidget):
@@ -237,8 +262,6 @@ class PlotView(pg.PlotWidget):
 
         self.plotItem.legend = CustomLegend(offset=self.default_legend_offset, parent=self)
         self.plotItem.legend.setParentItem(self.plotItem.vb)
-        self.plotItem.legend.setBrush(pg.mkBrush(255, 255, 255, 255))
-        self.plotItem.legend.setPen(pg.mkPen(100, 100, 100))
         self.plotItem.legend.setParentItem(self.plotItem.graphicsItem())
 
         # Размещаем легенду выше сетки и других элементов графика

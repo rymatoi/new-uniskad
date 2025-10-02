@@ -16,6 +16,10 @@ from PySide2.QtWidgets import (
 from pyqtgraph import ColorButton
 
 from dialogs.base import BaseDialog
+from app.plugins.project.visualization.views.legend.settings_store import (
+    default_legend_settings,
+    normalize_legend_settings,
+)
 
 
 class LegendSettingsDialog(BaseDialog):
@@ -84,23 +88,13 @@ class LegendSettingsDialog(BaseDialog):
         self.opacity_spinbox.valueChanged.connect(self.opacity_slider.setValue)
 
     def _load_initial_values(self) -> None:
-        default_background = QColor(255, 255, 255)
-        default_opacity = 100
-        default_border_color = QColor(100, 100, 100)
-        default_border_width = 1
+        defaults = default_legend_settings()
+        normalized = normalize_legend_settings({**defaults, **self._initial_settings})
 
-        background_color = QColor(
-            self._initial_settings.get("background_color", default_background)
-        )
-        opacity = int(
-            self._initial_settings.get("background_opacity", default_opacity)
-        )
-        border_color = QColor(
-            self._initial_settings.get("border_color", default_border_color)
-        )
-        border_width = int(
-            self._initial_settings.get("border_width", default_border_width)
-        )
+        background_color = QColor(normalized["background_color"])
+        opacity = int(normalized["background_opacity"])
+        border_color = QColor(normalized["border_color"])
+        border_width = int(normalized["border_width"])
 
         # Цветовая кнопка не поддерживает прозрачность, поэтому используем отдельный контрол
         background_color.setAlpha(255)
