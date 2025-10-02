@@ -82,7 +82,10 @@ class EpureItem(pg.ItemGroup):
             self.scatter.opts['name'] = None
         # Создаем одну кривую для всех интерполированных сегментов
         self.curve = self._create_curve((x_arr, y_arr))
-        self.curve.setName(None)
+        if hasattr(self.curve, 'setName'):
+            self.curve.setName(None)
+        elif hasattr(self.curve, 'opts'):
+            self.curve.opts['name'] = None
         self.curve.setZValue(self.scatter.zValue() - 1)
 
         # Добавляем элементы в обратном порядке, чтобы точки были поверх линий
