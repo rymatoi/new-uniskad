@@ -1,5 +1,6 @@
 from typing import TYPE_CHECKING, cast, Any, Tuple, Dict, Callable, Optional
 
+import numpy as np
 import pyqtgraph as pg
 from PySide2.QtGui import QSurfaceFormat
 from pyqtgraph import PlotWidget
@@ -45,6 +46,19 @@ class PlotDisplayMixin:
         }
 
         self.init_view()
+
+    @staticmethod
+    def _sanitize_grid_step(value: Any) -> Optional[float]:
+        """Возвращает положительное значение шага сетки или None."""
+        try:
+            numeric = float(value)
+        except (TypeError, ValueError):
+            return None
+
+        if np.isclose(numeric, 0.0):
+            return None
+
+        return abs(numeric)
 
     def init_legend(self):
         self.addLegend()
@@ -93,6 +107,23 @@ class PlotDisplayMixin:
             'y_divider': float(getattr(self.item, 'graph_y_dultiplier', 1.0))
         })
 
+        for axis in ['x', 'y']:
+            auto_attr = f'graph_{axis}_step_auto'
+            major_attr = f'graph_{axis}_major_step'
+            minor_attr = f'graph_{axis}_minor_step'
+
+            is_auto = to_bool(getattr(self.item, auto_attr, True))
+            major = self._sanitize_grid_step(getattr(self.item, major_attr, None))
+            minor = self._sanitize_grid_step(getattr(self.item, minor_attr, None))
+
+            if is_auto or major is None:
+                resolved = {'major': None, 'minor': None, 'auto': True}
+            else:
+                resolved_minor = minor if minor is not None else major / 5
+                resolved = {'major': major, 'minor': resolved_minor, 'auto': False}
+
+            self._display_settings['grid_settings'][axis] = resolved
+
         self._apply_display_settings()
 
     def _apply_display_settings(self):
@@ -116,12 +147,20 @@ class PlotDisplayMixin:
 
         grid_settings = self._display_settings['grid_settings']
         for axis in ['x', 'y']:
-            if not grid_settings[axis]['auto']:
-                axis_item = self.getAxis('bottom' if axis == 'x' else 'left')
-                axis_item.setTickSpacing(
-                    grid_settings[axis]['major'],
-                    grid_settings[axis]['minor']
-                )
+            settings = grid_settings[axis]
+            if settings.get('auto', True):
+                continue
+
+            major_step = self._sanitize_grid_step(settings.get('major'))
+            minor_step = self._sanitize_grid_step(settings.get('minor'))
+            if major_step is None:
+                continue
+
+            if minor_step is None:
+                minor_step = major_step / 5
+
+            axis_item = self.getAxis('bottom' if axis == 'x' else 'left')
+            axis_item.setTickSpacing(major_step, minor_step)
                 
         # Восстанавливаем видимость линеек, если они были активны
         if ruler_visibility:
@@ -168,22 +207,50 @@ class PlotDisplayMixin:
         if axis.lower() not in ['x', 'y']:
             return
 
+        major_step = self._sanitize_grid_step(major)
+        minor_step = self._sanitize_grid_step(minor)
+        is_auto = bool(auto) or major_step is None
+
+        if not is_auto and minor_step is None:
+            minor_step = major_step / 5
+
         self._display_settings['grid_settings'][axis] = {
-            'major': major,
-            'minor': minor,
-            'auto': auto
+            'major': None if is_auto else major_step,
+            'minor': None if is_auto else minor_step,
+            'auto': is_auto
         }
 
-        if not auto:
+        if not is_auto:
             axis_obj = self.getAxis('bottom' if axis == 'x' else 'left')
-            axis_obj.setTickSpacing(major, minor)
+            axis_obj.setTickSpacing(major_step, minor_step)
 
     def reset_view(self):
         """Сброс настроек отображения"""
         self.enableAutoRange()
         for settings in self._display_settings['grid_settings'].values():
-            settings['auto'] = True
+            settings.update({'auto': True, 'major': None, 'minor': None})
         self.showGrid(x=True, y=True, alpha=0.3)
+
+    def get_grid_settings(self) -> Dict[str, Dict[str, Optional[float]]]:
+        """Возвращает текущие настройки сетки."""
+        resolved: Dict[str, Dict[str, Optional[float]]] = {}
+        for axis, settings in self._display_settings['grid_settings'].items():
+            if settings.get('auto', True):
+                resolved[axis] = {'auto': True, 'major': None, 'minor': None}
+                continue
+
+            major_step = self._sanitize_grid_step(settings.get('major'))
+            minor_step = self._sanitize_grid_step(settings.get('minor'))
+            if major_step is None:
+                resolved[axis] = {'auto': True, 'major': None, 'minor': None}
+                continue
+
+            if minor_step is None:
+                minor_step = major_step / 5
+
+            resolved[axis] = {'auto': False, 'major': major_step, 'minor': minor_step}
+
+        return resolved
 
     def clear(self):
         self.plotItem.clear()

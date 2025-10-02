@@ -3,8 +3,8 @@ import matplotlib
 matplotlib.use('module://app.utils.backend_emf')
 import matplotlib.pyplot as plt
 import pyqtgraph.functions as fn
+from matplotlib.ticker import MultipleLocator
 from PySide2.QtCore import Qt
-import numpy as np
 
 
 class PlotEMFExporter:
@@ -59,13 +59,28 @@ class PlotEMFExporter:
         ax = fig.add_subplot(111, title=title)
         ax.clear()
 
-        # Настройка сетки
-        if hasattr(plot_view, 'graph_x_major_step') and plot_view.graph_x_major_step:
-            ax.xaxis.set_major_locator(plt.MultipleLocator(float(plot_view.graph_x_major_step)))
-        if hasattr(plot_view, 'graph_y_major_step') and plot_view.graph_y_major_step:
-            ax.yaxis.set_major_locator(plt.MultipleLocator(float(plot_view.graph_y_major_step)))
+        grid_settings = plot_view.get_grid_settings() if hasattr(plot_view, 'get_grid_settings') else {}
+        x_grid = grid_settings.get('x', {'auto': True})
+        y_grid = grid_settings.get('y', {'auto': True})
 
-        ax.grid(True)
+        if not x_grid.get('auto', True) and x_grid.get('major'):
+            ax.xaxis.set_major_locator(MultipleLocator(float(x_grid['major'])))
+        if not y_grid.get('auto', True) and y_grid.get('major'):
+            ax.yaxis.set_major_locator(MultipleLocator(float(y_grid['major'])))
+
+        minor_enabled = False
+        if not x_grid.get('auto', True) and x_grid.get('minor'):
+            ax.xaxis.set_minor_locator(MultipleLocator(float(x_grid['minor'])))
+            minor_enabled = True
+        if not y_grid.get('auto', True) and y_grid.get('minor'):
+            ax.yaxis.set_minor_locator(MultipleLocator(float(y_grid['minor'])))
+            minor_enabled = True
+
+        ax.grid(True, which='major')
+        if minor_enabled:
+            ax.grid(True, which='minor', linestyle=':', linewidth=0.5, alpha=0.6)
+        else:
+            ax.grid(False, which='minor')
 
         # Отрисовываем каждую кривую
         for curve in plot_view.plotItem.curves:

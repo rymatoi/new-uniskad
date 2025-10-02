@@ -196,6 +196,36 @@ class PlotExcelExporter:
         }
         return symbol_map.get(symbol, 'none')
 
+    @staticmethod
+    def _configure_axis_grid(axis, grid_config):
+        """Применяет настройки шага сетки к оси диаграммы."""
+        major_lines = ChartLines()
+        major_lines.spPr = GraphicalProperties(
+            ln=LineProperties(
+                solidFill=ColorChoice(srgbClr="CCCCCC"),
+            )
+        )
+        major_lines.spPr.ln.w = int(0.5 * 9525)
+        axis.majorGridlines = major_lines
+
+        major_step = grid_config.get('major') if grid_config else None
+        minor_step = grid_config.get('minor') if grid_config else None
+        is_auto = grid_config.get('auto', True) if grid_config else True
+
+        axis.majorUnit = None if is_auto or not major_step else float(major_step)
+
+        if not is_auto and minor_step:
+            axis.minorUnit = float(minor_step)
+            minor_lines = ChartLines()
+            minor_lines.spPr = GraphicalProperties(
+                ln=LineProperties(solidFill=ColorChoice(srgbClr="E0E0E0"))
+            )
+            minor_lines.spPr.ln.w = int(0.35 * 9525)
+            axis.minorGridlines = minor_lines
+        else:
+            axis.minorUnit = None
+            axis.minorGridlines = None
+
     def _create_plot(self, plot_view):
         """Создает график в Excel."""
         chart = ScatterChart()
@@ -203,24 +233,9 @@ class PlotExcelExporter:
         chart.x_axis.title = plot_view.plotItem.axes['bottom']['item'].label.toPlainText()
         chart.y_axis.title = plot_view.plotItem.axes['left']['item'].label.toPlainText()
 
-        # Настраиваем сетку
-        chart.x_axis.majorGridlines = ChartLines()
-        chart.y_axis.majorGridlines = ChartLines()
-
-        # Делаем сетку серой и тонкой
-        chart.x_axis.majorGridlines.spPr = GraphicalProperties(
-            ln=LineProperties(
-                solidFill=ColorChoice(srgbClr="CCCCCC"),  # Светло-серый цвет
-            )
-        )
-        chart.x_axis.majorGridlines.spPr.ln.w = int(0.5 * 9525)  # Тонкая линия
-
-        chart.y_axis.majorGridlines.spPr = GraphicalProperties(
-            ln=LineProperties(
-                solidFill=ColorChoice(srgbClr="CCCCCC"),
-            )
-        )
-        chart.y_axis.majorGridlines.spPr.ln.w = int(0.5 * 9525)
+        grid_settings = plot_view.get_grid_settings() if hasattr(plot_view, 'get_grid_settings') else {}
+        self._configure_axis_grid(chart.x_axis, grid_settings.get('x', {'auto': True}))
+        self._configure_axis_grid(chart.y_axis, grid_settings.get('y', {'auto': True}))
 
         extra_row_pointer = max(self.current_row, 1) + 1
 
