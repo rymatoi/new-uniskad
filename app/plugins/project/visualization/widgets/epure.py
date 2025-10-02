@@ -139,10 +139,15 @@ class EpureItem(pg.ItemGroup):
         return self._name
 
     def implements(self, interface=None):
-        ints = ['plotData']
+        """EpureItem does not behave like a standard PlotDataItem for legends.
+
+        We provide a dedicated legend proxy, so we prevent PyQtGraph from
+        auto-registering this item as ``plotData`` to avoid duplicate legend
+        entries.
+        """
         if interface is None:
-            return ints
-        return interface in ints
+            return []
+        return False
 
     def _on_proxy_visibility_changed(self, visible: bool):
         self._apply_visibility(visible, update_proxy=False)
