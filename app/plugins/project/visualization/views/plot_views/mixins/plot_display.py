@@ -193,7 +193,7 @@ class PlotDisplayMixin:
 
         owner = self
 
-        def wrapped_show_grid(*args, **kwargs):
+        def wrapped_show_grid(instance, *args, **kwargs):
             result = original_show_grid(*args, **kwargs)
             owner._ensure_overlay_order()
             return result
