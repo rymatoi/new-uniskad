@@ -1,3 +1,5 @@
+from typing import Dict
+
 import PySide2
 from PySide2.QtCore import QEvent, Qt
 from PySide2.QtWidgets import QMenu
@@ -38,6 +40,12 @@ class CustomLegend(pg.LegendItem):
         # Делает легенду поверх остальных элементов графика
         self.setZValue(10_000)
         self._apply_settings()
+
+    def apply_settings(self, settings: Dict[str, object]) -> Dict[str, object]:
+        """Применяет переданные настройки без дополнительного сохранения."""
+        self._legend_settings = normalize_legend_settings({**self._legend_settings, **settings})
+        self._apply_settings()
+        return self._legend_settings
 
     def _load_menu(self, mode, location):
         menu = sp.get_user_menu_(mode, location)

@@ -7,6 +7,7 @@ from pyqtgraph import PlotWidget
 
 from app.basic_funcs import to_bool
 from app.plugins.project.plot.ruler import Ruler
+from app.plugins.project.visualization.views.legend.custom_legend import CustomLegend
 from app.plugins.project.services.data_processors.base_dp import DataProcessor
 from app.plugins.project.services.data_processors.plot_dp import PlotProcessor
 
@@ -61,7 +62,9 @@ class PlotDisplayMixin:
         return abs(numeric)
 
     def init_legend(self):
-        self.addLegend()
+        legend = CustomLegend(parent=self)
+        legend.setParentItem(self.plotItem.vb)
+        self.plotItem.legend = legend
 
     @property
     def legend(self):

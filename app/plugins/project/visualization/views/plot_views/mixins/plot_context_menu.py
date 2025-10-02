@@ -14,6 +14,7 @@ from app.plugins.project.dialogs.create_approx import ApproxDialog
 from app.plugins.project.dialogs.create_interpolation import InterpDialog
 from app.plugins.project.dialogs.extrapolation_dialog import ExtrapolationDialog
 from app.plugins.project.dialogs.legend_settings_dialog import LegendSettingsDialog
+from app.plugins.project.visualization.views.legend.custom_legend import CustomLegend
 from app.plugins.project.visualization.views.legend.settings_store import (
     default_legend_settings,
     load_legend_settings,
@@ -87,9 +88,32 @@ class PlotContextMenuMixin:
             slot=self.onContextMenuRequested
         )
 
+    def _ensure_custom_legend(self) -> CustomLegend:
+        """Гарантирует, что у графика используется кастомная легенда."""
+        legend = getattr(self.plotItem, 'legend', None)
+
+        if isinstance(legend, CustomLegend):
+            return legend
+
+        if legend is not None:
+            try:
+                self.plotItem.removeItem(legend)
+            except Exception:
+                pass
+
+        legend = CustomLegend(parent=self)
+        legend.setParentItem(self.plotItem.vb)
+        self.plotItem.legend = legend
+
+        current_settings = getattr(self, 'legend_settings', None)
+        if current_settings:
+            legend.apply_settings(current_settings)
+
+        return legend
+
     def _init_default_legend_settings(self) -> dict:
         """Формирует начальные настройки легенды."""
-        legend = getattr(self.plotItem, 'legend', None)
+        legend = self._ensure_custom_legend()
 
         defaults = default_legend_settings()
         default_background = defaults['background_color']
@@ -399,13 +423,11 @@ class PlotContextMenuMixin:
         elif action_name == PlotMenuActions.PLOT_LEGEND.name:
             self.action_states['legend'] = checked
             # Создаем легенду, если её ещё нет
-            if not hasattr(self.plotItem, 'legend') or self.plotItem.legend is None:
-                self.plotItem.addLegend()
-                self._apply_legend_settings(self.legend_settings)
-            elif checked:
+            legend = self._ensure_custom_legend()
+            if checked:
                 self._apply_legend_settings(self.legend_settings)
             # Просто скрываем/показываем легенду
-            self.plotItem.legend.setVisible(checked)
+            legend.setVisible(checked)
 
         elif action_name == PlotMenuActions.PLOT_LEGEND_SETTINGS.name:
             self._open_legend_settings()
@@ -415,8 +437,7 @@ class PlotContextMenuMixin:
 
     def _open_legend_settings(self):
         """Открывает диалог настройки легенды и применяет результат."""
-        if not hasattr(self.plotItem, 'legend') or self.plotItem.legend is None:
-            self.plotItem.addLegend()
+        self._ensure_custom_legend()
 
         dialog = LegendSettingsDialog(self.legend_settings, parent=self)
         if dialog.exec_():
@@ -426,31 +447,31 @@ class PlotContextMenuMixin:
 
     def _apply_legend_settings(self, settings: dict):
         """Применяет переданные настройки к легенде."""
-        if not hasattr(self.plotItem, 'legend') or self.plotItem.legend is None:
-            return
+        legend = self._ensure_custom_legend()
 
         self.legend_settings = save_legend_settings({**self.legend_settings, **settings})
 
-        legend = self.plotItem.legend
-
-        background_color = QColor(self.legend_settings.get('background_color'))
-        opacity_percent = self.legend_settings.get('background_opacity', 100)
-        if opacity_percent >= 100:
-            alpha = 255
+        if isinstance(legend, CustomLegend):
+            legend.apply_settings(self.legend_settings)
         else:
-            alpha = int(round(opacity_percent * 2.55))
-        background_color.setAlpha(alpha)
-        legend.setBrush(pg.mkBrush(background_color))
-        legend.update()
+            background_color = QColor(self.legend_settings.get('background_color'))
+            opacity_percent = self.legend_settings.get('background_opacity', 100)
+            if opacity_percent >= 100:
+                alpha = 255
+            else:
+                alpha = int(round(opacity_percent * 2.55))
+            background_color.setAlpha(alpha)
+            legend.setBrush(pg.mkBrush(background_color))
+            legend.update()
 
-        border_color = QColor(self.legend_settings.get('border_color'))
-        border_width = max(0, int(self.legend_settings.get('border_width', 1)))
-        if border_width == 0:
-            pen = pg.mkPen(border_color)
-            pen.setStyle(Qt.NoPen)
-        else:
-            pen = pg.mkPen(border_color, width=border_width)
-        legend.setPen(pen)
+            border_color = QColor(self.legend_settings.get('border_color'))
+            border_width = max(0, int(self.legend_settings.get('border_width', 1)))
+            if border_width == 0:
+                pen = pg.mkPen(border_color)
+                pen.setStyle(Qt.NoPen)
+            else:
+                pen = pg.mkPen(border_color, width=border_width)
+            legend.setPen(pen)
 
     # Добавляем методы для сохранения/загрузки состояний
     def save_states(self):
@@ -497,12 +518,11 @@ class PlotContextMenuMixin:
             self.plotItem.ctrl.gridCheck.setChecked(True)
 
         # Инициализируем легенду
-        if not hasattr(self.plotItem, 'legend') or self.plotItem.legend is None:
-            self.plotItem.addLegend()
+        legend = self._ensure_custom_legend()
         self._apply_legend_settings(self.legend_settings)
         self.action_states['legend'] = True
-        self.plotItem.legend.setVisible(True)
-        
+        legend.setVisible(True)
+
         # Добавляем обработку кликов по легенде
         if hasattr(self.plotItem, 'legend'):
             self.plotItem.legend.scene().sigMouseClicked.connect(self._handle_legend_click)
