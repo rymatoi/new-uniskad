@@ -44,6 +44,9 @@ class EpureItem(pg.ItemGroup):
             for x, y in all_plot_data
         ]
 
+        if not curve_pairs and scatter_pairs:
+            curve_pairs = scatter_pairs
+
         if curve_pairs:
             total_points = sum(pair[0].size for pair in curve_pairs)
             gap_count = max(len(curve_pairs) - 1, 0)
@@ -73,8 +76,14 @@ class EpureItem(pg.ItemGroup):
 
         # Создаем один scatter для всех исходных точек
         self.scatter = self._create_scatter((scatter_x, scatter_y))
+        if hasattr(self.scatter, 'setName'):
+            self.scatter.setName(None)
+        else:
+            self.scatter.opts['name'] = None
         # Создаем одну кривую для всех интерполированных сегментов
         self.curve = self._create_curve((x_arr, y_arr))
+        self.curve.setName(None)
+        self.curve.setZValue(self.scatter.zValue() - 1)
 
         # Добавляем элементы в обратном порядке, чтобы точки были поверх линий
         self.addItem(self.curve)
@@ -88,18 +97,21 @@ class EpureItem(pg.ItemGroup):
         return self._style_config
 
     def init_legend_proxy(self):
-        legend_proxy = LegendProxyPlotDataItem([], [], name=self._name, style=self._style_config)
-        legend_proxy.setData([0, 1], [0, 0])
+        legend_proxy = LegendProxyPlotDataItem([0, 1], [0, 0], name=self._name, style=self._style_config)
         legend_proxy.setVisible(True)
-        legend_proxy.opts.update({
-            'symbolSize': self._style_config.get('symbol_size', GraphConstants.DEFAULT_STYLE['symbol_size']),
-            'pen': pg.mkPen(color=self._style_config['color'],
-                            style=GraphConstants.resolve_pen_style(self._style_config.get('line_style'))),
-            'brush': pg.mkBrush(self._style_config['fill_color']),
-            'symbolPen': pg.mkPen(self._style_config.get('symbol_color', self._style_config['color'])),
-            'symbolBrush': pg.mkBrush(self._style_config.get('fill_color', self._style_config['color'])),
-            'symbol': self._style_config.get('symbol', GraphConstants.DEFAULT_STYLE['symbol'])
-        })
+        legend_proxy.setSymbol(self._style_config.get('symbol', GraphConstants.DEFAULT_STYLE['symbol']))
+        legend_proxy.setSymbolSize(int(self._style_config.get('symbol_size', GraphConstants.DEFAULT_STYLE['symbol_size'])))
+        legend_proxy.setSymbolBrush(pg.mkBrush(self._style_config.get('fill_color', self._style_config['color'])))
+        legend_proxy.setSymbolPen(pg.mkPen(self._style_config.get('symbol_color', self._style_config['color'])))
+        legend_proxy.setPen(pg.mkPen(
+            color=self._style_config.get('color', GraphConstants.DEFAULT_STYLE['color']),
+            width=int(self._style_config.get('width', GraphConstants.DEFAULT_STYLE['width'])),
+            style=GraphConstants.resolve_pen_style(self._style_config.get('line_style'))
+        ))
+        legend_proxy.opts['size'] = legend_proxy.opts.get(
+            'symbolSize',
+            self._style_config.get('symbol_size', GraphConstants.DEFAULT_STYLE['symbol_size'])
+        )
         return legend_proxy
 
     def _create_curve(self, plot_data):
