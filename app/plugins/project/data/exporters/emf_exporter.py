@@ -1,3 +1,5 @@
+import math
+
 import matplotlib
 
 matplotlib.use('module://app.utils.backend_emf')
@@ -59,21 +61,47 @@ class PlotEMFExporter:
         ax = fig.add_subplot(111, title=title)
         ax.clear()
 
-        grid_settings = plot_view.get_grid_settings() if hasattr(plot_view, 'get_grid_settings') else {}
+        if hasattr(plot_view, 'get_effective_grid_settings'):
+            grid_settings = plot_view.get_effective_grid_settings()
+        elif hasattr(plot_view, 'get_grid_settings'):
+            grid_settings = plot_view.get_grid_settings()
+        else:
+            grid_settings = {}
         x_grid = grid_settings.get('x', {'auto': True})
         y_grid = grid_settings.get('y', {'auto': True})
 
-        if not x_grid.get('auto', True) and x_grid.get('major'):
-            ax.xaxis.set_major_locator(MultipleLocator(float(x_grid['major'])))
-        if not y_grid.get('auto', True) and y_grid.get('major'):
-            ax.yaxis.set_major_locator(MultipleLocator(float(y_grid['major'])))
+        def _sanitize(value):
+            try:
+                numeric = float(value)
+            except (TypeError, ValueError):
+                return None
+
+            if math.isclose(numeric, 0.0, abs_tol=1e-12):
+                return None
+
+            return abs(numeric)
+
+        x_major = _sanitize(x_grid.get('major')) if x_grid else None
+        y_major = _sanitize(y_grid.get('major')) if y_grid else None
+        x_minor = _sanitize(x_grid.get('minor')) if x_grid else None
+        y_minor = _sanitize(y_grid.get('minor')) if y_grid else None
+
+        if x_major is not None:
+            ax.xaxis.set_major_locator(MultipleLocator(x_major))
+        if y_major is not None:
+            ax.yaxis.set_major_locator(MultipleLocator(y_major))
+
+        if x_minor is None and x_major is not None:
+            x_minor = x_major / 5
+        if y_minor is None and y_major is not None:
+            y_minor = y_major / 5
 
         minor_enabled = False
-        if not x_grid.get('auto', True) and x_grid.get('minor'):
-            ax.xaxis.set_minor_locator(MultipleLocator(float(x_grid['minor'])))
+        if x_minor is not None:
+            ax.xaxis.set_minor_locator(MultipleLocator(x_minor))
             minor_enabled = True
-        if not y_grid.get('auto', True) and y_grid.get('minor'):
-            ax.yaxis.set_minor_locator(MultipleLocator(float(y_grid['minor'])))
+        if y_minor is not None:
+            ax.yaxis.set_minor_locator(MultipleLocator(y_minor))
             minor_enabled = True
 
         ax.grid(True, which='major')

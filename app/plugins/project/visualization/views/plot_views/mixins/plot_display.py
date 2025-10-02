@@ -252,6 +252,53 @@ class PlotDisplayMixin:
 
         return resolved
 
+    def _extract_axis_spacing(self, axis_item) -> Tuple[Optional[float], Optional[float]]:
+        """Извлекает текущие интервалы сетки из объекта оси."""
+        spacing_source = getattr(axis_item, 'tickSpacing', None)
+        if spacing_source is None:
+            return None, None
+
+        try:
+            spacing = spacing_source() if callable(spacing_source) else spacing_source
+        except TypeError:
+            spacing = getattr(axis_item, 'tickSpacing', None)
+
+        if not spacing:
+            return None, None
+
+        if not isinstance(spacing, (list, tuple)):
+            spacing = [spacing]
+
+        def _extract_value(entry: Any) -> Optional[float]:
+            if isinstance(entry, (list, tuple)) and entry:
+                entry = entry[0]
+            return self._sanitize_grid_step(entry)
+
+        major = _extract_value(spacing[0]) if len(spacing) > 0 else None
+        minor = _extract_value(spacing[1]) if len(spacing) > 1 else None
+        return major, minor
+
+    def get_effective_grid_settings(self) -> Dict[str, Dict[str, Optional[float]]]:
+        """Возвращает настройки сетки с учетом фактических интервалов осей."""
+        effective = self.get_grid_settings()
+        axis_map = {'x': 'bottom', 'y': 'left'}
+
+        for axis_key, axis_name in axis_map.items():
+            axis_item = self.getAxis(axis_name)
+            major, minor = self._extract_axis_spacing(axis_item)
+            config = effective.setdefault(axis_key, {'auto': True, 'major': None, 'minor': None})
+
+            if config.get('major') is None and major is not None:
+                config['major'] = major
+
+            if config.get('minor') is None:
+                if minor is not None:
+                    config['minor'] = minor
+                elif config.get('major') is not None:
+                    config['minor'] = config['major'] / 5
+
+        return effective
+
     def clear(self):
         self.plotItem.clear()
         self.plotItem.legend.clear()

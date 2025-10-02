@@ -1,3 +1,5 @@
+import math
+
 from openpyxl import Workbook
 from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
@@ -197,7 +199,18 @@ class PlotExcelExporter:
         return symbol_map.get(symbol, 'none')
 
     @staticmethod
-    def _configure_axis_grid(axis, grid_config):
+    def _sanitize_step(value):
+        try:
+            numeric = float(value)
+        except (TypeError, ValueError):
+            return None
+
+        if math.isclose(numeric, 0.0, abs_tol=1e-12):
+            return None
+
+        return abs(numeric)
+
+    def _configure_axis_grid(self, axis, grid_config):
         """Применяет настройки шага сетки к оси диаграммы."""
         major_lines = ChartLines()
         major_lines.spPr = GraphicalProperties(
@@ -208,13 +221,18 @@ class PlotExcelExporter:
         major_lines.spPr.ln.w = int(0.5 * 9525)
         axis.majorGridlines = major_lines
 
-        major_step = grid_config.get('major') if grid_config else None
-        minor_step = grid_config.get('minor') if grid_config else None
-        is_auto = grid_config.get('auto', True) if grid_config else True
+        major_step = self._sanitize_step(grid_config.get('major')) if grid_config else None
+        minor_step = self._sanitize_step(grid_config.get('minor')) if grid_config else None
 
-        axis.majorUnit = None if is_auto or not major_step else float(major_step)
+        if major_step is not None:
+            axis.majorUnit = float(major_step)
+        else:
+            axis.majorUnit = None
 
-        if not is_auto and minor_step:
+        if minor_step is None and major_step is not None:
+            minor_step = major_step / 5
+
+        if minor_step is not None:
             axis.minorUnit = float(minor_step)
             minor_lines = ChartLines()
             minor_lines.spPr = GraphicalProperties(
@@ -233,7 +251,12 @@ class PlotExcelExporter:
         chart.x_axis.title = plot_view.plotItem.axes['bottom']['item'].label.toPlainText()
         chart.y_axis.title = plot_view.plotItem.axes['left']['item'].label.toPlainText()
 
-        grid_settings = plot_view.get_grid_settings() if hasattr(plot_view, 'get_grid_settings') else {}
+        if hasattr(plot_view, 'get_effective_grid_settings'):
+            grid_settings = plot_view.get_effective_grid_settings()
+        elif hasattr(plot_view, 'get_grid_settings'):
+            grid_settings = plot_view.get_grid_settings()
+        else:
+            grid_settings = {}
         self._configure_axis_grid(chart.x_axis, grid_settings.get('x', {'auto': True}))
         self._configure_axis_grid(chart.y_axis, grid_settings.get('y', {'auto': True}))
 
