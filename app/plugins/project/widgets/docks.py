@@ -10,6 +10,12 @@ class ProjectDockWidget(DockWidget):
 
     def init_project_id(self, project):
         self.project_id = project.id
+        parent = getattr(self, '_parent', None)
+        if parent and hasattr(parent, 'user_settings'):
+            try:
+                parent.user_settings.set('active_project', str(project.id))
+            except Exception:
+                pass
 
     def save_state(self):
         tree = self.widget()

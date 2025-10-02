@@ -200,6 +200,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def init_toolbar(self):
         toolbar = QToolBar(self)
         toolbar.setWindowTitle('Панель инструментов')
+        toolbar.setObjectName('main_window_toolbar')
 
         # self._move_up = QAction(QIcon(":up.png"), 'Переместить вверх', self, )
         # self._move_down = QAction(QIcon(":down.png"), 'Переместить вниз', self, )
@@ -286,6 +287,7 @@ class MainWindow(QtWidgets.QMainWindow):
         """
         for dock_name, dock_data in self.dock_widgets.items():
             dock_widget = dock_data.dock_class(dock_data.title, dock_data.tree_name, dock_name, self)
+            dock_widget.setObjectName(f'{dock_name}_dock_widget')
             setattr(self, f"{dock_name}_tree_dock_widget", dock_widget)
             dock_widget.setWindowTitle(dock_data.title)
             dock_widget.setWidget(TreeView(self))
@@ -464,7 +466,17 @@ class MainWindow(QtWidgets.QMainWindow):
                 if plugin_name == 'project' and hasattr(dw, 'project_id') and dw.project_id is not None:
                     active_project_id = str(dw.project_id)
 
-        self.user_settings.set('active_plugins', active_plugins)
+        if active_project_id is None and hasattr(self, 'project_tree_dock_widget'):
+            project_dock = self.project_tree_dock_widget
+            if hasattr(project_dock, 'project_id') and project_dock.project_id is not None:
+                active_project_id = str(project_dock.project_id)
+
+        if active_plugins:
+            ordered_unique_plugins = list(dict.fromkeys(active_plugins))
+        else:
+            ordered_unique_plugins = []
+
+        self.user_settings.set('active_plugins', ordered_unique_plugins)
 
         if active_project_id is not None:
             self.user_settings.set('active_project', active_project_id)
@@ -505,6 +517,10 @@ class MainWindow(QtWidgets.QMainWindow):
             except Exception as exc:
                 logger.warning('Не удалось восстановить состояние окна: %s', exc)
 
+        active_project_setting = self.user_settings.get('active_project')
+        if active_project_setting and hasattr(self, 'project') and self.project is not None:
+            self.project.autoopen_project_id = str(active_project_setting)
+
         active_plugins = self.user_settings.get('active_plugins')
         if isinstance(active_plugins, str):
             try:
@@ -516,10 +532,6 @@ class MainWindow(QtWidgets.QMainWindow):
             return
 
         for plugin in active_plugins:
-            if plugin == 'project':
-                active_project = self.user_settings.get('active_project')
-                if active_project:
-                    self.project.autoopen_project_id = str(active_project)
             if hasattr(self, plugin) and hasattr(self, f'{plugin}_tree_dock_widget'):
                 self.activate_tree(getattr(self, plugin), getattr(self, plugin + '_tree_dock_widget'),
                                    getattr(self, plugin.upper() + '_TREE'))

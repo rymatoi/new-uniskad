@@ -56,10 +56,9 @@ class UserSettings:
     @classmethod
     def _encode_value(cls, value: Any) -> Any:
         if isinstance(value, QByteArray):
-            return cls.BINARY_PREFIX + bytes(value.toBase64()).decode('ascii')
+            return QByteArray(value)
         if isinstance(value, (bytes, bytearray)):
-            encoded = QByteArray(value).toBase64().data().decode('ascii')
-            return cls.BINARY_PREFIX + encoded
+            return QByteArray(value)
         if isinstance(value, (list, tuple, set)):
             return cls.LIST_PREFIX + json.dumps(list(value))
         return value
