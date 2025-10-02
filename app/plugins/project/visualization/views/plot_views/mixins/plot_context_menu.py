@@ -13,6 +13,7 @@ from db import sp
 from app.plugins.project.dialogs.create_approx import ApproxDialog
 from app.plugins.project.dialogs.create_interpolation import InterpDialog
 from app.plugins.project.dialogs.extrapolation_dialog import ExtrapolationDialog
+from app.plugins.project.dialogs.legend_appearance_dialog import LegendAppearanceDialog
 
 
 class PlotContextMenuMixin:
@@ -88,10 +89,11 @@ class PlotContextMenuMixin:
         pos = evt[0].scenePos()
         if hasattr(self.plotItem, 'legend') and self.plotItem.legend:
             legend = self.plotItem.legend
-            for sample, label in legend.items:
-                if label.sceneBoundingRect().contains(pos):
-                    # Если клик по легенде - прерываем обработку
-                    return
+            legend_pos = legend.mapFromScene(pos)
+            if legend.boundingRect().contains(legend_pos):
+                # Если клик по легенде - прерываем обработку,
+                # дальнейшая обработка будет в _handle_legend_click
+                return
 
         mouse_point = self.plotItem.vb.mapSceneToView(pos)
 
@@ -435,9 +437,9 @@ class PlotContextMenuMixin:
         
         # Проходим по всем элементам легенды
         for sample, label in legend.items:
-            if label.sceneBoundingRect().contains(pos):
+            if label.sceneBoundingRect().contains(pos) or sample.sceneBoundingRect().contains(pos):
                 # Находим соответствующую кривую
-                curve = next((c for c in self.curve_items if c.name() == label.text), None)
+                curve = next((c for c in self.curve_items if hasattr(c, 'name') and c.name() == label.text), None)
                 if curve:
                     # Создаем и показываем меню
                     menu = QMenu(self)
@@ -445,7 +447,26 @@ class PlotContextMenuMixin:
                     menu.exec_(QCursor.pos())
                     # Предотвращаем дальнейшую обработку события
                     event.accept()
-                break
+                return
+
+        # Если клик был по фону легенды, открываем диалог настроек
+        self._open_legend_settings_dialog()
+        event.accept()
+
+    def _open_legend_settings_dialog(self):
+        legend = getattr(self.plotItem, 'legend', None)
+        if not legend:
+            return
+
+        dialog = LegendAppearanceDialog(legend, parent=self)
+        if dialog.exec_():
+            result = dialog.get_result()
+            if result:
+                legend.update_appearance(
+                    result['background'],
+                    result['border'],
+                    result['opacity']
+                )
 
     def _on_plot_action_triggered(self, checked):
         """Обработчик сигнала triggered для действий графика"""
