@@ -2,6 +2,7 @@ from app.basic_funcs import timing_decorator
 from app.plugins.project.services.data_processors.epure_dp import EpureProcessor
 from app.plugins.project.visualization.views.plot_views.base_plot_view import BasePlotView
 from app.plugins.project.visualization.widgets.epure import EpureItem
+from app.plugins.project.visualization.widgets.legend_samples import CurveWithPointsSample
 
 
 class EpureView(BasePlotView):
@@ -10,11 +11,18 @@ class EpureView(BasePlotView):
     def __init__(self, item, main_window, parent=None):
         super().__init__(item, main_window, parent)
 
+    def init_legend(self):
+        super().init_legend()
+        if hasattr(self.plotItem, 'legend') and self.plotItem.legend:
+            self.plotItem.legend.setSampleType(CurveWithPointsSample)
+
     def add_curve(self, scatter_data, plot_data, **style):
         epure = EpureItem(scatter_data, plot_data, style=style)
         self.addItem(epure)
         self.curve_items.append(epure)
         self.selected_points[epure] = set()
+        if hasattr(self.plotItem, 'legend') and self.plotItem.legend:
+            self.plotItem.legend.addItem(epure.legend_proxy, epure.name())
         return epure
 
     @timing_decorator

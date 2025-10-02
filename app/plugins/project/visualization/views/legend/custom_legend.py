@@ -1,11 +1,13 @@
-import PySide2
-from PySide2.QtCore import QEvent
+from PySide2.QtCore import QEvent, Qt
+from PySide2.QtGui import QMouseEvent
 from PySide2.QtWidgets import QMenu
 from pyqtgraph import Point
 import pyqtgraph as pg
 
-from app import _menu, basic_funcs
+from app import _menu
 from app.history_manager.events import LegendPositionChangeEvent
+from app.plugins.project.dialogs.legend_appearance import LegendAppearanceDialog
+from app.plugins.project.visualization.views.legend.appearance import LegendAppearance
 from db import sp
 
 
@@ -25,6 +27,10 @@ class CustomLegend(pg.LegendItem):
         self.available_actions = []
         self.legend_menu = self._load_menu('any', 'legend')
 
+        self._appearance = LegendAppearance.default()
+        self.apply_appearance(self._appearance)
+        self.setZValue(1000)
+
     def _load_menu(self, mode, location):
         menu = sp.get_user_menu_(mode, location)
         self.available_actions += [action.name for action in menu]
@@ -35,8 +41,9 @@ class CustomLegend(pg.LegendItem):
         self.last_pos_offset = Point(offset)
         self.calculate_pos()
 
-    def event(self, event: PySide2.QtCore.QEvent) -> bool:
-        if event.type() == QEvent.UngrabMouse:
+    def event(self, event: QEvent) -> bool:
+        if (event.type() == QEvent.UngrabMouse and self._parent is not None
+                and hasattr(self._parent, 'main_window') and hasattr(self._parent.main_window, 'event_stack')):
             self._parent.main_window.event_stack.add_event(
                 LegendPositionChangeEvent(self, self.old_pos, self.current_pos))
         return super().event(event)
@@ -88,4 +95,21 @@ class CustomLegend(pg.LegendItem):
             getattr(self, action_name).triggered.connect(lambda: func(*args))
 
     def edit_legend(self, pos):
-        basic_funcs.info('Внимание!', 'Данное действие находится в разработке.')
+        parent = self._parent if self._parent is not None else None
+        dialog = LegendAppearanceDialog(self._appearance, parent)
+        if dialog.exec_():
+            result = dialog.get_result()
+            if result is not None:
+                self.apply_appearance(result)
+
+    def apply_appearance(self, appearance: LegendAppearance):
+        self._appearance = appearance
+        self.setBrush(appearance.to_brush())
+        self.setPen(appearance.to_pen())
+
+    def mousePressEvent(self, ev: QMouseEvent) -> None:
+        if ev.button() == Qt.RightButton:
+            self.edit_legend(ev.pos())
+            ev.accept()
+            return
+        super().mousePressEvent(ev)

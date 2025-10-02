@@ -358,7 +358,8 @@ class PlotContextMenuMixin:
             self.action_states['legend'] = checked
             # Создаем легенду, если её ещё нет
             if not hasattr(self.plotItem, 'legend') or self.plotItem.legend is None:
-                self.plotItem.addLegend()
+                if hasattr(self, 'init_legend'):
+                    self.init_legend()
             # Просто скрываем/показываем легенду
             self.plotItem.legend.setVisible(checked)
 
@@ -411,7 +412,8 @@ class PlotContextMenuMixin:
 
         # Инициализируем легенду
         if not hasattr(self.plotItem, 'legend') or self.plotItem.legend is None:
-            self.plotItem.addLegend()
+            if hasattr(self, 'init_legend'):
+                self.init_legend()
         self.action_states['legend'] = True
         self.plotItem.legend.setVisible(True)
         
