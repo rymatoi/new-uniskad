@@ -48,7 +48,7 @@ class PlotDisplayMixin:
             }
         }
 
-        self._legend_style = self._default_legend_style()
+        self._ensure_legend_style()
         self._grid_wrapper_installed = False
         self._wrap_plotitem_show_grid()
         self.init_view()
@@ -67,6 +67,7 @@ class PlotDisplayMixin:
         return abs(numeric)
 
     def init_legend(self):
+        self._ensure_legend_style()
         legend = self.addLegend()
 
         if legend is not None:
@@ -85,7 +86,12 @@ class PlotDisplayMixin:
             'border_width': 1.0,
         }
 
+    def _ensure_legend_style(self) -> None:
+        if not hasattr(self, '_legend_style') or self._legend_style is None:
+            self._legend_style = self._default_legend_style()
+
     def _apply_legend_style(self):
+        self._ensure_legend_style()
         legend = getattr(self.plotItem, 'legend', None)
 
         if legend is None:
@@ -99,6 +105,7 @@ class PlotDisplayMixin:
         legend.setPen(pg.mkPen(border_color, width=border_width))
 
     def get_legend_style(self) -> Dict[str, Any]:
+        self._ensure_legend_style()
         return {
             'background': QColor(self._legend_style['background']),
             'border_color': QColor(self._legend_style['border_color']),
@@ -106,6 +113,7 @@ class PlotDisplayMixin:
         }
 
     def set_legend_style(self, style: Dict[str, Any]) -> None:
+        self._ensure_legend_style()
         background = QColor(style.get('background', self._legend_style['background']))
         border_color = QColor(style.get('border_color', self._legend_style['border_color']))
         border_width = float(style.get('border_width', self._legend_style['border_width']))
