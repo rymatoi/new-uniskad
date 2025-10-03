@@ -1,4 +1,5 @@
 import re
+from collections.abc import Iterable
 from contextlib import contextmanager
 from contextvars import ContextVar
 
@@ -21,8 +22,34 @@ from sympy import (
 from sympy.functions.elementary.integers import floor
 
 
+def _sympify_value(value):
+    if isinstance(value, Basic):
+        return value
+    return sympify(value)
+
+
+def _flatten_sympy_args(value):
+    if isinstance(value, Basic):
+        yield value
+        return
+
+    if isinstance(value, (str, bytes)):
+        yield _sympify_value(value)
+        return
+
+    if isinstance(value, Iterable):
+        for item in value:
+            yield from _flatten_sympy_args(item)
+        return
+
+    yield _sympify_value(value)
+
+
 def _as_sympy_args(args):
-    return [sympify(arg) if not isinstance(arg, Basic) else arg for arg in args]
+    flattened = []
+    for arg in args:
+        flattened.extend(_flatten_sympy_args(arg))
+    return flattened
 
 
 _EVAL_CONTEXT = ContextVar('_eval_context', default={})
