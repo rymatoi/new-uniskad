@@ -253,9 +253,17 @@ def eval_expr(expr: str) -> "Optional[float]":
     # превращались в точки.
     expr = re.sub(r'(?<!\.)\b(\d+),(\d+)\b', r'\1.\2', expr)
     try:
-        return sympify(expr, locals=CUSTOM_FUNCTIONS).evalf()
-    except Exception as ex:
+        parsed = sympify(expr, locals=CUSTOM_FUNCTIONS)
+    except Exception:
         return expr
+
+    if isinstance(parsed, Basic):
+        try:
+            return parsed.evalf()
+        except Exception:
+            return expr
+
+    return parsed
 
 
 if __name__ == '__main__':
