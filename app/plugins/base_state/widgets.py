@@ -14,7 +14,7 @@ from PySide2.QtWidgets import QTreeView, QMenu, QColorDialog, QInputDialog, QDoc
     QApplication, QStyle, QSizePolicy, QDialog, QDialogButtonBox, QTextBrowser
 from openpyxl.workbook import Workbook
 from app import app_logger, _menu, basic_funcs
-from app._eval_expr import eval_expr
+from app._eval_expr import eval_context, eval_expr
 from app.basic_funcs import timing_decorator
 from app.formula import FormulaDelegate, FormulaLineEdit
 from app.plugins.base_state.models import Node, ANY_CHILD_TYPE
@@ -2016,7 +2016,19 @@ class TableItem(QTableWidgetItem):
             self.clear_unused_dependencies([], previous_cells)
             return None
 
-        eval_result = eval_expr(normalized_formula)
+        column_lookup = {}
+        if tw is not None:
+            for idx, column_key in enumerate(tw.ord_columns, start=1):
+                column_lookup[column_key] = idx
+                column_lookup[str(column_key)] = idx
+
+        with eval_context(
+            column_number=column_number,
+            column_key=self.key[1],
+            columns=list(tw.ord_columns) if tw is not None else None,
+            column_lookup=column_lookup,
+        ):
+            eval_result = eval_expr(normalized_formula)
         evaled_value = eval_result
 
         if row_formula_applied:
