@@ -29,7 +29,11 @@ class FormulaDelegate(QStyledItemDelegate):
             'OR(, )',
             'ИЛИ(, )',
             'NOT()',
-            'НЕ()'
+            'НЕ()',
+            'RANGE(; )',
+            'ДИАПАЗОН(; )',
+            'COLUMN()',
+            'СТОЛБЕЦ()'
         ]
 
     def createEditor(self, parent, option, index):

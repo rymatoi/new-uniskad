@@ -14,7 +14,7 @@ from PySide2.QtWidgets import QTreeView, QMenu, QColorDialog, QInputDialog, QDoc
     QApplication, QStyle, QSizePolicy, QDialog, QDialogButtonBox, QTextBrowser
 from openpyxl.workbook import Workbook
 from app import app_logger, _menu, basic_funcs
-from app._eval_expr import eval_expr
+from app._eval_expr import eval_context, eval_expr
 from app.basic_funcs import timing_decorator
 from app.formula import FormulaDelegate, FormulaLineEdit
 from app.plugins.base_state.models import Node, ANY_CHILD_TYPE
@@ -2016,7 +2016,19 @@ class TableItem(QTableWidgetItem):
             self.clear_unused_dependencies([], previous_cells)
             return None
 
-        eval_result = eval_expr(normalized_formula)
+        column_lookup = {}
+        if tw is not None:
+            for idx, column_key in enumerate(tw.ord_columns, start=1):
+                column_lookup[column_key] = idx
+                column_lookup[str(column_key)] = idx
+
+        with eval_context(
+            column_number=column_number,
+            column_key=self.key[1],
+            columns=list(tw.ord_columns) if tw is not None else None,
+            column_lookup=column_lookup,
+        ):
+            eval_result = eval_expr(normalized_formula)
         evaled_value = eval_result
 
         if row_formula_applied:
@@ -2299,8 +2311,10 @@ class TablePage1(QtWidgets.QWidget):
             "<code>МАКС()</code>, <code>СЧЁТ()</code>, <code>ЕСЛИ(условие; значение_если_истина; значение_если_ложь)</code>, "
             "математические <code>ABS()</code>/<code>МОДУЛЬ()</code>, <code>POWER()</code>/<code>СТЕПЕНЬ()</code>, "
             "<code>ROUND()</code>/<code>ОКРУГЛ()</code> и логические <code>AND()</code>/<code>И()</code>, <code>OR()</code>/"
-            "<code>ИЛИ()</code>, <code>NOT()</code>/<code>НЕ()</code>. Аргументы можно разделять точкой с запятой или запятой. "
-            "Для <code>ROUND</code> второй аргумент задаёт количество знаков после запятой.</li>"
+            "<code>ИЛИ()</code>, <code>NOT()</code>/<code>НЕ()</code>. Для нумерации строк доступна функция <code>RANGE()</code>/"
+            "<code>ДИАПАЗОН()</code>, а <code>COLUMN()</code>/<code>СТОЛБЕЦ()</code> возвращает номер текущего или указанного столбца. "
+            "Аргументы можно разделять точкой с запятой или запятой. Для <code>ROUND</code> второй аргумент задаёт количество знаков "
+            "после запятой.</li>"
             "<li><b>Автоподстановка параметров.</b> Выбирайте элементы из выпадающего списка — параметр вставляется в кавычках "
             "с пустыми скобками, например <code>&quot;Температура[]&quot;</code>. Укажите номер столбца в квадратных скобках, чтобы "
             "обратиться к конкретному значению. Без указания номера столбца ссылка раскрывается в массив всех значений строки, "
@@ -2316,6 +2330,8 @@ class TablePage1(QtWidgets.QWidget):
             "<li><code>=ЕСЛИ(&quot;Давление&quot;[1] &gt; 10; &quot;Превышение&quot;; &quot;Норма&quot;)</code> — возвращает текст в зависимости от условия.</li>"
             "<li><code>=ROUND(&quot;Температура&quot;[1]; 2)</code> — округляет значение до двух знаков после запятой.</li>"
             "<li><code>=AND(&quot;Нагрузка&quot;[1] &gt; 5; NOT(&quot;Признак&quot;[1]))</code> — проверяет несколько логических условий одновременно.</li>"
+            "<li><code>=ДИАПАЗОН(1; СЧЁТ(&quot;Температура[]&quot;) + 1)</code> — создаёт последовательность 1…N для формулы строки.</li>"
+            "<li><code>=СТОЛБЕЦ()</code> — возвращает номер столбца текущей ячейки, пригодно для привязки расчётов к позициям.</li>"
             "<li><code>=(&quot;Масса&quot;[1] - &quot;Масса&quot;[2]) / &quot;Масса&quot;[2]</code> — вычисляет относительное отклонение между измерениями.</li>"
             "</ul>"
             "<p>Сложные выражения можно сохранить в разделе «Список шаблонных формул» и использовать повторно.</p>"
