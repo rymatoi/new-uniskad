@@ -22,6 +22,7 @@ from resources.ui.ui_py.ui_mainwindow import Ui_MainWindow
 from settings.dialog import SettingsDialog
 from db import session
 import config.config
+from app.utils import theme
 
 logger = app_logger.get_logger(__name__)
 
@@ -84,6 +85,9 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.ui = Ui_MainWindow()
         self.ui.setupUi(self)
+        self.setAttribute(Qt.WA_StyledBackground, True)
+        if self.centralWidget():
+            self.centralWidget().setAttribute(Qt.WA_StyledBackground, True)
 
         self.user = None
         self.init_user()
@@ -153,7 +157,11 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.notification = None
         self.notifications_timeout = 10000
+        self._modern_ui_enabled = False
         self.init_notifications()
+
+        if self._get_bool_setting('use_modern_ui', False):
+            self.apply_modern_ui(True, persist=False)
 
         self.event_stack = EventStack()
         shortcut_undo = QShortcut(QKeySequence('Ctrl+Z'), self)
@@ -175,6 +183,31 @@ class MainWindow(QtWidgets.QMainWindow):
         self.notification = StackedNotifications(self)
         self.notification.setGeometry(100, 100, 600, 100)
         self.notification.hide()
+        self.notification.set_modern_theme(self._modern_ui_enabled)
+
+    def _get_bool_setting(self, key, default=False):
+        value = self.user_settings.get(key, default)
+        if isinstance(value, str):
+            value = value.lower() in {'1', 'true', 'yes', 'on'}
+        return bool(value)
+
+    def apply_modern_ui(self, enabled: bool, persist: bool = True) -> None:
+        enabled = bool(enabled)
+        self._modern_ui_enabled = enabled
+
+        if enabled:
+            theme.apply_modern_light_theme(self)
+        else:
+            theme.clear_modern_theme(self)
+
+        if self.notification:
+            self.notification.set_modern_theme(enabled)
+
+        if persist:
+            self.user_settings.set('use_modern_ui', enabled)
+
+    def toggle_modern_ui(self) -> None:
+        self.apply_modern_ui(not self._modern_ui_enabled)
 
     def show_notification(self, text):
         """
