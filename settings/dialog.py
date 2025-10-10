@@ -2,10 +2,10 @@ from PySide2.QtCore import Qt
 from PySide2.QtGui import QIcon
 
 from app import app_logger
-from db import sp
 from dialogs.base import BaseDialog
 from resources.ui.ui_py.ui_settings import Ui_SettingsDialog
 from settings.models import SettingsTreeModel
+from settings.store import get_settings_tree
 from settings.widgets.tree import SettingsTreeView
 
 logger = app_logger.get_logger(__name__)
@@ -38,16 +38,42 @@ class SettingsDialog(BaseDialog):
         self.treeview.show()
         model = SettingsTreeModel()
 
-        tree_items = sp.get_settings_tree()
+        tree_items = get_settings_tree()
         model.ini_tree(tree_items)
 
         self.treeview.setModel(model)
+        selection_model = self.treeview.selectionModel()
+        if selection_model:
+            selection_model.currentChanged.connect(
+                lambda current, _: self.treeview.open_item(current)
+            )
+
+        target_index = model.index(0, 0)
+        while target_index.isValid() and model.rowCount(target_index) > 0:
+            target_index = model.index(0, 0, target_index)
+
+        if target_index.isValid():
+            self.treeview.setCurrentIndex(target_index)
+            self.treeview.open_item(target_index)
 
     def create_connections(self):
         """Функция создания привязок"""
         self.ui.acceptPushButton.clicked.connect(self.accept)
         self.ui.cancelPushButton.clicked.connect(self.close)
+        self.ui.applyPushButton.clicked.connect(self.apply)
 
     def accept(self) -> None:
-        self.parent().user_settings.update()
+        self.apply()
         super().accept()
+
+    def apply(self) -> None:
+        parent = self.parent()
+        if parent is None:
+            return
+
+        if hasattr(parent, "user_settings"):
+            parent.user_settings.update()
+
+        apply_method = getattr(parent, "apply_user_settings", None)
+        if callable(apply_method):
+            apply_method()
