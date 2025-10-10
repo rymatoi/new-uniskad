@@ -4,7 +4,7 @@ import json
 from PySide2 import QtWidgets
 from PySide2.QtCore import QEventLoop, Slot
 from PySide2.QtGui import QIcon, QCloseEvent, Qt, QKeySequence
-from PySide2.QtWidgets import QMenu, QToolBar, QHBoxLayout, QToolButton, QWidget, QDialog, QShortcut, QDockWidget, \
+from PySide2.QtWidgets import QMenu, QToolBar, QHBoxLayout, QToolButton, QWidget, QShortcut, QDockWidget, \
     QAction, QProgressBar, QLabel
 from app import app_logger, _menu, basic_funcs
 from app.cache import DataCache
@@ -76,9 +76,10 @@ class MainWindow(QtWidgets.QMainWindow):
         self._tree_states_to_restore = {}
         self._pending_window_state_bytes = None
         self._pending_central_window_state_bytes = None
-
-        config.config.app.enable_timer(self.user_settings.get('application_close_timeout', 30))
-        config.config.app._main_window_initialized = True  # TODO test
+        self._auto_close_enabled = True
+        self._auto_close_timeout = 30
+        self._progress_bar_enabled = True
+        self._remember_window_state = True
 
         self.result = None
 
@@ -155,6 +156,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.notifications_timeout = 10000
         self.init_notifications()
 
+        self.apply_settings_from_storage()
+
         self.event_stack = EventStack()
         shortcut_undo = QShortcut(QKeySequence('Ctrl+Z'), self)
         shortcut_undo.activated.connect(self.event_stack.undo)
@@ -175,6 +178,43 @@ class MainWindow(QtWidgets.QMainWindow):
         self.notification = StackedNotifications(self)
         self.notification.setGeometry(100, 100, 600, 100)
         self.notification.hide()
+
+    def apply_settings_from_storage(self):
+        """Применение пользовательских настроек интерфейса."""
+        self._auto_close_enabled = bool(self.user_settings.get('auto_close_enabled', True))
+        self._auto_close_timeout = int(self.user_settings.get('application_close_timeout', 30) or 0)
+        if self._auto_close_timeout <= 0:
+            self._auto_close_timeout = 30
+        if self._auto_close_enabled and self._auto_close_timeout > 0:
+            config.config.app._main_window_initialized = True
+            config.config.app.enable_timer(self._auto_close_timeout)
+        else:
+            config.config.app._main_window_initialized = False
+            config.config.app.disable_timer()
+
+        self._remember_window_state = bool(self.user_settings.get('remember_window_state', True))
+
+        always_on_top = bool(self.user_settings.get('main_window_always_on_top', False))
+        flags = self.windowFlags()
+        if always_on_top:
+            if not flags & Qt.WindowStaysOnTopHint:
+                self.setWindowFlags(flags | Qt.WindowStaysOnTopHint)
+                if self.isVisible():
+                    self.show()
+        else:
+            if flags & Qt.WindowStaysOnTopHint:
+                self.setWindowFlags(flags & ~Qt.WindowStaysOnTopHint)
+                if self.isVisible():
+                    self.show()
+
+        self._progress_bar_enabled = bool(self.user_settings.get('show_progress_bar', True))
+        if not self._progress_bar_enabled:
+            self.progress_bar.setVisible(False)
+
+        notifications_timeout = int(self.user_settings.get('notifications_timeout', 10000) or 0)
+        if notifications_timeout <= 0:
+            notifications_timeout = 10000
+        self.notifications_timeout = notifications_timeout
 
     def show_notification(self, text):
         """
@@ -407,7 +447,8 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def closeEvent(self, event: QCloseEvent):
         """Выполнение действий до закрытия главного окна."""
-        self.save_windows_state()
+        if self._remember_window_state:
+            self.save_windows_state()
         sp.session.close()
         logger.info("Выход из программы.")
         super().closeEvent(event)
@@ -427,7 +468,8 @@ class MainWindow(QtWidgets.QMainWindow):
             self._current_progress_message = 'Загрузка...'
         self.progress_bar.setRange(0, 0)
         self.set_progress_bar_status(self._current_progress_message)
-        self.progress_bar.setVisible(True)
+        if self._progress_bar_enabled:
+            self.progress_bar.setVisible(True)
 
     @Slot(str)
     def set_progress_bar_status(self, message):
@@ -438,6 +480,8 @@ class MainWindow(QtWidgets.QMainWindow):
     def on_worker_finished(self):
         self.progress_bar.setRange(0, 100)
         self.progress_bar.setValue(100)
+        if not self._progress_bar_enabled:
+            self.progress_bar.setVisible(False)
 
     def run_with_progress(self, func, progress_text="Загрузка..."):
         self.result = None
@@ -539,6 +583,8 @@ class MainWindow(QtWidgets.QMainWindow):
             self._pending_central_window_state_bytes = None
 
     def save_windows_state(self):
+        if not getattr(self, '_remember_window_state', True):
+            return
         active_plugins = []
         active_project_id = None
         for dw in self.findChildren(QDockWidget):
@@ -618,6 +664,8 @@ class MainWindow(QtWidgets.QMainWindow):
             self.user_settings.remove('tree_states')
 
     def restore_windows_state(self):
+        if not getattr(self, '_remember_window_state', True):
+            return
         geometry_bytes = self.user_settings.get_bytes('main_window_geometry')
         if not geometry_bytes.isEmpty():
             try:
@@ -731,8 +779,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def show_settings(self):
         settings = SettingsDialog(self)
-        if settings.exec_() == QDialog.Accepted:
-            print('done')
+        settings.exec_()
 
     def _close(self):
         logger.info("Выход из программы.")
