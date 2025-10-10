@@ -1,5 +1,6 @@
 import base64
 import os.path
+from pathlib import Path
 
 from PySide2 import QtWidgets
 from PySide2.QtCore import QSettings, QTranslator, QLocale, QLibraryInfo
@@ -26,6 +27,22 @@ DB_MENU = False
 PROG_ID = 50
 
 logger = app_logger.get_logger(__name__)  # подключаем экземпляр логгера для логирования
+
+
+def apply_modern_stylesheet():
+    """Apply the futuristic global stylesheet if it is available."""
+
+    style_path = Path(__file__).resolve().parent.parent / "resources" / "styles" / "modern.qss"
+    try:
+        with style_path.open(encoding="utf-8") as stylesheet:
+            app.setStyleSheet(stylesheet.read())
+    except FileNotFoundError:
+        logger.warning("Файл стилей %s не найден. Интерфейс будет использован со стилем по умолчанию.", style_path)
+    except OSError as exc:
+        logger.warning("Не удалось загрузить файл стилей %s: %s", style_path, exc)
+
+
+apply_modern_stylesheet()
 
 
 class Config:
