@@ -39,6 +39,19 @@
                 </layout>
             </item>
             <item row="1" column="0">
+                <widget class="QPushButton" name="modernUiToggleButton">
+                    <property name="minimumHeight">
+                        <number>36</number>
+                    </property>
+                    <property name="text">
+                        <string>Включить новый интерфейс</string>
+                    </property>
+                    <property name="checkable">
+                        <bool>true</bool>
+                    </property>
+                </widget>
+            </item>
+            <item row="2" column="0">
                 <spacer name="verticalSpacer">
                     <property name="orientation">
                         <enum>Qt::Vertical</enum>
