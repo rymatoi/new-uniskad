@@ -191,10 +191,14 @@ class TreeView(QTreeView):
         self._is_sorted = False
         self._sort_order = None
 
-    def _node_identifier(self, index):
-        if not index or not index.isValid():
+    @staticmethod
+    def _node_from_index(index):
+        if index is None or not index.isValid():
             return None
-        node = index.internalPointer()
+        return index.internalPointer()
+
+    @staticmethod
+    def _node_identifier_from_node(node):
         if node is None:
             return None
         data = getattr(node, '_data', None)
@@ -206,6 +210,9 @@ class TreeView(QTreeView):
                 if value is not None:
                     return str(value)
         return None
+
+    def _node_identifier(self, index):
+        return self._node_identifier_from_node(self._node_from_index(index))
 
     def _build_index_map(self):
         model = self.model()
@@ -260,12 +267,11 @@ class TreeView(QTreeView):
     def _collect_open_tab_ids(self):
         opened = []
         seen = set()
-        for index in list(self._opened_tabs.keys()):
-            if index and index.isValid():
-                identifier = self._node_identifier(index)
-                if identifier and identifier not in seen:
-                    seen.add(identifier)
-                    opened.append(str(identifier))
+        for node in list(self._opened_tabs.keys()):
+            identifier = self._node_identifier_from_node(node)
+            if identifier and identifier not in seen:
+                seen.add(identifier)
+                opened.append(str(identifier))
         return opened
 
     def capture_persistent_state(self):
@@ -364,7 +370,8 @@ class TreeView(QTreeView):
 
         if active_identifier:
             target_index = index_map.get(str(active_identifier))
-            tab_widget = self._opened_tabs.get(target_index)
+            node = self._node_from_index(target_index)
+            tab_widget = self._opened_tabs.get(node)
             if tab_widget is not None:
                 def raise_tab():
                     try:
@@ -403,10 +410,11 @@ class TreeView(QTreeView):
             self._active_tab_identifier = None
 
     def _handle_tab_closed(self, index):
-        tab = self._opened_tabs.pop(index, None)
-        if not index or not index.isValid():
+        node = self._node_from_index(index)
+        tab = self._opened_tabs.pop(node, None)
+        if node is None:
             return
-        identifier = self._node_identifier(index)
+        identifier = self._node_identifier_from_node(node)
         if identifier and self._active_tab_identifier == str(identifier):
             self._active_tab_identifier = None
 
@@ -1068,14 +1076,14 @@ class TreeView(QTreeView):
         self.update_external_nodes(customized_nodes)
 
     def update_external_nodes(self, nodes):
-        index = True
         for node in nodes:
-            for _index in self._opened_tabs.keys():
-                if node == _index.internalPointer():
-                    try:
-                        self._opened_tabs[_index].refresh(index)
-                    except AttributeError as e:
-                        logger.info(f'У элемента {node.data()} нет реализации обновления содержимого вкладки.')
+            tab = self._opened_tabs.get(node)
+            if tab is None:
+                continue
+            try:
+                tab.refresh(True)
+            except AttributeError:
+                logger.info(f'У элемента {node.data()} нет реализации обновления содержимого вкладки.')
 
     def get_opened_tabs(self):
         return self._opened_tabs.values()
@@ -1131,8 +1139,10 @@ class TreeView(QTreeView):
                     else:
                         if self.HIDE_REMOVED_ITEMS:
                             self.setItemVisibility(self.model(), _index, True)
-                    if _index in self._opened_tabs.keys():
-                        self._opened_tabs[_index].close()
+                    node_ref = self._node_from_index(_index)
+                    tab = self._opened_tabs.get(node_ref)
+                    if tab is not None:
+                        tab.close()
                 else:
                     basic_funcs.error('Ошибка', str(success))
 
@@ -1158,9 +1168,14 @@ class TreeView(QTreeView):
         if not self.DOUBLE_CLICK_OPEN:
             return
 
-        if self._opened_tabs.get(index, None):
-            self._opened_tabs[index].raise_()
-            identifier = self._node_identifier(index)
+        node = self._node_from_index(index)
+        if node is None:
+            return
+
+        existing_tab = self._opened_tabs.get(node)
+        if existing_tab is not None:
+            existing_tab.raise_()
+            identifier = self._node_identifier_from_node(node)
             if identifier:
                 self._active_tab_identifier = str(identifier)
             return
@@ -1175,9 +1190,9 @@ class TreeView(QTreeView):
             children.append(dock)
 
         tab = self._link_dict.get(item_type, self._default_tab)(index, self, self.main_window)
-        self._opened_tabs[index] = tab
+        self._opened_tabs[node] = tab
 
-        identifier = self._node_identifier(index)
+        identifier = self._node_identifier_from_node(node)
         if identifier:
             identifier_str = str(identifier)
 
@@ -1271,8 +1286,10 @@ class TreeView(QTreeView):
                 self.model().dataChanged.emit(index, index)
 
                 if need_tab_update:
-                    if index in self._opened_tabs:
-                        self._opened_tabs[index].refresh(index)
+                    node = self._node_from_index(index)
+                    tab = self._opened_tabs.get(node)
+                    if tab is not None:
+                        tab.refresh(index)
 
     def insertRow(self, item, index):
         if item:
