@@ -6,7 +6,6 @@ from PySide2.QtCore import Qt, Signal
 from PySide2.QtGui import QFont, QFontDatabase
 from PySide2.QtWidgets import (
     QCheckBox,
-    QComboBox,
     QDialogButtonBox,
     QFontComboBox,
     QFormLayout,
@@ -41,8 +40,8 @@ class SettingsDialog(BaseDialog):
             "use_custom_font": False,
             "font_name": QFontDatabase.systemFont(QFontDatabase.GeneralFont).family(),
             "font_size": 10,
-            "color_theme": "system",
-            "compact_mode": False,
+            "enable_notifications": True,
+            "notifications_timeout": 10,
         }
 
         self.setWindowTitle("Настройки")
@@ -111,11 +110,28 @@ class SettingsDialog(BaseDialog):
         self.status_bar_checkbox = QCheckBox("Показывать строку состояния", self.general_tab)
         layout.addRow("", self.status_bar_checkbox)
 
-        group = QGroupBox("Сеанс", self.general_tab)
-        group.setLayout(layout)
+        session_group = QGroupBox("Сеанс", self.general_tab)
+        session_group.setLayout(layout)
+
+        notifications_layout = QFormLayout()
+        notifications_layout.setFieldGrowthPolicy(QFormLayout.ExpandingFieldsGrow)
+
+        self.notifications_enabled_checkbox = QCheckBox(
+            "Показывать всплывающие уведомления", self.general_tab
+        )
+        notifications_layout.addRow("", self.notifications_enabled_checkbox)
+
+        self.notifications_timeout_spin = QSpinBox(self.general_tab)
+        self.notifications_timeout_spin.setRange(1, 120)
+        self.notifications_timeout_spin.setSuffix(" сек")
+        notifications_layout.addRow("Время отображения:", self.notifications_timeout_spin)
+
+        notifications_group = QGroupBox("Уведомления", self.general_tab)
+        notifications_group.setLayout(notifications_layout)
 
         container_layout = QVBoxLayout(self.general_tab)
-        container_layout.addWidget(group)
+        container_layout.addWidget(session_group)
+        container_layout.addWidget(notifications_group)
         container_layout.addStretch()
 
     def _init_appearance_tab(self) -> None:
@@ -131,15 +147,6 @@ class SettingsDialog(BaseDialog):
         self.font_size_spin = QSpinBox(self.appearance_tab)
         self.font_size_spin.setRange(8, 32)
         layout.addRow("Размер шрифта:", self.font_size_spin)
-
-        self.theme_combo = QComboBox(self.appearance_tab)
-        self.theme_combo.addItem("Системная тема", "system")
-        self.theme_combo.addItem("Светлая", "light")
-        self.theme_combo.addItem("Тёмная", "dark")
-        layout.addRow("Цветовая схема:", self.theme_combo)
-
-        self.compact_mode_checkbox = QCheckBox("Компактный режим элементов", self.appearance_tab)
-        layout.addRow("", self.compact_mode_checkbox)
 
         group = QGroupBox("Оформление", self.appearance_tab)
         group.setLayout(layout)
@@ -177,13 +184,13 @@ class SettingsDialog(BaseDialog):
         self.remember_session_checkbox.stateChanged.connect(self._mark_dirty)
         self.restore_project_checkbox.stateChanged.connect(self._mark_dirty)
         self.status_bar_checkbox.stateChanged.connect(self._mark_dirty)
+        self.notifications_enabled_checkbox.stateChanged.connect(self._mark_dirty)
+        self.notifications_timeout_spin.valueChanged.connect(self._mark_dirty)
 
         # Appearance tab
         self.use_custom_font_checkbox.stateChanged.connect(self._on_use_custom_font_changed)
         self.font_combo.currentFontChanged.connect(lambda *_: self._mark_dirty())
         self.font_size_spin.valueChanged.connect(self._mark_dirty)
-        self.theme_combo.currentIndexChanged.connect(self._mark_dirty)
-        self.compact_mode_checkbox.stateChanged.connect(self._mark_dirty)
 
         # Data tab
         self.clear_session_button.clicked.connect(self._clear_saved_session)
@@ -198,20 +205,17 @@ class SettingsDialog(BaseDialog):
         self.restore_project_checkbox.setChecked(self._get_setting("restore_last_project"))
         self.status_bar_checkbox.setChecked(self._get_setting("show_status_bar"))
 
+        self.notifications_enabled_checkbox.setChecked(
+            self._get_setting("enable_notifications")
+        )
+        timeout_seconds = int(self._get_setting("notifications_timeout"))
+        self.notifications_timeout_spin.setValue(max(timeout_seconds, 1))
+
         self.use_custom_font_checkbox.setChecked(self._get_setting("use_custom_font"))
         current_font = self._get_setting("font_name")
         if current_font:
             self.font_combo.setCurrentFont(QFont(str(current_font)))
         self.font_size_spin.setValue(int(self._get_setting("font_size")))
-
-        theme_key = str(self._get_setting("color_theme"))
-        index = self.theme_combo.findData(theme_key)
-        if index != -1:
-            self.theme_combo.setCurrentIndex(index)
-        else:
-            self.theme_combo.setCurrentIndex(0)
-
-        self.compact_mode_checkbox.setChecked(self._get_setting("compact_mode"))
 
         self._update_font_controls_state()
 
@@ -265,11 +269,11 @@ class SettingsDialog(BaseDialog):
             "remember_last_session": self.remember_session_checkbox.isChecked(),
             "restore_last_project": self.restore_project_checkbox.isChecked(),
             "show_status_bar": self.status_bar_checkbox.isChecked(),
+            "enable_notifications": self.notifications_enabled_checkbox.isChecked(),
+            "notifications_timeout": int(self.notifications_timeout_spin.value()),
             "use_custom_font": self.use_custom_font_checkbox.isChecked(),
             "font_name": self.font_combo.currentText(),
             "font_size": int(self.font_size_spin.value()),
-            "color_theme": self.theme_combo.currentData(),
-            "compact_mode": self.compact_mode_checkbox.isChecked(),
         }
 
     def _apply(self) -> None:
@@ -314,8 +318,6 @@ class SettingsDialog(BaseDialog):
             "use_custom_font",
             "font_name",
             "font_size",
-            "color_theme",
-            "compact_mode",
         ]
         for key in keys:
             self.user_settings.remove(key)

@@ -4,7 +4,7 @@ from typing import Any, Dict, Optional
 
 from PySide2 import QtWidgets
 from PySide2.QtCore import QEventLoop, QSize, Slot
-from PySide2.QtGui import QIcon, QCloseEvent, Qt, QKeySequence, QFont, QPalette, QColor
+from PySide2.QtGui import QIcon, QCloseEvent, Qt, QKeySequence, QFont
 from PySide2.QtWidgets import QMenu, QToolBar, QHBoxLayout, QToolButton, QWidget, QDialog, QShortcut, QDockWidget, \
     QAction, QProgressBar, QLabel
 from app import app_logger, _menu, basic_funcs
@@ -75,8 +75,6 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.user_settings = UserSettings()
         self._default_app_font = QFont(config.config.app.font())
-        self._default_palette = QPalette(config.config.app.palette())
-        self._default_toolbar_icon_size: Optional[QSize] = None
         self._tree_states_to_restore = {}
         self._pending_window_state_bytes = None
         self._pending_central_window_state_bytes = None
@@ -156,6 +154,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.connect_triggered_funcs()
 
         self.notification = None
+        self.notifications_enabled = True
         self.notifications_timeout = 10000
         self.init_notifications()
 
@@ -185,6 +184,8 @@ class MainWindow(QtWidgets.QMainWindow):
         """
         Показывает окошко с уведомлением
         """
+        if not self.notifications_enabled:
+            return
         self.notification.show()
         self.notification.add_notification(text, self.notifications_timeout)
 
@@ -218,7 +219,6 @@ class MainWindow(QtWidgets.QMainWindow):
         # toolbar.addAction(self._move_down)
 
         self.toolbar = toolbar
-        self._default_toolbar_icon_size = toolbar.iconSize()
 
         self.role_button = QToolButton(self)
         self.role_button.setPopupMode(QToolButton.MenuButtonPopup)
@@ -787,17 +787,22 @@ class MainWindow(QtWidgets.QMainWindow):
         status_bar_visible = self._coerce_bool(setting('show_status_bar', True), default=True)
         self.statusBar().setVisible(status_bar_visible)
 
-        theme = setting('color_theme', 'system') or 'system'
-        self._apply_color_theme(str(theme))
-
-        compact_mode = self._coerce_bool(setting('compact_mode', False), default=False)
-        self._apply_compact_mode(compact_mode)
-
         use_custom_font = self._coerce_bool(setting('use_custom_font', False), default=False)
         font_name = setting('font_name', self._default_app_font.family())
         default_point_size = self._default_app_font.pointSize() if self._default_app_font.pointSize() > 0 else 10
         font_size = self._coerce_int(setting('font_size', default_point_size), default=default_point_size, minimum=6)
         self._apply_font_settings(use_custom_font, font_name, font_size)
+
+        notifications_enabled = self._coerce_bool(
+            setting('enable_notifications', True),
+            default=True,
+        )
+        notifications_timeout = self._coerce_int(
+            setting('notifications_timeout', 10),
+            default=10,
+            minimum=1,
+        )
+        self._apply_notification_settings(notifications_enabled, notifications_timeout)
 
     def _apply_font_settings(self, use_custom_font: bool, font_name: Any, font_size: int) -> None:
         if use_custom_font:
@@ -810,37 +815,11 @@ class MainWindow(QtWidgets.QMainWindow):
         else:
             config.config.app.setFont(QFont(self._default_app_font))
 
-    def _apply_color_theme(self, theme: str) -> None:
-        theme = (theme or 'system').lower()
-        if theme == 'dark':
-            palette = QPalette()
-            palette.setColor(QPalette.Window, QColor(53, 53, 53))
-            palette.setColor(QPalette.WindowText, Qt.white)
-            palette.setColor(QPalette.Base, QColor(35, 35, 35))
-            palette.setColor(QPalette.AlternateBase, QColor(53, 53, 53))
-            palette.setColor(QPalette.ToolTipBase, Qt.white)
-            palette.setColor(QPalette.ToolTipText, Qt.white)
-            palette.setColor(QPalette.Text, Qt.white)
-            palette.setColor(QPalette.Button, QColor(53, 53, 53))
-            palette.setColor(QPalette.ButtonText, Qt.white)
-            palette.setColor(QPalette.BrightText, Qt.red)
-            palette.setColor(QPalette.Highlight, QColor(142, 45, 197).darker())
-            palette.setColor(QPalette.HighlightedText, Qt.white)
-            config.config.app.setPalette(palette)
-        elif theme == 'light':
-            config.config.app.setPalette(config.config.app.style().standardPalette())
-        else:
-            config.config.app.setPalette(QPalette(self._default_palette))
-
-    def _apply_compact_mode(self, enabled: bool) -> None:
-        if hasattr(self, 'toolbar') and self.toolbar is not None:
-            if enabled:
-                self.toolbar.setIconSize(QSize(16, 16))
-                self.toolbar.setStyleSheet("QToolButton { padding: 2px 6px; }")
-            else:
-                size = self._default_toolbar_icon_size or QSize(24, 24)
-                self.toolbar.setIconSize(size)
-                self.toolbar.setStyleSheet("")
+    def _apply_notification_settings(self, enabled: bool, timeout_seconds: int) -> None:
+        self.notifications_enabled = enabled
+        self.notifications_timeout = max(1, int(timeout_seconds)) * 1000
+        if not enabled and self.notification is not None:
+            self.notification.hide()
 
     @staticmethod
     def _coerce_bool(value: Any, default: bool = False) -> bool:
