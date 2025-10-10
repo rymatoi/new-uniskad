@@ -14,6 +14,7 @@ from app.plugins import *
 from app.plugins.admin_users.widgets.docks import AdminUsersDockWidget
 from app.plugins.base_state.widgets import TreeView, DockWidget
 from app.plugins.project.widgets.docks import ProjectDockWidget
+from app.ui_theme import apply_modern_theme, coerce_to_bool
 from db import sp
 from db._session import Worker
 from db.user_settings import UserSettings
@@ -85,6 +86,12 @@ class MainWindow(QtWidgets.QMainWindow):
         self.ui = Ui_MainWindow()
         self.ui.setupUi(self)
 
+        central_widget = self.centralWidget()
+        if central_widget is not None:
+            central_widget.setAttribute(Qt.WA_StyledBackground, True)
+
+        self.setAttribute(Qt.WA_StyledBackground, True)
+
         self.user = None
         self.init_user()
 
@@ -143,6 +150,11 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.toolbar_layout = QHBoxLayout(self)
 
+        stored_theme = self.user_settings.get('use_modern_ui')
+        initial_theme_state = coerce_to_bool(stored_theme, True)
+        self.modern_ui_enabled = initial_theme_state
+        self.set_modern_ui_enabled(initial_theme_state, persist=False)
+
         self.init_modes()
         self.init_menu()
         self.init_toolbar()
@@ -175,6 +187,20 @@ class MainWindow(QtWidgets.QMainWindow):
         self.notification = StackedNotifications(self)
         self.notification.setGeometry(100, 100, 600, 100)
         self.notification.hide()
+        if self.notification:
+            self.notification.refresh_theme()
+
+    def set_modern_ui_enabled(self, enabled: bool, persist: bool = True):
+        """Toggle the modern light interface theme."""
+        enabled = bool(enabled)
+        self.modern_ui_enabled = enabled
+        apply_modern_theme(enabled, base_widget=self)
+
+        if persist:
+            self.user_settings.set('use_modern_ui', enabled)
+
+        if getattr(self, 'notification', None):
+            self.notification.refresh_theme()
 
     def show_notification(self, text):
         """
@@ -295,6 +321,9 @@ class MainWindow(QtWidgets.QMainWindow):
             setattr(self, f"{dock_name}_tree_dock_widget", dock_widget)
             dock_widget.setWindowTitle(dock_data.title)
             dock_widget.setWidget(TreeView(self))
+            dock_widget.setAttribute(Qt.WA_StyledBackground, True)
+            if dock_widget.widget():
+                dock_widget.widget().setAttribute(Qt.WA_StyledBackground, True)
             self.addDockWidget(dock_data.area, dock_widget)
             dock_widget.hide()
 

@@ -1,5 +1,7 @@
 from PySide2.QtGui import QFontDatabase
 from PySide2.QtWidgets import QWidget
+
+from app.ui_theme import coerce_to_bool
 from resources.ui.ui_py.ui_settings_appearance import Ui_SettingsAppearance
 
 
@@ -26,6 +28,7 @@ class AppearanceTab(QWidget):
         self.ui.fontComboBox.currentTextChanged.connect(lambda: self.prop_changed('font_name'))
         self.ui.fontSizeComboBox.currentTextChanged.connect(lambda: self.prop_changed('font_size'))
         self.ui.customFontCheckBox.stateChanged.connect(lambda: self.prop_changed('use_custom_font'))
+        self.ui.modernUiCheckBox.toggled.connect(self._on_modern_ui_toggled)
 
     def prop_changed(self, prop_name):
         if self.mw is None:
@@ -59,3 +62,13 @@ class AppearanceTab(QWidget):
         font_size = self.mw.user_settings.get('font_size')
         if font_size:
             self.ui.fontSizeComboBox.setCurrentText(str(font_size))
+
+        use_modern_ui = coerce_to_bool(self.mw.user_settings.get('use_modern_ui'), True)
+        block = self.ui.modernUiCheckBox.blockSignals(True)
+        self.ui.modernUiCheckBox.setChecked(use_modern_ui)
+        self.ui.modernUiCheckBox.blockSignals(block)
+
+    def _on_modern_ui_toggled(self, checked: bool):
+        if self.mw is None:
+            return
+        self.mw.set_modern_ui_enabled(checked, persist=True)
