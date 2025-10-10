@@ -1,5 +1,6 @@
 import ast
 import json
+from pathlib import Path
 
 from PySide2 import QtWidgets
 from PySide2.QtCore import QEventLoop, Slot
@@ -84,6 +85,9 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.ui = Ui_MainWindow()
         self.ui.setupUi(self)
+        self.setObjectName("MainWindow")
+
+        self.apply_futuristic_stylesheet()
 
         self.user = None
         self.init_user()
@@ -116,11 +120,15 @@ class MainWindow(QtWidgets.QMainWindow):
         }
 
         self.progress_bar = QProgressBar()
+        self.progress_bar.setObjectName("GlobalProgressBar")
         self.progress_bar.setRange(0, 0)  # Indeterminate mode
         self.progress_bar.setVisible(False)
         self._current_progress_message = ''
 
+        self.statusBar().setObjectName("MainStatusBar")
+
         self.status_label = QLabel()
+        self.status_label.setObjectName("StatusLabel")
 
         self.statusBar().addWidget(self.progress_bar)
         self.statusBar().addWidget(self.status_label)
@@ -158,6 +166,24 @@ class MainWindow(QtWidgets.QMainWindow):
         self.event_stack = EventStack()
         shortcut_undo = QShortcut(QKeySequence('Ctrl+Z'), self)
         shortcut_undo.activated.connect(self.event_stack.undo)
+
+    def apply_futuristic_stylesheet(self):
+        """Load and apply the futuristic global stylesheet."""
+        style_path = (
+            Path(__file__).resolve().parent.parent / 'resources' / 'styles' / 'futuristic.qss'
+        )
+
+        if not style_path.exists():
+            logger.warning("Stylesheet not found at %s", style_path)
+            return
+
+        try:
+            stylesheet = style_path.read_text(encoding='utf-8')
+        except OSError as exc:
+            logger.warning("Unable to read stylesheet %s: %s", style_path, exc)
+            return
+
+        config.config.app.setStyleSheet(stylesheet)
 
         shortcut_redo = QShortcut(QKeySequence('Ctrl+Shift+Z'), self)
         shortcut_redo.activated.connect(self.event_stack.redo)
