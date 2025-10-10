@@ -7,34 +7,21 @@ class Notification(QWidget):
     def __init__(self, text, timeout, parent=None):
         super().__init__(parent)
 
-        # Set background color and rounded corners on frame
         self.frame = QFrame(self)
-        self.frame.setStyleSheet("background-color: #3c3f41; border-radius: 5px;")
+        self.frame.setObjectName("NotificationFrame")
         self.frame.setFrameShape(QFrame.StyledPanel)
 
         # Set label
         self.label = QLabel(self._get_short_text(text), self.frame)
-        self.label.setStyleSheet("color: white; padding: 10px;")
+        self.label.setObjectName("NotificationLabel")
+        self.label.setStyleSheet("color: #f8fafc; padding: 10px;")
         self.label.setToolTip(text)
 
         # Set close button
-        self.close_button = QPushButton("X", self.frame)
-        self.close_button.setFixedSize(20, 20)
-        self.close_button.setStyleSheet(
-            """
-    QPushButton {
-        color: white;
-        font-weight: bold;
-        background-color: transparent;
-        border: none;
-        margin-right: 5px;
-    }
-    QPushButton:hover {
-        background-color: #2c2f30;
-        border-radius: 10px;
-    }
-    """
-        )
+        self.close_button = QPushButton("✕", self.frame)
+        self.close_button.setObjectName("NotificationCloseButton")
+        self.close_button.setFixedSize(28, 28)
+        self.close_button.setCursor(Qt.PointingHandCursor)
         self.close_button.clicked.connect(self.remove_notification)
 
         # Set timer to hide notification after timeout
