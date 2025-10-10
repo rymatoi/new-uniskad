@@ -3,7 +3,7 @@ import json
 
 from PySide2 import QtWidgets
 from PySide2.QtCore import QEventLoop, Slot
-from PySide2.QtGui import QIcon, QCloseEvent, Qt, QKeySequence
+from PySide2.QtGui import QIcon, QCloseEvent, Qt, QKeySequence, QFont
 from PySide2.QtWidgets import QMenu, QToolBar, QHBoxLayout, QToolButton, QWidget, QDialog, QShortcut, QDockWidget, \
     QAction, QProgressBar, QLabel
 from app import app_logger, _menu, basic_funcs
@@ -73,6 +73,8 @@ class MainWindow(QtWidgets.QMainWindow):
         super(MainWindow, self).__init__()
 
         self.user_settings = UserSettings()
+        app_instance = QtWidgets.QApplication.instance()
+        self._default_font = QFont(app_instance.font()) if app_instance else QFont()
         self._tree_states_to_restore = {}
         self._pending_window_state_bytes = None
         self._pending_central_window_state_bytes = None
@@ -84,6 +86,8 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.ui = Ui_MainWindow()
         self.ui.setupUi(self)
+
+        self.apply_user_settings()
 
         self.user = None
         self.init_user()
@@ -733,6 +737,43 @@ class MainWindow(QtWidgets.QMainWindow):
         settings = SettingsDialog(self)
         if settings.exec_() == QDialog.Accepted:
             print('done')
+
+    def apply_user_settings(self) -> None:
+        app_instance = QtWidgets.QApplication.instance()
+        if app_instance is None:
+            return
+
+        use_custom_font = self.user_settings.get('use_custom_font', False)
+        if isinstance(use_custom_font, str):
+            use_custom_font = use_custom_font.lower() == 'true'
+
+        font = QFont(self._default_font)
+        if use_custom_font:
+            font_name = self.user_settings.get('font_name', font.family())
+            if font_name:
+                font.setFamily(str(font_name))
+
+            font_size_value = self.user_settings.get('font_size', font.pointSize())
+            try:
+                font_size = int(font_size_value)
+            except (TypeError, ValueError):
+                font_size = font.pointSize()
+            if font_size > 0:
+                font.setPointSize(font_size)
+
+        app_instance.setFont(font)
+        self.setFont(font)
+
+        tree_font_name = font.family()
+        tree_font_size = font.pointSize()
+        for tree_view in self.findChildren(TreeView):
+            model = tree_view.model()
+            if model is None:
+                continue
+            model.font_name = tree_font_name
+            model.font_size = tree_font_size
+            model.layoutChanged.emit()
+            tree_view.viewport().update()
 
     def _close(self):
         logger.info("Выход из программы.")

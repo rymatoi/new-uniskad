@@ -11,13 +11,20 @@ logger = app_logger.get_logger(__name__)
 class SettingsTreeView(TreeView):
     def __init__(self, parent, main_window):
         super().__init__(parent, main_window)
-        # self.treeview_menu = self._load_menu('project', 'project_treeview')
+        self.DISABLE_MENU = True
+        self.setHeaderHidden(True)
         self.link_nodes_with_tabs({
             SettingsNode: AppearanceTab
         })
 
+    def _load_menu(self, mode='base_state', location='treeview'):
+        return []
+
     def open_item(self, index):
-        if self._opened_tabs.get(index, None):
+        if not index.isValid():
+            return
+
+        if self.model() and self.model().rowCount(index) > 0:
             return
 
         if len(self._parent.ui.widget.children()):
@@ -26,6 +33,7 @@ class SettingsTreeView(TreeView):
             self._parent.ui.widget.clearLayout(layout)
             layout.deleteLater()
             tab.deleteLater()
+        self._opened_tabs.clear()
 
         item = index.internalPointer()
         item_type = self.model().item_types.get(item.internal_type(), 'root')
