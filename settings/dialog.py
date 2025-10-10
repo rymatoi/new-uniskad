@@ -1,12 +1,14 @@
+from typing import List
+
 from PySide2.QtCore import Qt
 from PySide2.QtGui import QIcon
 
 from app import app_logger
-from db import sp
 from dialogs.base import BaseDialog
 from resources.ui.ui_py.ui_settings import Ui_SettingsDialog
-from settings.models import SettingsTreeModel
+from settings.models import SettingsDefinition, SettingsTreeModel
 from settings.widgets.tree import SettingsTreeView
+from settings.widgets.tabs import AppearanceTab
 
 logger = app_logger.get_logger(__name__)
 
@@ -37,17 +39,38 @@ class SettingsDialog(BaseDialog):
         self.ui.treeView.deleteLater()
         self.treeview.show()
         model = SettingsTreeModel()
-
-        tree_items = sp.get_settings_tree()
-        model.ini_tree(tree_items)
+        model.build_from_definitions(self._create_settings_definitions())
 
         self.treeview.setModel(model)
+
+        if model.rowCount():
+            first_index = model.index(0, 0)
+            if first_index.isValid():
+                self.treeview.setCurrentIndex(first_index)
+                self.treeview.open_item(first_index)
 
     def create_connections(self):
         """Функция создания привязок"""
         self.ui.acceptPushButton.clicked.connect(self.accept)
         self.ui.cancelPushButton.clicked.connect(self.close)
+        self.ui.applyPushButton.clicked.connect(self.apply_settings)
 
     def accept(self) -> None:
-        self.parent().user_settings.update()
+        self.apply_settings()
         super().accept()
+
+    def apply_settings(self) -> None:
+        parent = self.parent()
+        if parent is not None and hasattr(parent, 'user_settings'):
+            parent.user_settings.update()
+
+    @staticmethod
+    def _create_settings_definitions() -> List[SettingsDefinition]:
+        return [
+            SettingsDefinition(
+                identifier=1,
+                parent_id=0,
+                title='Внешний вид',
+                properties={'tab_class': AppearanceTab},
+            ),
+        ]
