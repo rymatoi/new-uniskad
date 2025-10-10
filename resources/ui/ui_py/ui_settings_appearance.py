@@ -20,6 +20,11 @@ class Ui_SettingsAppearance(object):
         SettingsAppearance.resize(400, 300)
         self.gridLayout = QGridLayout(SettingsAppearance)
         self.gridLayout.setObjectName(u"gridLayout")
+        self.modernUiCheckBox = QCheckBox(SettingsAppearance)
+        self.modernUiCheckBox.setObjectName(u"modernUiCheckBox")
+
+        self.gridLayout.addWidget(self.modernUiCheckBox, 0, 0, 1, 1)
+
         self.horizontalLayout = QHBoxLayout()
         self.horizontalLayout.setObjectName(u"horizontalLayout")
         self.customFontCheckBox = QCheckBox(SettingsAppearance)
@@ -42,11 +47,11 @@ class Ui_SettingsAppearance(object):
 
         self.horizontalLayout.addWidget(self.fontSizeComboBox)
 
-        self.gridLayout.addLayout(self.horizontalLayout, 0, 0, 1, 1)
+        self.gridLayout.addLayout(self.horizontalLayout, 1, 0, 1, 1)
 
         self.verticalSpacer = QSpacerItem(20, 251, QSizePolicy.Minimum, QSizePolicy.Expanding)
 
-        self.gridLayout.addItem(self.verticalSpacer, 1, 0, 1, 1)
+        self.gridLayout.addItem(self.verticalSpacer, 2, 0, 1, 1)
 
         self.retranslateUi(SettingsAppearance)
 
@@ -56,6 +61,8 @@ class Ui_SettingsAppearance(object):
 
     def retranslateUi(self, SettingsAppearance):
         SettingsAppearance.setWindowTitle(QCoreApplication.translate("SettingsAppearance", u"Form", None))
+        self.modernUiCheckBox.setText(QCoreApplication.translate("SettingsAppearance",
+                                                                  u"\u0412\u043a\u043b\u044e\u0447\u0438\u0442\u044c \u043d\u043e\u0432\u044b\u0439 UI", None))
         self.customFontCheckBox.setText(QCoreApplication.translate("SettingsAppearance",
                                                                    u"\u0418\u0441\u043f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u0442\u044c \u0441\u0432\u043e\u0439 \u0448\u0440\u0438\u0444\u0442:",
                                                                    None))
