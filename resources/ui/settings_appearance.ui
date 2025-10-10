@@ -6,8 +6,8 @@
             <rect>
                 <x>0</x>
                 <y>0</y>
-                <width>400</width>
-                <height>300</height>
+                <width>420</width>
+                <height>320</height>
             </rect>
         </property>
         <property name="windowTitle">
@@ -15,26 +15,57 @@
         </property>
         <layout class="QGridLayout" name="gridLayout">
             <item row="0" column="0">
-                <layout class="QHBoxLayout" name="horizontalLayout">
+                <layout class="QVBoxLayout" name="mainLayout">
                     <item>
-                        <widget class="QCheckBox" name="customFontCheckBox">
+                        <widget class="QLabel" name="modernUiTitleLabel">
                             <property name="text">
-                                <string>Использовать свой шрифт:</string>
+                                <string>Интерфейс</string>
+                            </property>
+                            <property name="styleSheet">
+                                <string notr="true">font-weight: 600;</string>
                             </property>
                         </widget>
                     </item>
                     <item>
-                        <widget class="QComboBox" name="fontComboBox"/>
-                    </item>
-                    <item>
-                        <widget class="QLabel" name="label">
+                        <widget class="QCheckBox" name="modernUiCheckBox">
                             <property name="text">
-                                <string>Размер:</string>
+                                <string>Использовать обновлённый интерфейс (2025)</string>
                             </property>
                         </widget>
                     </item>
                     <item>
-                        <widget class="QComboBox" name="fontSizeComboBox"/>
+                        <widget class="QLabel" name="modernUiDescriptionLabel">
+                            <property name="text">
+                                <string>Современная светлая тема с мягкими цветами и плавными границами.</string>
+                            </property>
+                            <property name="wordWrap">
+                                <bool>true</bool>
+                            </property>
+                        </widget>
+                    </item>
+                    <item>
+                        <layout class="QHBoxLayout" name="horizontalLayout">
+                            <item>
+                                <widget class="QCheckBox" name="customFontCheckBox">
+                                    <property name="text">
+                                        <string>Использовать свой шрифт:</string>
+                                    </property>
+                                </widget>
+                            </item>
+                            <item>
+                                <widget class="QComboBox" name="fontComboBox"/>
+                            </item>
+                            <item>
+                                <widget class="QLabel" name="label">
+                                    <property name="text">
+                                        <string>Размер:</string>
+                                    </property>
+                                </widget>
+                            </item>
+                            <item>
+                                <widget class="QComboBox" name="fontSizeComboBox"/>
+                            </item>
+                        </layout>
                     </item>
                 </layout>
             </item>

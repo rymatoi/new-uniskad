@@ -4,38 +4,24 @@ from PySide2.QtCore import Qt, QTimer, QPoint
 
 
 class Notification(QWidget):
-    def __init__(self, text, timeout, parent=None):
+    def __init__(self, text, timeout, parent=None, modern_theme=False):
         super().__init__(parent)
 
         # Set background color and rounded corners on frame
         self.frame = QFrame(self)
-        self.frame.setStyleSheet("background-color: #3c3f41; border-radius: 5px;")
         self.frame.setFrameShape(QFrame.StyledPanel)
 
         # Set label
         self.label = QLabel(self._get_short_text(text), self.frame)
-        self.label.setStyleSheet("color: white; padding: 10px;")
         self.label.setToolTip(text)
 
         # Set close button
-        self.close_button = QPushButton("X", self.frame)
+        self.close_button = QPushButton("×", self.frame)
         self.close_button.setFixedSize(20, 20)
-        self.close_button.setStyleSheet(
-            """
-    QPushButton {
-        color: white;
-        font-weight: bold;
-        background-color: transparent;
-        border: none;
-        margin-right: 5px;
-    }
-    QPushButton:hover {
-        background-color: #2c2f30;
-        border-radius: 10px;
-    }
-    """
-        )
         self.close_button.clicked.connect(self.remove_notification)
+
+        self._modern_theme = modern_theme
+        self.apply_theme(modern_theme)
 
         # Set timer to hide notification after timeout
         self.timer = QTimer(self)
@@ -69,12 +55,54 @@ class Notification(QWidget):
         self.parent().remove_notification(self)
         # self.deleteLater()
 
+    def apply_theme(self, modern_theme: bool):
+        self._modern_theme = modern_theme
+        if modern_theme:
+            self.frame.setStyleSheet(
+                "background-color: #ffffff; border-radius: 10px; border: 1px solid #dad3cb;"
+            )
+            self.label.setStyleSheet("color: #2f2b2a; padding: 10px;")
+            self.close_button.setStyleSheet(
+                """
+    QPushButton {
+        color: #ff7e67;
+        font-weight: bold;
+        background-color: transparent;
+        border: none;
+        margin-right: 8px;
+    }
+    QPushButton:hover {
+        background-color: #ffe1d6;
+        border-radius: 10px;
+    }
+    """
+            )
+        else:
+            self.frame.setStyleSheet("background-color: #3c3f41; border-radius: 5px;")
+            self.label.setStyleSheet("color: white; padding: 10px;")
+            self.close_button.setStyleSheet(
+                """
+    QPushButton {
+        color: white;
+        font-weight: bold;
+        background-color: transparent;
+        border: none;
+        margin-right: 5px;
+    }
+    QPushButton:hover {
+        background-color: #2c2f30;
+        border-radius: 10px;
+    }
+    """
+            )
+
 
 class StackedNotifications(QWidget):
-    def __init__(self, parent=None, max_notifications=10):
+    def __init__(self, parent=None, max_notifications=10, modern_theme=False):
         super().__init__(parent, Qt.WindowStaysOnTopHint | Qt.FramelessWindowHint)
 
         self.max_notifications = max_notifications
+        self._modern_theme = modern_theme
 
         # Set background color to transparent
         self.setAttribute(Qt.WA_TranslucentBackground)
@@ -105,7 +133,7 @@ class StackedNotifications(QWidget):
             self._notifications.pop(0)
 
         # Create notification and add to layout
-        notification = Notification(text, timeout, self)
+        notification = Notification(text, timeout, self, self._modern_theme)
         self._notifications.append(notification)
         self.layout.addWidget(notification)
 
@@ -124,11 +152,13 @@ class StackedNotifications(QWidget):
     def remove_notification(self, notification):
         # Remove notification from layout
         self.layout.removeWidget(notification)
+        if notification in self._notifications:
+            self._notifications.remove(notification)
 
         # Update widget height
         self.update_height(notification)
 
-        if self._notifications == 0:
+        if len(self._notifications) == 0:
             self.hide()
 
     def update_position(self):
@@ -163,3 +193,8 @@ class StackedNotifications(QWidget):
 
         # Set position of the notification widget
         self.update_position()
+
+    def set_modern_theme(self, modern_theme: bool):
+        self._modern_theme = modern_theme
+        for notification in list(self._notifications):
+            notification.apply_theme(modern_theme)

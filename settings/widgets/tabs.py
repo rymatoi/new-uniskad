@@ -26,6 +26,7 @@ class AppearanceTab(QWidget):
         self.ui.fontComboBox.currentTextChanged.connect(lambda: self.prop_changed('font_name'))
         self.ui.fontSizeComboBox.currentTextChanged.connect(lambda: self.prop_changed('font_size'))
         self.ui.customFontCheckBox.stateChanged.connect(lambda: self.prop_changed('use_custom_font'))
+        self.ui.modernUiCheckBox.stateChanged.connect(lambda: self.prop_changed('use_modern_ui'))
 
     def prop_changed(self, prop_name):
         if self.mw is None:
@@ -37,6 +38,11 @@ class AppearanceTab(QWidget):
             self.mw.user_settings.set('font_size', self.ui.fontSizeComboBox.currentText())
         elif prop_name == 'use_custom_font':
             self.mw.user_settings.set('use_custom_font', self.ui.customFontCheckBox.isChecked())
+        elif prop_name == 'use_modern_ui':
+            is_enabled = self.ui.modernUiCheckBox.isChecked()
+            self.mw.user_settings.set('use_modern_ui', is_enabled)
+            if hasattr(self.mw, 'apply_user_interface_theme'):
+                self.mw.apply_user_interface_theme()
 
     def init_default_values(self):
         font_families = QFontDatabase().families()
@@ -59,3 +65,9 @@ class AppearanceTab(QWidget):
         font_size = self.mw.user_settings.get('font_size')
         if font_size:
             self.ui.fontSizeComboBox.setCurrentText(str(font_size))
+
+        use_modern_ui = self.mw.user_settings.get('use_modern_ui')
+        if isinstance(use_modern_ui, str):
+            use_modern_ui = use_modern_ui.lower() == 'true'
+        if use_modern_ui is not None:
+            self.ui.modernUiCheckBox.setChecked(bool(use_modern_ui))
