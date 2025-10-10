@@ -294,6 +294,12 @@ class Session:
                 return self.run_sync(self.execute(query, *args))
         except Exception as e:
             logger.exception("Error executing call for %s", query)
+            if self.main_window:
+                self.main_window.show_error_notification(
+                    "Не удалось выполнить запрос",
+                    details=str(e),
+                )
+            return None
 
     def stored_procedure(self, modifying=False, result_type=None, description=None, autocommit=False):
         def decorator(func):
@@ -350,6 +356,19 @@ class Session:
                     if 'seslogin' in str(result):
                         self.call('checkuserpassword', self._login, self._password)
                     return result
+
+                if isinstance(result, Exception):
+                    logger.error(
+                        "Stored procedure %s returned an exception: %s",
+                        func.__name__,
+                        result,
+                    )
+                    if self.main_window:
+                        self.main_window.show_error_notification(
+                            "Ошибка при выполнении процедуры",
+                            details=str(result),
+                        )
+                    return None
 
                 return parse_obj_as(return_type, result)
 
