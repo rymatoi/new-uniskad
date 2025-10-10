@@ -3,9 +3,9 @@ import json
 
 from PySide2 import QtWidgets
 from PySide2.QtCore import QEventLoop, Slot
-from PySide2.QtGui import QIcon, QCloseEvent, Qt, QKeySequence
-from PySide2.QtWidgets import QMenu, QToolBar, QHBoxLayout, QToolButton, QWidget, QDialog, QShortcut, QDockWidget, \
-    QAction, QProgressBar, QLabel
+from PySide2.QtGui import QIcon, QCloseEvent, Qt, QKeySequence, QPalette, QColor, QFont
+from PySide2.QtWidgets import (QMenu, QToolBar, QHBoxLayout, QToolButton, QWidget, QDialog, QShortcut, QDockWidget,
+                               QAction, QProgressBar, QLabel, QMessageBox, QStyleFactory)
 from app import app_logger, _menu, basic_funcs
 from app.cache import DataCache
 from app.history_manager.history_manager import EventStack
@@ -73,6 +73,29 @@ class MainWindow(QtWidgets.QMainWindow):
         super(MainWindow, self).__init__()
 
         self.user_settings = UserSettings()
+        app_instance = QtWidgets.QApplication.instance()
+        self._default_app_font = app_instance.font() if app_instance else QtWidgets.QApplication.font()
+        self._default_style_sheet = app_instance.styleSheet() if app_instance else ''
+        self._system_palette = app_instance.palette() if app_instance else QPalette()
+        fusion_style = QStyleFactory.create('Fusion')
+        self._light_palette = fusion_style.standardPalette() if fusion_style else QPalette(self._system_palette)
+        self._dark_palette = self._create_dark_palette()
+        default_font_size = self._default_app_font.pointSize()
+        if default_font_size <= 0:
+            default_font_size = int(self._default_app_font.pointSizeF() or 12)
+        self._default_font_size = default_font_size
+        self._pending_show_maximized = False
+        self._remember_geometry = bool(self.user_settings.get(SettingsDialog.GENERAL_REMEMBER_GEOMETRY, True))
+        self._confirm_on_exit = bool(self.user_settings.get(SettingsDialog.GENERAL_CONFIRM_ON_EXIT, False))
+        self._start_maximized = bool(self.user_settings.get(SettingsDialog.GENERAL_START_MAXIMIZED, False))
+        self._show_status_bar = bool(self.user_settings.get(SettingsDialog.GENERAL_SHOW_STATUS_BAR, True))
+        self._use_custom_font = bool(self.user_settings.get(SettingsDialog.APPEARANCE_CUSTOM_FONT, False))
+        self._custom_font_family = self.user_settings.get(
+            SettingsDialog.APPEARANCE_FONT_FAMILY, self._default_app_font.family())
+        self._custom_font_size = int(self.user_settings.get(
+            SettingsDialog.APPEARANCE_FONT_SIZE, self._default_font_size))
+        self._current_theme = self.user_settings.get(SettingsDialog.APPEARANCE_THEME, 'system')
+
         self._tree_states_to_restore = {}
         self._pending_window_state_bytes = None
         self._pending_central_window_state_bytes = None
@@ -124,6 +147,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.statusBar().addWidget(self.progress_bar)
         self.statusBar().addWidget(self.status_label)
+        self.statusBar().setVisible(self._show_status_bar)
 
         self.work_data = None
         self.admin_roles = None
@@ -163,6 +187,146 @@ class MainWindow(QtWidgets.QMainWindow):
         shortcut_redo.activated.connect(self.event_stack.redo)
 
         self.restore_windows_state()
+        self.apply_user_preferences()
+
+    def _create_dark_palette(self) -> QPalette:
+        palette = QPalette(self._system_palette)
+        palette.setColor(QPalette.Window, QColor(45, 45, 45))
+        palette.setColor(QPalette.WindowText, Qt.white)
+        palette.setColor(QPalette.Base, QColor(36, 36, 36))
+        palette.setColor(QPalette.AlternateBase, QColor(45, 45, 45))
+        palette.setColor(QPalette.ToolTipBase, Qt.white)
+        palette.setColor(QPalette.ToolTipText, Qt.white)
+        palette.setColor(QPalette.Text, Qt.white)
+        palette.setColor(QPalette.Button, QColor(45, 45, 45))
+        palette.setColor(QPalette.ButtonText, Qt.white)
+        palette.setColor(QPalette.BrightText, Qt.red)
+        palette.setColor(QPalette.Highlight, QColor(90, 122, 214))
+        palette.setColor(QPalette.HighlightedText, Qt.white)
+        palette.setColor(QPalette.Disabled, QPalette.ButtonText, QColor(120, 120, 120))
+        palette.setColor(QPalette.Disabled, QPalette.WindowText, QColor(120, 120, 120))
+        palette.setColor(QPalette.Disabled, QPalette.Text, QColor(120, 120, 120))
+        palette.setColor(QPalette.Disabled, QPalette.HighlightedText, QColor(180, 180, 180))
+        return palette
+
+    @staticmethod
+    def _coerce_bool(value) -> bool:
+        if isinstance(value, str):
+            return value.lower() in ('1', 'true', 'yes', 'on')
+        return bool(value)
+
+    def _load_preferences(self) -> dict:
+        defaults = {
+            SettingsDialog.GENERAL_START_MAXIMIZED: False,
+            SettingsDialog.GENERAL_REMEMBER_GEOMETRY: True,
+            SettingsDialog.GENERAL_SHOW_STATUS_BAR: True,
+            SettingsDialog.GENERAL_CONFIRM_ON_EXIT: False,
+            SettingsDialog.APPEARANCE_CUSTOM_FONT: False,
+            SettingsDialog.APPEARANCE_FONT_FAMILY: self._default_app_font.family(),
+            SettingsDialog.APPEARANCE_FONT_SIZE: self._default_font_size,
+            SettingsDialog.APPEARANCE_THEME: 'system'
+        }
+        bool_keys = {
+            SettingsDialog.GENERAL_START_MAXIMIZED,
+            SettingsDialog.GENERAL_REMEMBER_GEOMETRY,
+            SettingsDialog.GENERAL_SHOW_STATUS_BAR,
+            SettingsDialog.GENERAL_CONFIRM_ON_EXIT,
+            SettingsDialog.APPEARANCE_CUSTOM_FONT
+        }
+        preferences = {}
+        for key, default in defaults.items():
+            value = self.user_settings.get(key, default)
+            if key in bool_keys:
+                value = self._coerce_bool(value)
+            elif key == SettingsDialog.APPEARANCE_FONT_SIZE:
+                try:
+                    value = int(value)
+                except (TypeError, ValueError):
+                    value = self._default_font_size
+            elif value is None:
+                value = default
+            preferences[key] = value
+        return preferences
+
+    def apply_user_preferences(self, override_values=None):
+        preferences = self._load_preferences()
+        if override_values:
+            preferences.update(override_values)
+
+        self._remember_geometry = bool(preferences[SettingsDialog.GENERAL_REMEMBER_GEOMETRY])
+        self._confirm_on_exit = bool(preferences[SettingsDialog.GENERAL_CONFIRM_ON_EXIT])
+        self._start_maximized = bool(preferences[SettingsDialog.GENERAL_START_MAXIMIZED])
+        self._show_status_bar = bool(preferences[SettingsDialog.GENERAL_SHOW_STATUS_BAR])
+        self.statusBar().setVisible(self._show_status_bar)
+
+        if self._start_maximized:
+            if self.isVisible():
+                self.showMaximized()
+            else:
+                self._pending_show_maximized = True
+        else:
+            if self.isVisible() and self.isMaximized():
+                self.showNormal()
+            self._pending_show_maximized = False
+
+        self._use_custom_font = bool(preferences[SettingsDialog.APPEARANCE_CUSTOM_FONT])
+        font_family = preferences[SettingsDialog.APPEARANCE_FONT_FAMILY] or self._default_app_font.family()
+        font_size = int(preferences[SettingsDialog.APPEARANCE_FONT_SIZE])
+        if font_size <= 0:
+            font_size = self._default_font_size
+        self._custom_font_family = font_family
+        self._custom_font_size = font_size
+        theme_value = preferences.get(SettingsDialog.APPEARANCE_THEME, 'system') or 'system'
+        self._current_theme = theme_value
+
+        if not self._remember_geometry:
+            self._remove_saved_geometry()
+
+        self._apply_font()
+        self._apply_theme(self._current_theme)
+
+    def _apply_font(self) -> None:
+        app = QtWidgets.QApplication.instance()
+        if app is None:
+            return
+
+        if self._use_custom_font:
+            font = QFont(self._custom_font_family, self._custom_font_size)
+            if font.pointSize() <= 0:
+                font.setPointSize(self._default_font_size)
+            app.setFont(font)
+            self.setFont(font)
+        else:
+            app.setFont(self._default_app_font)
+            self.setFont(self._default_app_font)
+
+    def _apply_theme(self, theme_name: str) -> None:
+        app = QtWidgets.QApplication.instance()
+        if app is None:
+            return
+
+        if theme_name == 'dark':
+            app.setPalette(self._dark_palette)
+            app.setStyleSheet(self._default_style_sheet)
+        elif theme_name == 'light':
+            app.setPalette(self._light_palette)
+            app.setStyleSheet(self._default_style_sheet)
+        else:
+            app.setPalette(self._system_palette)
+            app.setStyleSheet(self._default_style_sheet)
+
+    def _remove_saved_geometry(self) -> None:
+        self.user_settings.remove('main_window_geometry')
+        self.user_settings.remove('main_window_state')
+        self.user_settings.remove('central_window_state')
+        self._pending_window_state_bytes = None
+        self._pending_central_window_state_bytes = None
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        if self._pending_show_maximized:
+            self.showMaximized()
+            self._pending_show_maximized = False
 
     def show_message_sb(self, message, timeout=5000):
         pass
@@ -407,6 +571,18 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def closeEvent(self, event: QCloseEvent):
         """Выполнение действий до закрытия главного окна."""
+        if getattr(self, '_confirm_on_exit', False):
+            result = QMessageBox.question(
+                self,
+                'Выход',
+                'Вы действительно хотите завершить работу приложения?',
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No
+            )
+            if result != QMessageBox.Yes:
+                event.ignore()
+                return
+
         self.save_windows_state()
         sp.session.close()
         logger.info("Выход из программы.")
@@ -565,26 +741,29 @@ class MainWindow(QtWidgets.QMainWindow):
         else:
             self.user_settings.remove('active_project')
 
-        try:
-            geometry_bytes = self.saveGeometry()
-            logger.debug('Сохраняем геометрию окна: длина raw=%s', geometry_bytes.size())
-            self.user_settings.set('main_window_geometry', geometry_bytes)
-        except Exception as exc:
-            logger.warning('Не удалось сохранить геометрию окна: %s', exc)
+        if self._remember_geometry:
+            try:
+                geometry_bytes = self.saveGeometry()
+                logger.debug('Сохраняем геометрию окна: длина raw=%s', geometry_bytes.size())
+                self.user_settings.set('main_window_geometry', geometry_bytes)
+            except Exception as exc:
+                logger.warning('Не удалось сохранить геометрию окна: %s', exc)
 
-        try:
-            state_bytes = self.saveState()
-            logger.debug('Сохраняем состояние окна: длина raw=%s', state_bytes.size())
-            self.user_settings.set('main_window_state', state_bytes)
-        except Exception as exc:
-            logger.warning('Не удалось сохранить состояние окна: %s', exc)
+            try:
+                state_bytes = self.saveState()
+                logger.debug('Сохраняем состояние окна: длина raw=%s', state_bytes.size())
+                self.user_settings.set('main_window_state', state_bytes)
+            except Exception as exc:
+                logger.warning('Не удалось сохранить состояние окна: %s', exc)
 
-        try:
-            central_state_bytes = self.ui.centralWidget.saveState()
-            logger.debug('Сохраняем состояние центрального окна: длина raw=%s', central_state_bytes.size())
-            self.user_settings.set('central_window_state', central_state_bytes)
-        except Exception as exc:
-            logger.warning('Не удалось сохранить состояние центрального окна: %s', exc)
+            try:
+                central_state_bytes = self.ui.centralWidget.saveState()
+                logger.debug('Сохраняем состояние центрального окна: длина raw=%s', central_state_bytes.size())
+                self.user_settings.set('central_window_state', central_state_bytes)
+            except Exception as exc:
+                logger.warning('Не удалось сохранить состояние центрального окна: %s', exc)
+        else:
+            self._remove_saved_geometry()
 
         existing_states = self._coerce_tree_states(self.user_settings.get('tree_states', {}))
         tree_states = dict(existing_states)
@@ -618,28 +797,31 @@ class MainWindow(QtWidgets.QMainWindow):
             self.user_settings.remove('tree_states')
 
     def restore_windows_state(self):
-        geometry_bytes = self.user_settings.get_bytes('main_window_geometry')
-        if not geometry_bytes.isEmpty():
-            try:
-                if not geometry_bytes.isEmpty():
-                    restored = self.restoreGeometry(geometry_bytes)
-                    logger.debug('Результат восстановления геометрии окна: %s', restored)
-                else:
-                    logger.debug('Геометрия окна пуста, пропускаем восстановление')
-            except Exception as exc:
-                logger.warning('Не удалось восстановить геометрию окна: %s', exc)
+        if self._remember_geometry:
+            geometry_bytes = self.user_settings.get_bytes('main_window_geometry')
+            if not geometry_bytes.isEmpty():
+                try:
+                    if not geometry_bytes.isEmpty():
+                        restored = self.restoreGeometry(geometry_bytes)
+                        logger.debug('Результат восстановления геометрии окна: %s', restored)
+                    else:
+                        logger.debug('Геометрия окна пуста, пропускаем восстановление')
+                except Exception as exc:
+                    logger.warning('Не удалось восстановить геометрию окна: %s', exc)
 
-        window_state = self.user_settings.get_bytes('main_window_state')
-        if not window_state.isEmpty():
-            self._pending_window_state_bytes = window_state
-        else:
-            self._pending_window_state_bytes = None
+            window_state = self.user_settings.get_bytes('main_window_state')
+            if not window_state.isEmpty():
+                self._pending_window_state_bytes = window_state
+            else:
+                self._pending_window_state_bytes = None
 
-        central_state = self.user_settings.get_bytes('central_window_state')
-        if not central_state.isEmpty():
-            self._pending_central_window_state_bytes = central_state
+            central_state = self.user_settings.get_bytes('central_window_state')
+            if not central_state.isEmpty():
+                self._pending_central_window_state_bytes = central_state
+            else:
+                self._pending_central_window_state_bytes = None
         else:
-            self._pending_central_window_state_bytes = None
+            self._remove_saved_geometry()
 
         self._tree_states_to_restore = self._coerce_tree_states(self.user_settings.get('tree_states', {}))
 
@@ -732,7 +914,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def show_settings(self):
         settings = SettingsDialog(self)
         if settings.exec_() == QDialog.Accepted:
-            print('done')
+            self.apply_user_preferences()
 
     def _close(self):
         logger.info("Выход из программы.")
