@@ -6,6 +6,7 @@ from inspect import signature
 
 import asyncpg
 import typing
+from typing import Optional
 
 from PySide2.QtCore import QObject, QThread, Signal, Qt
 from asyncpg import RaiseError
@@ -222,6 +223,13 @@ class Session:
             logger.error("Failed to reconnect to the database after several attempts")
             if last_error:
                 logger.debug("Last reconnect error: %s", last_error)
+                self._notify(
+                    'error',
+                    'Не удалось подключиться к базе данных',
+                    details=f'{type(last_error).__name__}: {last_error}',
+                )
+            else:
+                self._notify('error', 'Не удалось подключиться к базе данных')
             return False
 
     def update_loading_bar(self, message):
@@ -232,6 +240,23 @@ class Session:
 
         self._progress_emitter.progress.emit(message)
         logger.info("Progress bar message: %s", message)
+
+    def _notify(self, level: str, message: str, details: Optional[str] = None) -> None:
+        main_window = getattr(self, 'main_window', None)
+        if not main_window:
+            return
+
+        notifier = {
+            'info': getattr(main_window, 'notify_info', None),
+            'warning': getattr(main_window, 'notify_warning', None),
+            'error': getattr(main_window, 'notify_error', None),
+        }.get(level)
+
+        if callable(notifier):
+            try:
+                notifier(message, details=details)
+            except Exception:  # noqa: BLE001 - defensive logging only
+                logger.debug("Failed to dispatch %s notification", level, exc_info=True)
 
     async def execute(self, procedure_name, *args):
         query = f'SELECT * FROM "sc_ref".{procedure_name}({",".join([f"${i + 1}" for i, _ in enumerate(args)])})'
@@ -271,12 +296,26 @@ class Session:
                     return QueryResult(result, columns=list(result[0].keys()) if len(result) else None)
                 except Exception as e:
                     logger.exception("Error executing %s after reconnect", procedure_name)
+                    self._notify(
+                        'error',
+                        f'Ошибка при повторном выполнении {procedure_name}',
+                        details=f'{type(e).__name__}: {e}',
+                    )
                     return e
             else:
                 logger.error("Reconnect failed after connection loss during %s", procedure_name)
+                self._notify(
+                    'error',
+                    f'Не удалось выполнить {procedure_name} после восстановления соединения',
+                )
                 return None
         except Exception as e:
             logger.exception("Unexpected error executing %s", procedure_name)
+            self._notify(
+                'error',
+                f'Ошибка при выполнении {procedure_name}',
+                details=f'{type(e).__name__}: {e}',
+            )
             return e
 
     def call(self, query, *args):
@@ -294,6 +333,7 @@ class Session:
                 return self.run_sync(self.execute(query, *args))
         except Exception as e:
             logger.exception("Error executing call for %s", query)
+            self._notify('error', f'Ошибка при выполнении {query}', details=f'{type(e).__name__}: {e}')
 
     def stored_procedure(self, modifying=False, result_type=None, description=None, autocommit=False):
         def decorator(func):
@@ -347,6 +387,11 @@ class Session:
                 result = func(*args, **kwargs)
                 if isinstance(result, RaiseError):
                     logger.error("Stored procedure %s raised database error: %s", func.__name__, result)
+                    self._notify(
+                        'error',
+                        description or f'Ошибка процедуры {func.__name__}',
+                        details=str(result),
+                    )
                     if 'seslogin' in str(result):
                         self.call('checkuserpassword', self._login, self._password)
                     return result
