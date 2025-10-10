@@ -3,7 +3,7 @@ import json
 
 from PySide2 import QtWidgets
 from PySide2.QtCore import QEventLoop, Slot
-from PySide2.QtGui import QIcon, QCloseEvent, Qt, QKeySequence
+from PySide2.QtGui import QIcon, QCloseEvent, Qt, QKeySequence, QPalette, QColor, QFont
 from PySide2.QtWidgets import QMenu, QToolBar, QHBoxLayout, QToolButton, QWidget, QDialog, QShortcut, QDockWidget, \
     QAction, QProgressBar, QLabel
 from app import app_logger, _menu, basic_funcs
@@ -77,7 +77,16 @@ class MainWindow(QtWidgets.QMainWindow):
         self._pending_window_state_bytes = None
         self._pending_central_window_state_bytes = None
 
-        config.config.app.enable_timer(self.user_settings.get('application_close_timeout', 30))
+        app_instance = QtWidgets.QApplication.instance()
+        self._default_font = QFont(app_instance.font())
+        self._default_palette = QPalette(app_instance.palette())
+        self._dark_palette = None
+
+        self._remember_window_state = True
+        self._restore_last_session = True
+        self.notifications_enabled = True
+        self.notifications_timeout = 10000
+
         config.config.app._main_window_initialized = True  # TODO test
 
         self.result = None
@@ -152,8 +161,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.connect_triggered_funcs()
 
         self.notification = None
-        self.notifications_timeout = 10000
         self.init_notifications()
+
+        self.apply_user_preferences()
 
         self.event_stack = EventStack()
         shortcut_undo = QShortcut(QKeySequence('Ctrl+Z'), self)
@@ -180,8 +190,119 @@ class MainWindow(QtWidgets.QMainWindow):
         """
         Показывает окошко с уведомлением
         """
+        if not self.notifications_enabled or self.notification is None:
+            return
         self.notification.show()
         self.notification.add_notification(text, self.notifications_timeout)
+
+    def apply_user_preferences(self):
+        """Применяет сохранённые локальные настройки интерфейса."""
+        settings = self.user_settings
+
+        auto_close_enabled = self._coerce_bool(settings.get('general/auto_close_enabled', True), True)
+        timeout_default = settings.get('application_close_timeout', 30)
+        timeout_minutes = self._coerce_int(settings.get('general/close_timeout_minutes', timeout_default), 30)
+        timeout_minutes = max(1, timeout_minutes)
+        if auto_close_enabled:
+            config.config.app.enable_timer(timeout_minutes)
+        else:
+            config.config.app.disable_timer()
+
+        remember_window = self._coerce_bool(settings.get('general/save_window_state', True), True)
+        restore_session = self._coerce_bool(settings.get('general/restore_last_session', True), True)
+
+        if not remember_window and self._remember_window_state:
+            self._clear_window_state_storage()
+        if not restore_session and self._restore_last_session:
+            self._clear_session_state_storage()
+
+        self._remember_window_state = remember_window
+        self._restore_last_session = restore_session
+
+        show_status_bar = self._coerce_bool(settings.get('interface/show_status_bar', True), True)
+        self.statusBar().setVisible(show_status_bar)
+
+        font_pref = settings.get('interface/font_size', 'normal')
+        self._apply_font_size(font_pref)
+
+        theme_pref = settings.get('interface/theme', 'light')
+        self._apply_theme(theme_pref)
+
+        notifications_enabled = self._coerce_bool(settings.get('notifications/enable', True), True)
+        timeout_seconds = self._coerce_int(settings.get('notifications/timeout_seconds', 10), 10)
+        self.notifications_enabled = notifications_enabled
+        self.notifications_timeout = max(1, timeout_seconds) * 1000
+        if self.notification is not None and not notifications_enabled:
+            self.notification.hide()
+
+    def _apply_font_size(self, preference: str) -> None:
+        app_instance = QtWidgets.QApplication.instance()
+        base_font = QFont(self._default_font)
+        point_size = base_font.pointSize()
+        if point_size <= 0:
+            point_size = QtWidgets.QApplication.font().pointSize() or 10
+        offsets = {'small': -1, 'normal': 0, 'large': 2}
+        point_size = max(8, point_size + offsets.get(preference, 0))
+        base_font.setPointSize(point_size)
+        app_instance.setFont(base_font)
+
+    def _apply_theme(self, preference: str) -> None:
+        app_instance = QtWidgets.QApplication.instance()
+        if preference == 'dark':
+            if self._dark_palette is None:
+                self._dark_palette = self._create_dark_palette()
+            app_instance.setPalette(self._dark_palette)
+        else:
+            app_instance.setPalette(self._default_palette)
+
+    @staticmethod
+    def _create_dark_palette() -> QPalette:
+        palette = QPalette()
+        palette.setColor(QPalette.Window, QColor(53, 53, 53))
+        palette.setColor(QPalette.WindowText, Qt.white)
+        palette.setColor(QPalette.Base, QColor(35, 35, 35))
+        palette.setColor(QPalette.AlternateBase, QColor(53, 53, 53))
+        palette.setColor(QPalette.ToolTipBase, Qt.white)
+        palette.setColor(QPalette.ToolTipText, Qt.white)
+        palette.setColor(QPalette.Text, Qt.white)
+        palette.setColor(QPalette.Button, QColor(53, 53, 53))
+        palette.setColor(QPalette.ButtonText, Qt.white)
+        palette.setColor(QPalette.BrightText, Qt.red)
+        palette.setColor(QPalette.Link, QColor(42, 130, 218))
+        palette.setColor(QPalette.Highlight, QColor(42, 130, 218))
+        palette.setColor(QPalette.HighlightedText, Qt.black)
+        return palette
+
+    def _clear_window_state_storage(self) -> None:
+        for key in ('main_window_geometry', 'main_window_state', 'central_window_state'):
+            self.user_settings.remove(key)
+
+    def _clear_session_state_storage(self) -> None:
+        for key in ('active_plugins', 'active_project', 'tree_states'):
+            self.user_settings.remove(key)
+
+    @staticmethod
+    def _coerce_bool(value, default=False):
+        if isinstance(value, bool):
+            return value
+        if value in (None, '', Qt.Unchecked):
+            return default
+        if isinstance(value, (int, float)):
+            return value != 0
+        if isinstance(value, str):
+            lowered = value.strip().lower()
+            if lowered in {'1', 'true', 'yes', 'y', 'on'}:
+                return True
+            if lowered in {'0', 'false', 'no', 'n', 'off'}:
+                return False
+        return default
+
+    @staticmethod
+    def _coerce_int(value, default):
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return default
 
     def set_statusbar_text(self, text):
         """
@@ -539,128 +660,149 @@ class MainWindow(QtWidgets.QMainWindow):
             self._pending_central_window_state_bytes = None
 
     def save_windows_state(self):
-        active_plugins = []
-        active_project_id = None
-        for dw in self.findChildren(QDockWidget):
-            if not dw.isHidden() and hasattr(dw, 'plugin_name'):
-                plugin_name = dw.plugin_name
-                active_plugins.append(plugin_name)
-                if plugin_name == 'project' and hasattr(dw, 'project_id') and dw.project_id is not None:
-                    active_project_id = str(dw.project_id)
+        should_save_session = self._restore_last_session
+        should_save_window = self._remember_window_state
 
-        if active_project_id is None and hasattr(self, 'project_tree_dock_widget'):
-            project_dock = self.project_tree_dock_widget
-            if hasattr(project_dock, 'project_id') and project_dock.project_id is not None:
-                active_project_id = str(project_dock.project_id)
+        if not should_save_session:
+            self._clear_session_state_storage()
+        if not should_save_window:
+            self._clear_window_state_storage()
 
-        if active_plugins:
-            ordered_unique_plugins = list(dict.fromkeys(active_plugins))
-        else:
-            ordered_unique_plugins = []
+        if not should_save_session and not should_save_window:
+            return
 
-        self.user_settings.set('active_plugins', ordered_unique_plugins)
+        if should_save_session:
+            active_plugins = []
+            active_project_id = None
+            for dw in self.findChildren(QDockWidget):
+                if not dw.isHidden() and hasattr(dw, 'plugin_name'):
+                    plugin_name = dw.plugin_name
+                    active_plugins.append(plugin_name)
+                    if plugin_name == 'project' and hasattr(dw, 'project_id') and dw.project_id is not None:
+                        active_project_id = str(dw.project_id)
 
-        if active_project_id is not None:
-            self.user_settings.set('active_project', active_project_id)
-        else:
-            self.user_settings.remove('active_project')
+            if active_project_id is None and hasattr(self, 'project_tree_dock_widget'):
+                project_dock = self.project_tree_dock_widget
+                if hasattr(project_dock, 'project_id') and project_dock.project_id is not None:
+                    active_project_id = str(project_dock.project_id)
 
-        try:
-            geometry_bytes = self.saveGeometry()
-            logger.debug('Сохраняем геометрию окна: длина raw=%s', geometry_bytes.size())
-            self.user_settings.set('main_window_geometry', geometry_bytes)
-        except Exception as exc:
-            logger.warning('Не удалось сохранить геометрию окна: %s', exc)
+            if active_plugins:
+                ordered_unique_plugins = list(dict.fromkeys(active_plugins))
+            else:
+                ordered_unique_plugins = []
 
-        try:
-            state_bytes = self.saveState()
-            logger.debug('Сохраняем состояние окна: длина raw=%s', state_bytes.size())
-            self.user_settings.set('main_window_state', state_bytes)
-        except Exception as exc:
-            logger.warning('Не удалось сохранить состояние окна: %s', exc)
+            self.user_settings.set('active_plugins', ordered_unique_plugins)
 
-        try:
-            central_state_bytes = self.ui.centralWidget.saveState()
-            logger.debug('Сохраняем состояние центрального окна: длина raw=%s', central_state_bytes.size())
-            self.user_settings.set('central_window_state', central_state_bytes)
-        except Exception as exc:
-            logger.warning('Не удалось сохранить состояние центрального окна: %s', exc)
+            if active_project_id is not None:
+                self.user_settings.set('active_project', active_project_id)
+            else:
+                self.user_settings.remove('active_project')
 
-        existing_states = self._coerce_tree_states(self.user_settings.get('tree_states', {}))
-        tree_states = dict(existing_states)
-
-        for dock_name, dock_data in self.dock_widgets.items():
-            dock_widget = getattr(self, f'{dock_name}_tree_dock_widget', None)
-            if dock_widget is None:
-                continue
-            tree_widget = dock_widget.widget()
-            if not isinstance(tree_widget, TreeView):
-                continue
-            if tree_widget.model() is None:
-                continue
-            plugin_key = getattr(dock_widget, 'plugin_name', dock_name)
-            if not plugin_key:
-                continue
+        if should_save_window:
             try:
-                state = tree_widget.capture_persistent_state()
-            except Exception:
-                logger.exception('Не удалось сохранить состояние дерева для режима "%s".', plugin_key)
-                continue
-            tree_states[str(plugin_key)] = state
+                geometry_bytes = self.saveGeometry()
+                logger.debug('Сохраняем геометрию окна: длина raw=%s', geometry_bytes.size())
+                self.user_settings.set('main_window_geometry', geometry_bytes)
+            except Exception as exc:
+                logger.warning('Не удалось сохранить геометрию окна: %s', exc)
 
-        if tree_states:
             try:
-                serialized = json.dumps(tree_states, ensure_ascii=False)
-                self.user_settings.set('tree_states', serialized)
-            except (TypeError, ValueError) as exc:
-                logger.warning('Не удалось сериализовать состояние деревьев: %s', exc)
-        else:
-            self.user_settings.remove('tree_states')
+                state_bytes = self.saveState()
+                logger.debug('Сохраняем состояние окна: длина raw=%s', state_bytes.size())
+                self.user_settings.set('main_window_state', state_bytes)
+            except Exception as exc:
+                logger.warning('Не удалось сохранить состояние окна: %s', exc)
+
+            try:
+                central_state_bytes = self.ui.centralWidget.saveState()
+                logger.debug('Сохраняем состояние центрального окна: длина raw=%s', central_state_bytes.size())
+                self.user_settings.set('central_window_state', central_state_bytes)
+            except Exception as exc:
+                logger.warning('Не удалось сохранить состояние центрального окна: %s', exc)
+
+        if should_save_session:
+            existing_states = self._coerce_tree_states(self.user_settings.get('tree_states', {}))
+            tree_states = dict(existing_states)
+
+            for dock_name, dock_data in self.dock_widgets.items():
+                dock_widget = getattr(self, f'{dock_name}_tree_dock_widget', None)
+                if dock_widget is None:
+                    continue
+                tree_widget = dock_widget.widget()
+                if not isinstance(tree_widget, TreeView):
+                    continue
+                if tree_widget.model() is None:
+                    continue
+                plugin_key = getattr(dock_widget, 'plugin_name', dock_name)
+                if not plugin_key:
+                    continue
+                try:
+                    state = tree_widget.capture_persistent_state()
+                except Exception:
+                    logger.exception('Не удалось сохранить состояние дерева для режима "%s".', plugin_key)
+                    continue
+                tree_states[str(plugin_key)] = state
+
+            if tree_states:
+                try:
+                    serialized = json.dumps(tree_states, ensure_ascii=False)
+                    self.user_settings.set('tree_states', serialized)
+                except (TypeError, ValueError) as exc:
+                    logger.warning('Не удалось сериализовать состояние деревьев: %s', exc)
+            else:
+                self.user_settings.remove('tree_states')
 
     def restore_windows_state(self):
-        geometry_bytes = self.user_settings.get_bytes('main_window_geometry')
-        if not geometry_bytes.isEmpty():
-            try:
-                if not geometry_bytes.isEmpty():
-                    restored = self.restoreGeometry(geometry_bytes)
-                    logger.debug('Результат восстановления геометрии окна: %s', restored)
-                else:
-                    logger.debug('Геометрия окна пуста, пропускаем восстановление')
-            except Exception as exc:
-                logger.warning('Не удалось восстановить геометрию окна: %s', exc)
+        if self._remember_window_state:
+            geometry_bytes = self.user_settings.get_bytes('main_window_geometry')
+            if not geometry_bytes.isEmpty():
+                try:
+                    if not geometry_bytes.isEmpty():
+                        restored = self.restoreGeometry(geometry_bytes)
+                        logger.debug('Результат восстановления геометрии окна: %s', restored)
+                    else:
+                        logger.debug('Геометрия окна пуста, пропускаем восстановление')
+                except Exception as exc:
+                    logger.warning('Не удалось восстановить геометрию окна: %s', exc)
 
-        window_state = self.user_settings.get_bytes('main_window_state')
-        if not window_state.isEmpty():
-            self._pending_window_state_bytes = window_state
+            window_state = self.user_settings.get_bytes('main_window_state')
+            if not window_state.isEmpty():
+                self._pending_window_state_bytes = window_state
+            else:
+                self._pending_window_state_bytes = None
+
+            central_state = self.user_settings.get_bytes('central_window_state')
+            if not central_state.isEmpty():
+                self._pending_central_window_state_bytes = central_state
+            else:
+                self._pending_central_window_state_bytes = None
         else:
             self._pending_window_state_bytes = None
-
-        central_state = self.user_settings.get_bytes('central_window_state')
-        if not central_state.isEmpty():
-            self._pending_central_window_state_bytes = central_state
-        else:
             self._pending_central_window_state_bytes = None
 
-        self._tree_states_to_restore = self._coerce_tree_states(self.user_settings.get('tree_states', {}))
+        if self._restore_last_session:
+            self._tree_states_to_restore = self._coerce_tree_states(self.user_settings.get('tree_states', {}))
 
-        active_project_setting = self.user_settings.get('active_project')
-        if active_project_setting and hasattr(self, 'project') and self.project is not None:
-            self.project.autoopen_project_id = str(active_project_setting)
+            active_project_setting = self.user_settings.get('active_project')
+            if active_project_setting and hasattr(self, 'project') and self.project is not None:
+                self.project.autoopen_project_id = str(active_project_setting)
 
-        active_plugins = self.user_settings.get('active_plugins')
-        if isinstance(active_plugins, str):
-            try:
-                active_plugins = ast.literal_eval(active_plugins)
-            except (ValueError, SyntaxError):
-                active_plugins = [active_plugins]
+            active_plugins = self.user_settings.get('active_plugins')
+            if isinstance(active_plugins, str):
+                try:
+                    active_plugins = ast.literal_eval(active_plugins)
+                except (ValueError, SyntaxError):
+                    active_plugins = [active_plugins]
 
-        if not isinstance(active_plugins, (list, tuple)):
-            active_plugins = []
+            if not isinstance(active_plugins, (list, tuple)):
+                active_plugins = []
 
-        for plugin in active_plugins:
-            if hasattr(self, plugin) and hasattr(self, f'{plugin}_tree_dock_widget'):
-                self.activate_tree(getattr(self, plugin), getattr(self, plugin + '_tree_dock_widget'),
-                                   getattr(self, plugin.upper() + '_TREE'))
+            for plugin in active_plugins:
+                if hasattr(self, plugin) and hasattr(self, f'{plugin}_tree_dock_widget'):
+                    self.activate_tree(getattr(self, plugin), getattr(self, plugin + '_tree_dock_widget'),
+                                       getattr(self, plugin.upper() + '_TREE'))
+        else:
+            self._tree_states_to_restore = {}
 
         self._apply_pending_window_state()
 
@@ -730,9 +872,9 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.show_tree(tree_name, True)
 
     def show_settings(self):
-        settings = SettingsDialog(self)
-        if settings.exec_() == QDialog.Accepted:
-            print('done')
+        dialog = SettingsDialog(self)
+        if dialog.exec_() == QDialog.Accepted:
+            self.apply_user_preferences()
 
     def _close(self):
         logger.info("Выход из программы.")

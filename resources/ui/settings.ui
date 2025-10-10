@@ -6,75 +6,275 @@
             <rect>
                 <x>0</x>
                 <y>0</y>
-                <width>605</width>
-                <height>466</height>
+                <width>720</width>
+                <height>460</height>
             </rect>
         </property>
         <property name="windowTitle">
-            <string>Dialog</string>
+            <string>Настройки</string>
         </property>
-        <layout class="QGridLayout" name="gridLayout_2">
-            <item row="0" column="0">
-                <layout class="QGridLayout" name="gridLayout">
-                    <item row="0" column="0">
-                        <widget class="QSplitter" name="splitter">
-                            <property name="orientation">
-                                <enum>Qt::Horizontal</enum>
+        <layout class="QVBoxLayout" name="verticalLayout">
+            <item>
+                <widget class="QSplitter" name="splitter">
+                    <property name="orientation">
+                        <enum>Qt::Horizontal</enum>
+                    </property>
+                    <widget class="QListWidget" name="categoryListWidget">
+                        <property name="frameShape">
+                            <enum>QFrame::NoFrame</enum>
+                        </property>
+                        <property name="alternatingRowColors">
+                            <bool>true</bool>
+                        </property>
+                        <property name="selectionMode">
+                            <enum>QAbstractItemView::SingleSelection</enum>
+                        </property>
+                        <property name="selectionBehavior">
+                            <enum>QAbstractItemView::SelectRows</enum>
+                        </property>
+                        <property name="editTriggers">
+                            <set>QAbstractItemView::NoEditTriggers</set>
+                        </property>
+                        <property name="uniformItemSizes">
+                            <bool>true</bool>
+                        </property>
+                        <item>
+                            <property name="text">
+                                <string>Общие</string>
                             </property>
-                            <widget class="QTreeView" name="treeView"/>
-                            <widget class="QWidget" name="widget" native="true"/>
-                        </widget>
-                    </item>
-                    <item row="1" column="0">
-                        <widget class="QGroupBox" name="horizontalGroupBox">
-                            <property name="sizePolicy">
-                                <sizepolicy hsizetype="Preferred" vsizetype="Minimum">
-                                    <horstretch>0</horstretch>
-                                    <verstretch>0</verstretch>
-                                </sizepolicy>
+                        </item>
+                        <item>
+                            <property name="text">
+                                <string>Интерфейс</string>
                             </property>
-                            <property name="minimumSize">
-                                <size>
-                                    <width>0</width>
-                                    <height>41</height>
-                                </size>
+                        </item>
+                        <item>
+                            <property name="text">
+                                <string>Уведомления</string>
                             </property>
-                            <layout class="QHBoxLayout" name="horizontalLayout">
+                        </item>
+                    </widget>
+                    <widget class="QStackedWidget" name="stackedWidget">
+                        <widget class="QWidget" name="generalPage">
+                            <layout class="QVBoxLayout" name="generalLayout">
                                 <item>
-                                    <spacer name="horizontalSpacer">
+                                    <widget class="QCheckBox" name="autoCloseCheckBox">
+                                        <property name="text">
+                                            <string>Запускать таймер автозакрытия</string>
+                                        </property>
+                                    </widget>
+                                </item>
+                                <item>
+                                    <layout class="QHBoxLayout" name="closeTimeoutLayout">
+                                        <item>
+                                            <widget class="QLabel" name="closeTimeoutLabel">
+                                                <property name="text">
+                                                    <string>Через, мин</string>
+                                                </property>
+                                            </widget>
+                                        </item>
+                                        <item>
+                                            <widget class="QSpinBox" name="closeTimeoutSpinBox">
+                                                <property name="minimum">
+                                                    <number>1</number>
+                                                </property>
+                                                <property name="maximum">
+                                                    <number>240</number>
+                                                </property>
+                                            </widget>
+                                        </item>
+                                    </layout>
+                                </item>
+                                <item>
+                                    <widget class="QCheckBox" name="saveWindowStateCheckBox">
+                                        <property name="text">
+                                            <string>Запоминать расположение окна</string>
+                                        </property>
+                                    </widget>
+                                </item>
+                                <item>
+                                    <widget class="QCheckBox" name="restoreSessionCheckBox">
+                                        <property name="text">
+                                            <string>Восстанавливать последнюю сессию</string>
+                                        </property>
+                                    </widget>
+                                </item>
+                                <item>
+                                    <spacer name="generalSpacer">
                                         <property name="orientation">
-                                            <enum>Qt::Horizontal</enum>
+                                            <enum>Qt::Vertical</enum>
                                         </property>
                                         <property name="sizeHint" stdset="0">
                                             <size>
-                                                <width>40</width>
-                                                <height>20</height>
+                                                <width>20</width>
+                                                <height>40</height>
                                             </size>
                                         </property>
                                     </spacer>
                                 </item>
+                            </layout>
+                        </widget>
+                        <widget class="QWidget" name="interfacePage">
+                            <layout class="QVBoxLayout" name="interfaceLayout">
                                 <item>
-                                    <widget class="QPushButton" name="acceptPushButton">
+                                    <widget class="QCheckBox" name="showStatusBarCheckBox">
                                         <property name="text">
-                                            <string>Ок</string>
+                                            <string>Показывать строку состояния</string>
                                         </property>
                                     </widget>
                                 </item>
                                 <item>
-                                    <widget class="QPushButton" name="cancelPushButton">
-                                        <property name="text">
-                                            <string>Отменить</string>
-                                        </property>
-                                    </widget>
+                                    <layout class="QHBoxLayout" name="fontSizeLayout">
+                                        <item>
+                                            <widget class="QLabel" name="fontSizeLabel">
+                                                <property name="text">
+                                                    <string>Размер шрифта</string>
+                                                </property>
+                                            </widget>
+                                        </item>
+                                        <item>
+                                            <widget class="QComboBox" name="fontSizeComboBox">
+                                                <item>
+                                                    <property name="text">
+                                                        <string>Мелкий</string>
+                                                    </property>
+                                                </item>
+                                                <item>
+                                                    <property name="text">
+                                                        <string>Обычный</string>
+                                                    </property>
+                                                </item>
+                                                <item>
+                                                    <property name="text">
+                                                        <string>Крупный</string>
+                                                    </property>
+                                                </item>
+                                            </widget>
+                                        </item>
+                                    </layout>
                                 </item>
                                 <item>
-                                    <widget class="QPushButton" name="applyPushButton">
-                                        <property name="text">
-                                            <string>Применить</string>
+                                    <layout class="QHBoxLayout" name="themeLayout">
+                                        <item>
+                                            <widget class="QLabel" name="themeLabel">
+                                                <property name="text">
+                                                    <string>Тема оформления</string>
+                                                </property>
+                                            </widget>
+                                        </item>
+                                        <item>
+                                            <widget class="QComboBox" name="themeComboBox">
+                                                <item>
+                                                    <property name="text">
+                                                        <string>Светлая</string>
+                                                    </property>
+                                                </item>
+                                                <item>
+                                                    <property name="text">
+                                                        <string>Тёмная</string>
+                                                    </property>
+                                                </item>
+                                            </widget>
+                                        </item>
+                                    </layout>
+                                </item>
+                                <item>
+                                    <spacer name="interfaceSpacer">
+                                        <property name="orientation">
+                                            <enum>Qt::Vertical</enum>
                                         </property>
-                                    </widget>
+                                        <property name="sizeHint" stdset="0">
+                                            <size>
+                                                <width>20</width>
+                                                <height>40</height>
+                                            </size>
+                                        </property>
+                                    </spacer>
                                 </item>
                             </layout>
+                        </widget>
+                        <widget class="QWidget" name="notificationsPage">
+                            <layout class="QVBoxLayout" name="notificationsLayout">
+                                <item>
+                                    <widget class="QCheckBox" name="enableNotificationsCheckBox">
+                                        <property name="text">
+                                            <string>Показывать всплывающие уведомления</string>
+                                        </property>
+                                    </widget>
+                                </item>
+                                <item>
+                                    <layout class="QHBoxLayout" name="notificationsTimeoutLayout">
+                                        <item>
+                                            <widget class="QLabel" name="notificationsTimeoutLabel">
+                                                <property name="text">
+                                                    <string>Время показа, сек</string>
+                                                </property>
+                                            </widget>
+                                        </item>
+                                        <item>
+                                            <widget class="QSpinBox" name="notificationsTimeoutSpinBox">
+                                                <property name="minimum">
+                                                    <number>1</number>
+                                                </property>
+                                                <property name="maximum">
+                                                    <number>120</number>
+                                                </property>
+                                            </widget>
+                                        </item>
+                                    </layout>
+                                </item>
+                                <item>
+                                    <spacer name="notificationsSpacer">
+                                        <property name="orientation">
+                                            <enum>Qt::Vertical</enum>
+                                        </property>
+                                        <property name="sizeHint" stdset="0">
+                                            <size>
+                                                <width>20</width>
+                                                <height>40</height>
+                                            </size>
+                                        </property>
+                                    </spacer>
+                                </item>
+                            </layout>
+                        </widget>
+                    </widget>
+                </widget>
+            </item>
+            <item>
+                <layout class="QHBoxLayout" name="buttonLayout">
+                    <item>
+                        <spacer name="buttonSpacer">
+                            <property name="orientation">
+                                <enum>Qt::Horizontal</enum>
+                            </property>
+                            <property name="sizeHint" stdset="0">
+                                <size>
+                                    <width>40</width>
+                                    <height>20</height>
+                                </size>
+                            </property>
+                        </spacer>
+                    </item>
+                    <item>
+                        <widget class="QPushButton" name="acceptPushButton">
+                            <property name="text">
+                                <string>Ок</string>
+                            </property>
+                        </widget>
+                    </item>
+                    <item>
+                        <widget class="QPushButton" name="cancelPushButton">
+                            <property name="text">
+                                <string>Отмена</string>
+                            </property>
+                        </widget>
+                    </item>
+                    <item>
+                        <widget class="QPushButton" name="applyPushButton">
+                            <property name="text">
+                                <string>Применить</string>
+                            </property>
                         </widget>
                     </item>
                 </layout>
