@@ -26,6 +26,7 @@ class AppearanceTab(QWidget):
         self.ui.fontComboBox.currentTextChanged.connect(lambda: self.prop_changed('font_name'))
         self.ui.fontSizeComboBox.currentTextChanged.connect(lambda: self.prop_changed('font_size'))
         self.ui.customFontCheckBox.stateChanged.connect(lambda: self.prop_changed('use_custom_font'))
+        self.ui.modernUiToggleButton.clicked.connect(self.toggle_modern_ui)
 
     def prop_changed(self, prop_name):
         if self.mw is None:
@@ -59,3 +60,37 @@ class AppearanceTab(QWidget):
         font_size = self.mw.user_settings.get('font_size')
         if font_size:
             self.ui.fontSizeComboBox.setCurrentText(str(font_size))
+
+        self.update_modern_ui_button()
+
+    def update_modern_ui_button(self):
+        if self.mw is None:
+            self.ui.modernUiToggleButton.setEnabled(False)
+            return
+
+        is_enabled = self._is_modern_ui_enabled()
+        self.ui.modernUiToggleButton.blockSignals(True)
+        self.ui.modernUiToggleButton.setChecked(is_enabled)
+        self.ui.modernUiToggleButton.setText(
+            'Выключить новый интерфейс' if is_enabled else 'Включить новый интерфейс'
+        )
+        self.ui.modernUiToggleButton.blockSignals(False)
+
+    def toggle_modern_ui(self):
+        if self.mw is None:
+            return
+
+        new_value = not self._is_modern_ui_enabled()
+        self.mw.user_settings.set('enable_modern_ui', new_value)
+        if hasattr(self.mw, 'apply_user_interface_theme'):
+            self.mw.apply_user_interface_theme()
+        self.update_modern_ui_button()
+
+    def _is_modern_ui_enabled(self):
+        if self.mw is None:
+            return False
+
+        value = self.mw.user_settings.get('enable_modern_ui', False)
+        if isinstance(value, str):
+            value = value.lower() == 'true'
+        return bool(value)

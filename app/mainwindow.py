@@ -22,6 +22,7 @@ from resources.ui.ui_py.ui_mainwindow import Ui_MainWindow
 from settings.dialog import SettingsDialog
 from db import session
 import config.config
+from app.utils.themes import ModernLightTheme
 
 logger = app_logger.get_logger(__name__)
 
@@ -155,6 +156,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.notifications_timeout = 10000
         self.init_notifications()
 
+        self.apply_user_interface_theme()
+
         self.event_stack = EventStack()
         shortcut_undo = QShortcut(QKeySequence('Ctrl+Z'), self)
         shortcut_undo.activated.connect(self.event_stack.undo)
@@ -182,6 +185,26 @@ class MainWindow(QtWidgets.QMainWindow):
         """
         self.notification.show()
         self.notification.add_notification(text, self.notifications_timeout)
+
+    def is_modern_ui_enabled(self):
+        value = self.user_settings.get('enable_modern_ui', False)
+        if isinstance(value, str):
+            value = value.lower() == 'true'
+        return bool(value)
+
+    def apply_user_interface_theme(self):
+        """Apply a 2025-inspired light theme when enabled in user settings."""
+        enabled = self.is_modern_ui_enabled()
+
+        if enabled:
+            ModernLightTheme.apply_palette(config.config.app)
+            config.config.app.setStyleSheet(ModernLightTheme.stylesheet())
+        else:
+            ModernLightTheme.reset_palette(config.config.app)
+            config.config.app.setStyleSheet('')
+
+        if getattr(self, 'notification', None):
+            self.notification.set_modern_theme(enabled)
 
     def set_statusbar_text(self, text):
         """

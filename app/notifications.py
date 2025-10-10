@@ -1,60 +1,84 @@
-from PySide2.QtWidgets import QApplication, QLabel, QVBoxLayout, QWidget, QPushButton, QSizePolicy, QScrollArea, \
-    QHBoxLayout, QFrame
-from PySide2.QtCore import Qt, QTimer, QPoint
+from PySide2.QtWidgets import QApplication, QLabel, QVBoxLayout, QWidget, QPushButton, QHBoxLayout, QFrame
+from PySide2.QtCore import Qt, QTimer
 
 
 class Notification(QWidget):
-    def __init__(self, text, timeout, parent=None):
+    def __init__(self, text, timeout, parent=None, use_modern_theme=False):
         super().__init__(parent)
 
-        # Set background color and rounded corners on frame
         self.frame = QFrame(self)
-        self.frame.setStyleSheet("background-color: #3c3f41; border-radius: 5px;")
         self.frame.setFrameShape(QFrame.StyledPanel)
 
-        # Set label
         self.label = QLabel(self._get_short_text(text), self.frame)
-        self.label.setStyleSheet("color: white; padding: 10px;")
         self.label.setToolTip(text)
 
-        # Set close button
-        self.close_button = QPushButton("X", self.frame)
-        self.close_button.setFixedSize(20, 20)
-        self.close_button.setStyleSheet(
-            """
-    QPushButton {
-        color: white;
-        font-weight: bold;
-        background-color: transparent;
-        border: none;
-        margin-right: 5px;
-    }
-    QPushButton:hover {
-        background-color: #2c2f30;
-        border-radius: 10px;
-    }
-    """
-        )
+        self.close_button = QPushButton("✕", self.frame)
+        self.close_button.setFixedSize(24, 24)
         self.close_button.clicked.connect(self.remove_notification)
 
-        # Set timer to hide notification after timeout
         self.timer = QTimer(self)
         self.timer.setSingleShot(True)
         self.timer.timeout.connect(self.remove_notification)
         self.timer.start(timeout)
 
-        # Set layout
         layout = QHBoxLayout(self.frame)
         layout.addWidget(self.label)
         layout.addWidget(self.close_button)
-        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setContentsMargins(12, 8, 8, 8)
+        layout.setSpacing(8)
 
-        # Set layout and position
-        self.setLayout(QHBoxLayout(self))
-        self.layout().addWidget(self.frame)
-        self.layout().setContentsMargins(0, 0, 0, 0)
+        container_layout = QHBoxLayout(self)
+        container_layout.addWidget(self.frame)
+        container_layout.setContentsMargins(0, 0, 0, 0)
+
+        self.apply_theme(use_modern_theme)
         self.adjustSize()
         self.move(0, 0)
+
+    def apply_theme(self, use_modern_theme):
+        if use_modern_theme:
+            self.frame.setStyleSheet(
+                """
+                QFrame {
+                    background-color: #ffffff;
+                    border-radius: 12px;
+                    border: 1px solid #dfe3eb;
+                }
+                """
+            )
+            self.label.setStyleSheet("color: #1c1f26; padding: 2px 0; font-weight: 500;")
+            self.close_button.setStyleSheet(
+                """
+                QPushButton {
+                    background: transparent;
+                    border: none;
+                    color: #8a96ad;
+                    font-weight: bold;
+                }
+                QPushButton:hover {
+                    background-color: rgba(52, 120, 246, 0.1);
+                    color: #1c1f26;
+                    border-radius: 12px;
+                }
+                """
+            )
+        else:
+            self.frame.setStyleSheet("background-color: #3c3f41; border-radius: 5px;")
+            self.label.setStyleSheet("color: white; padding: 2px 0;")
+            self.close_button.setStyleSheet(
+                """
+                QPushButton {
+                    color: white;
+                    font-weight: bold;
+                    background-color: transparent;
+                    border: none;
+                }
+                QPushButton:hover {
+                    background-color: #2c2f30;
+                    border-radius: 12px;
+                }
+                """
+            )
 
     def _get_short_text(self, text):
         """
@@ -66,8 +90,8 @@ class Notification(QWidget):
             return text
 
     def remove_notification(self):
-        self.parent().remove_notification(self)
-        # self.deleteLater()
+        if self.parent():
+            self.parent().remove_notification(self)
 
 
 class StackedNotifications(QWidget):
@@ -75,6 +99,7 @@ class StackedNotifications(QWidget):
         super().__init__(parent, Qt.WindowStaysOnTopHint | Qt.FramelessWindowHint)
 
         self.max_notifications = max_notifications
+        self.use_modern_theme = False
 
         # Set background color to transparent
         self.setAttribute(Qt.WA_TranslucentBackground)
@@ -102,10 +127,12 @@ class StackedNotifications(QWidget):
 
     def add_notification(self, text, timeout=5000):
         if len(self._notifications) >= self.max_notifications:
-            self._notifications.pop(0)
+            oldest = self._notifications.pop(0)
+            self.layout.removeWidget(oldest)
+            oldest.deleteLater()
 
         # Create notification and add to layout
-        notification = Notification(text, timeout, self)
+        notification = Notification(text, timeout, self, self.use_modern_theme)
         self._notifications.append(notification)
         self.layout.addWidget(notification)
 
@@ -124,11 +151,15 @@ class StackedNotifications(QWidget):
     def remove_notification(self, notification):
         # Remove notification from layout
         self.layout.removeWidget(notification)
+        if notification in self._notifications:
+            self._notifications.remove(notification)
 
         # Update widget height
         self.update_height(notification)
 
-        if self._notifications == 0:
+        notification.deleteLater()
+
+        if not self._notifications:
             self.hide()
 
     def update_position(self):
@@ -148,8 +179,10 @@ class StackedNotifications(QWidget):
         count = self.layout.count()
 
         # Calculate new height
-        print(notification.height())
-        new_height = count * (self.notification_height + self.spacing) + self.spacing
+        if count == 0:
+            new_height = 0
+        else:
+            new_height = count * (self.notification_height + self.spacing) + self.spacing
 
         # If the new height is greater than the current height, increase the widget height
         if new_height > self.height:
@@ -163,3 +196,8 @@ class StackedNotifications(QWidget):
 
         # Set position of the notification widget
         self.update_position()
+
+    def set_modern_theme(self, enabled: bool):
+        self.use_modern_theme = enabled
+        for notification in list(self._notifications):
+            notification.apply_theme(enabled)
