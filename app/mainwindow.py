@@ -117,12 +117,24 @@ class MainWindow(QtWidgets.QMainWindow):
             self.PROJECT: Dock_('Дерево проекта', self.PROJECT_TREE, Qt.LeftDockWidgetArea, ProjectDockWidget)
         }
 
+        self.notification = None
+        self.notifications_enabled = True
+        self.notifications_timeout = 10000
+
         self._current_progress_message = ''
         self._progress_notification = None
+        self._progress_collapsed = False
         self._last_worker_error = None
 
         self.status_label = QLabel()
         self.statusBar().addWidget(self.status_label)
+
+        self.progress_status_button = QToolButton(self)
+        self.progress_status_button.setText('Фоновые задачи')
+        self.progress_status_button.setToolTip('Показать уведомление о загрузке')
+        self.progress_status_button.setVisible(False)
+        self.progress_status_button.clicked.connect(self.restore_progress_notification)
+        self.statusBar().addPermanentWidget(self.progress_status_button)
 
         self.work_data = None
         self.admin_roles = None
@@ -150,9 +162,6 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.connect_triggered_funcs()
 
-        self.notification = None
-        self.notifications_enabled = True
-        self.notifications_timeout = 10000
         self.init_notifications()
 
         self.event_stack = EventStack()
@@ -196,18 +205,62 @@ class MainWindow(QtWidgets.QMainWindow):
     def show_progress_notification(self, text, details=None):
         if not self.notifications_enabled:
             return None
+        if self._progress_notification is not None:
+            progress_note = self._progress_notification
+            progress_note.set_variant('progress')
+            progress_note.restart_timer(None)
+            progress_note.set_message(text)
+            if details is not None:
+                if details:
+                    progress_note.set_details(details)
+                else:
+                    progress_note.clear_details()
+            if self._progress_collapsed:
+                self.progress_status_button.setText(text)
+            return progress_note
+
         self.notification.show()
-        return self.notification.add_notification(
+        progress_note = self.notification.add_notification(
             text,
             timeout=None,
             details=details,
             variant='progress',
             show_progress=True,
         )
+        progress_note.closed.connect(self._handle_notification_closed)
+        progress_note.minimize_requested.connect(self._on_progress_minimize)
+        self._progress_notification = progress_note
+        self._progress_collapsed = False
+        return progress_note
+
+    def restore_progress_notification(self):
+        if not self._progress_notification:
+            return
+        if not self.notification:
+            return
+        self.notification.restore_notification(self._progress_notification)
+        self._progress_collapsed = False
+        self.progress_status_button.setVisible(False)
 
     @staticmethod
     def _format_exception(exc):
         return f'{exc.__class__.__name__}: {exc}'
+
+    def _handle_notification_closed(self, note):
+        if note is self._progress_notification or getattr(note, 'is_progress_toast', False):
+            self._progress_notification = None
+            self._progress_collapsed = False
+            self.progress_status_button.setVisible(False)
+
+    def _on_progress_minimize(self, note):
+        if note is not self._progress_notification:
+            return
+        if not self.notification:
+            return
+        self.notification.minimize_notification(note)
+        self._progress_collapsed = True
+        self.progress_status_button.setText(self._current_progress_message or 'Фоновые задачи')
+        self.progress_status_button.setVisible(True)
 
     def notify_exception(self, message, exc, level='error', details=None):
         if level == 'error':
@@ -466,26 +519,49 @@ class MainWindow(QtWidgets.QMainWindow):
 
     @Slot()
     def on_worker_started(self):
+        if self._progress_notification:
+            if self._progress_collapsed:
+                self.restore_progress_notification()
+            self._progress_notification.dismiss()
+            self._progress_notification = None
+        self._progress_collapsed = False
+        self.progress_status_button.setVisible(False)
         if not self._current_progress_message:
             self._current_progress_message = 'Загрузка...'
-        self._progress_notification = self.show_progress_notification(self._current_progress_message)
+        progress_note = self.show_progress_notification(self._current_progress_message)
+        if progress_note:
+            progress_note.clear_details()
+        self._progress_notification = progress_note
 
     @Slot(str)
     def set_progress_bar_status(self, message):
         self._current_progress_message = message
         if self._progress_notification is not None:
             self._progress_notification.set_message(message)
+        if self._progress_collapsed:
+            self.progress_status_button.setText(message)
 
     @Slot()
     def on_worker_finished(self):
         if self._progress_notification is None:
             return
+        if self._progress_collapsed:
+            self.restore_progress_notification()
         if self._last_worker_error is not None:
-            self._progress_notification.mark_failed('Ошибка', self._format_exception(self._last_worker_error), auto_close=None)
+            self._progress_notification.dismiss()
+            self.notify_exception('Ошибка при выполнении операции', self._last_worker_error)
         else:
-            self._progress_notification.mark_complete('Готово')
+            self._progress_notification.mark_complete('Готово', auto_close=1200)
         self._progress_notification = None
         self._last_worker_error = None
+        self._progress_collapsed = False
+        self.progress_status_button.setVisible(False)
+
+    @Slot(str)
+    def append_progress_detail(self, detail):
+        if self._progress_notification is None:
+            return
+        self._progress_notification.append_detail(detail)
 
     def run_with_progress(self, func, progress_text="Загрузка..."):
         self.result = None
@@ -867,6 +943,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.notifications_timeout = max(1, int(timeout_seconds)) * 1000
         if not enabled and self.notification is not None:
             self.notification.hide()
+            self.progress_status_button.setVisible(False)
+            self._progress_collapsed = False
 
     @staticmethod
     def _coerce_bool(value: Any, default: bool = False) -> bool:

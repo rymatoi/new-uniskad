@@ -21,6 +21,8 @@ class Notification(QWidget):
     """Single toast notification with optional progress indicator and details."""
 
     closed = Signal(QWidget)
+    minimize_requested = Signal(QWidget)
+    details_toggled = Signal(bool)
 
     VARIANT_STYLES = {
         "info": ("#3c3f41", "#2c2f30"),
@@ -43,9 +45,17 @@ class Notification(QWidget):
         super().__init__(parent)
 
         self._timeout = timeout
-        self._details_text = details
         self._variant = variant if variant in self.VARIANT_STYLES else "info"
         self._progress_active = show_progress
+        self.is_progress_toast = show_progress
+
+        self._detail_lines: list[str] = []
+        if details:
+            if isinstance(details, str):
+                self._detail_lines = [details]
+            else:
+                self._detail_lines = list(details)
+        self._details_text = "\n".join(self._detail_lines)
 
         self.setAttribute(Qt.WA_StyledBackground, True)
 
@@ -100,9 +110,24 @@ class Notification(QWidget):
             "}"
             "QToolButton::checked { color: #f1f1f1; }"
         )
-        self.detail_toggle.setVisible(bool(details))
+        self.detail_toggle.setVisible(bool(self._detail_lines))
         self.detail_toggle.toggled.connect(self._toggle_details)
         header_layout.addWidget(self.detail_toggle, 0, Qt.AlignRight)
+
+        self.minimize_button = QToolButton(self.frame)
+        self.minimize_button.setText("⤓")
+        self.minimize_button.setToolTip("Свернуть в статус-бар")
+        self.minimize_button.setStyleSheet(
+            "QToolButton {"
+            "border: none;"
+            "color: #f1f1f1;"
+            "padding: 2px;"
+            "}"
+            "QToolButton::hover { color: #ffffff; }"
+        )
+        self.minimize_button.clicked.connect(lambda: self.minimize_requested.emit(self))
+        self.minimize_button.setVisible(show_progress)
+        header_layout.addWidget(self.minimize_button, 0, Qt.AlignRight)
 
         self.close_button = QPushButton("✕", self.frame)
         self.close_button.setFixedSize(22, 22)
@@ -126,7 +151,7 @@ class Notification(QWidget):
         if self.progress_bar is not None:
             self.layout.addWidget(self.progress_bar)
 
-        self.details_label = QLabel(details or "", self.frame)
+        self.details_label = QLabel(self._details_text, self.frame)
         self.details_label.setWordWrap(True)
         self.details_label.setStyleSheet("color: #d0d0d0; line-height: 1.4;")
         self.details_label.setVisible(False)
@@ -158,6 +183,7 @@ class Notification(QWidget):
             "border-radius: 10px;"
             "}"
         )
+        self.minimize_button.setVisible(self.is_progress_toast and variant == "progress")
         if self.progress_bar is not None and variant != "progress":
             self.progress_bar.setRange(0, 1)
             self.progress_bar.setValue(1)
@@ -179,16 +205,50 @@ class Notification(QWidget):
         self.request_relayout()
 
     def set_details(self, details: Optional[str]) -> None:
-        self._details_text = details
         if details:
-            self.details_label.setText(details)
-            self.detail_toggle.setVisible(True)
+            if isinstance(details, str):
+                self._detail_lines = [details]
+            else:
+                self._detail_lines = list(details)
+        else:
+            self._detail_lines = []
+        self._details_text = "\n".join(self._detail_lines)
+        has_details = bool(self._detail_lines)
+        self.detail_toggle.setVisible(has_details)
+        if has_details and self.detail_toggle.isChecked():
+            self.details_label.setText(self._details_text)
+            self.details_label.setVisible(True)
         else:
             self.details_label.clear()
-            self.detail_toggle.setVisible(False)
-        if not self.detail_toggle.isVisible():
             self.details_label.setVisible(False)
+            if self.detail_toggle.isChecked():
+                self.detail_toggle.setChecked(False)
         self.request_relayout()
+
+    def append_detail(self, detail: str) -> None:
+        if not detail:
+            return
+        self._detail_lines.append(detail)
+        self._details_text = "\n".join(self._detail_lines)
+        self.detail_toggle.setVisible(True)
+        if self.detail_toggle.isChecked():
+            self.details_label.setText(self._details_text)
+            self.details_label.setVisible(True)
+        self.request_relayout()
+
+    def clear_details(self) -> None:
+        self._detail_lines.clear()
+        self._details_text = ""
+        self.details_label.clear()
+        self.details_label.setVisible(False)
+        self.detail_toggle.blockSignals(True)
+        self.detail_toggle.setChecked(False)
+        self.detail_toggle.blockSignals(False)
+        self.detail_toggle.setVisible(False)
+        self.request_relayout()
+
+    def is_details_expanded(self) -> bool:
+        return self.detail_toggle.isChecked()
 
     def mark_complete(self, message: Optional[str] = None, details: Optional[str] = None, auto_close: int = 2500) -> None:
         if message:
@@ -200,6 +260,9 @@ class Notification(QWidget):
             self.progress_bar.setValue(1)
         self.set_variant("success")
         self.restart_timer(auto_close)
+        self._progress_active = False
+        if self.is_progress_toast:
+            self.minimize_button.setVisible(False)
 
     def mark_failed(self, message: Optional[str] = None, details: Optional[str] = None, auto_close: Optional[int] = None) -> None:
         if message:
@@ -211,6 +274,9 @@ class Notification(QWidget):
             self.progress_bar.setValue(0)
         self.set_variant("error")
         self.restart_timer(auto_close)
+        self._progress_active = False
+        if self.is_progress_toast:
+            self.minimize_button.setVisible(False)
 
     def dismiss(self) -> None:
         if self._timer is not None:
@@ -219,8 +285,11 @@ class Notification(QWidget):
 
     def _toggle_details(self, checked: bool) -> None:
         self.detail_toggle.setArrowType(Qt.DownArrow if checked else Qt.RightArrow)
-        has_text = bool(self._details_text)
+        has_text = bool(self._detail_lines)
+        if checked and has_text:
+            self.details_label.setText(self._details_text)
         self.details_label.setVisible(checked and has_text)
+        self.details_toggled.emit(checked)
         self.request_relayout()
 
 
@@ -273,7 +342,8 @@ class StackedNotifications(QWidget):
     def remove_notification(self, notification: QWidget) -> None:
         if notification in self._notifications:
             self._notifications.remove(notification)  # type: ignore[arg-type]
-        self.layout.removeWidget(notification)
+        if self.layout.indexOf(notification) != -1:
+            self.layout.removeWidget(notification)
         notification.deleteLater()
         if not self._notifications:
             self.hide()
@@ -292,3 +362,22 @@ class StackedNotifications(QWidget):
             max(0, geometry.right() - self.width() - 24),
             max(0, geometry.bottom() - self.height() - 24),
         )
+
+    def minimize_notification(self, notification: Notification) -> None:
+        if notification not in self._notifications:
+            return
+        if self.layout.indexOf(notification) != -1:
+            self.layout.removeWidget(notification)
+        notification.hide()
+        if not any(n.isVisible() for n in self._notifications):
+            self.hide()
+        self.request_relayout()
+
+    def restore_notification(self, notification: Notification) -> None:
+        if notification not in self._notifications:
+            self._notifications.append(notification)
+        if self.layout.indexOf(notification) == -1:
+            self.layout.addWidget(notification)
+        notification.show()
+        self.show()
+        self.request_relayout()

@@ -61,6 +61,7 @@ class Worker(QThread):
 
 class _ProgressEmitter(QObject):
     progress = Signal(str)
+    detail = Signal(str)
 
 
 class Session:
@@ -134,6 +135,7 @@ class Session:
             self._progress_emitter = _ProgressEmitter()
         self._progress_emitter.moveToThread(mw.thread())
         self._progress_emitter.progress.connect(mw.set_progress_bar_status, Qt.QueuedConnection)
+        self._progress_emitter.detail.connect(mw.append_progress_detail, Qt.QueuedConnection)
         if self._last_progress_message:
             self._progress_emitter.progress.emit(self._last_progress_message)
         logger.debug("Main window initialized for session progress updates")
@@ -232,6 +234,15 @@ class Session:
 
         self._progress_emitter.progress.emit(message)
         logger.info("Progress bar message: %s", message)
+
+    def report_progress_detail(self, message: str) -> None:
+        if not message:
+            return
+        if self._progress_emitter is None:
+            logger.debug("Progress detail queued (emitter not ready): %s", message)
+            return
+        self._progress_emitter.detail.emit(message)
+        logger.info("Progress detail: %s", message)
 
     async def execute(self, procedure_name, *args):
         query = f'SELECT * FROM "sc_ref".{procedure_name}({",".join([f"${i + 1}" for i, _ in enumerate(args)])})'
@@ -347,10 +358,12 @@ class Session:
                 result = func(*args, **kwargs)
                 if isinstance(result, RaiseError):
                     logger.error("Stored procedure %s raised database error: %s", func.__name__, result)
+                    self.report_progress_detail(f"✖ {description or func.__name__}")
                     if 'seslogin' in str(result):
                         self.call('checkuserpassword', self._login, self._password)
                     return result
 
+                self.report_progress_detail(f"✔ {description or func.__name__}")
                 return parse_obj_as(return_type, result)
 
             return wrapper
