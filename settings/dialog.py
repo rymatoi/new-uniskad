@@ -1,3 +1,6 @@
+from dataclasses import dataclass
+from typing import List
+
 from PySide2.QtCore import Qt
 from PySide2.QtGui import QIcon
 
@@ -38,16 +41,54 @@ class SettingsDialog(BaseDialog):
         self.treeview.show()
         model = SettingsTreeModel()
 
-        tree_items = sp.get_settings_tree()
+        tree_items = self._load_tree_items()
         model.ini_tree(tree_items)
 
         self.treeview.setModel(model)
+        if model.rowCount():
+            first_index = model.index(0, 0)
+            if first_index.isValid():
+                self.treeview.setCurrentIndex(first_index)
+                self.treeview.open_item(first_index)
 
     def create_connections(self):
         """Функция создания привязок"""
         self.ui.acceptPushButton.clicked.connect(self.accept)
         self.ui.cancelPushButton.clicked.connect(self.close)
+        self.ui.applyPushButton.clicked.connect(self.apply)
 
     def accept(self) -> None:
-        self.parent().user_settings.update()
+        self.apply()
         super().accept()
+
+    def apply(self):
+        parent = self.parent()
+        if parent is not None and hasattr(parent, 'apply_user_settings'):
+            parent.apply_user_settings()
+
+    @staticmethod
+    def _default_tree_items() -> List['StaticSettingsItem']:
+        return [
+            StaticSettingsItem(id=1, id_up=0, prop_name='name', prop_value='Общие'),
+            StaticSettingsItem(id=1, id_up=0, prop_name='tab_id', prop_value='general'),
+            StaticSettingsItem(id=2, id_up=0, prop_name='name', prop_value='Оформление'),
+            StaticSettingsItem(id=2, id_up=0, prop_name='tab_id', prop_value='appearance'),
+        ]
+
+    def _load_tree_items(self) -> List['StaticSettingsItem']:
+        try:
+            tree_items = sp.get_settings_tree()
+            if tree_items:
+                return tree_items
+        except Exception:
+            logger.exception('Не удалось получить дерево настроек из БД. Используем локальные настройки.')
+        return self._default_tree_items()
+
+
+@dataclass
+class StaticSettingsItem:
+    id: int
+    id_up: int
+    prop_name: str
+    prop_value: str
+    type_: str = 'settings_item'
