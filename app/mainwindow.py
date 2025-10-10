@@ -3,10 +3,10 @@ import json
 from typing import Any, Dict, Optional
 
 from PySide2 import QtWidgets
-from PySide2.QtCore import QEventLoop, QSize, Slot
+from PySide2.QtCore import QEventLoop, QSize, Slot, Signal, QTimer
 from PySide2.QtGui import QIcon, QCloseEvent, Qt, QKeySequence, QFont
 from PySide2.QtWidgets import QMenu, QToolBar, QHBoxLayout, QToolButton, QWidget, QDialog, QShortcut, QDockWidget, \
-    QAction, QProgressBar, QLabel
+    QAction, QLabel
 from app import app_logger, _menu, basic_funcs
 from app.cache import DataCache
 from app.history_manager.history_manager import EventStack
@@ -25,6 +25,15 @@ from db import session
 import config.config
 
 logger = app_logger.get_logger(__name__)
+
+
+class ClickableLabel(QLabel):
+    clicked = Signal()
+
+    def mouseReleaseEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self.clicked.emit()
+        super().mouseReleaseEvent(event)
 
 
 class Dock_:
@@ -92,6 +101,17 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.data_cache = DataCache()
 
+        self.notification = None
+        self.notifications_enabled = True
+        self.notifications_timeout = 10000
+        self._current_progress_message = ''
+        self._progress_notification = None
+        self._progress_detail_lines: list[str] = []
+        self._progress_collapsed = False
+        self._status_progress_timer = QTimer(self)
+        self._status_progress_timer.setSingleShot(True)
+        self._status_progress_timer.timeout.connect(self._on_status_progress_timeout)
+
         session.init_main_window(self)
 
         self.roles = []
@@ -117,15 +137,18 @@ class MainWindow(QtWidgets.QMainWindow):
             self.PROJECT: Dock_('Дерево проекта', self.PROJECT_TREE, Qt.LeftDockWidgetArea, ProjectDockWidget)
         }
 
-        self.progress_bar = QProgressBar()
-        self.progress_bar.setRange(0, 0)  # Indeterminate mode
-        self.progress_bar.setVisible(False)
-        self._current_progress_message = ''
+        self._last_worker_error = None
 
         self.status_label = QLabel()
-
-        self.statusBar().addWidget(self.progress_bar)
         self.statusBar().addWidget(self.status_label)
+
+        self.status_progress_label = ClickableLabel()
+        self.status_progress_label.setObjectName('statusProgressLabel')
+        self.status_progress_label.setStyleSheet('color: #f1f1f1; text-decoration: underline;')
+        self.status_progress_label.setVisible(False)
+        self.status_progress_label.clicked.connect(self._restore_progress_from_status_bar)
+        self.status_progress_label.setCursor(Qt.PointingHandCursor)
+        self.statusBar().addPermanentWidget(self.status_progress_label)
 
         self.work_data = None
         self.admin_roles = None
@@ -153,9 +176,6 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.connect_triggered_funcs()
 
-        self.notification = None
-        self.notifications_enabled = True
-        self.notifications_timeout = 10000
         self.init_notifications()
 
         self.event_stack = EventStack()
@@ -180,14 +200,133 @@ class MainWindow(QtWidgets.QMainWindow):
         self.notification.setGeometry(100, 100, 600, 100)
         self.notification.hide()
 
-    def show_notification(self, text):
+    def show_notification(self, text, details=None, level='info', timeout=None):
         """
         Показывает окошко с уведомлением
         """
-        if not self.notifications_enabled:
+        if not getattr(self, 'notifications_enabled', True):
             return
+        if self.notification is None:
+            self.init_notifications()
         self.notification.show()
-        self.notification.add_notification(text, self.notifications_timeout)
+        note_timeout = timeout if timeout is not None else self.notifications_timeout
+        return self.notification.add_notification(
+            text,
+            timeout=note_timeout,
+            details=details,
+            variant=level,
+            show_progress=(level == 'progress'),
+        )
+
+    def show_progress_notification(self, text, details=None):
+        if not getattr(self, 'notifications_enabled', True):
+            return None
+        if self.notification is None:
+            self.init_notifications()
+        if self._progress_notification is not None:
+            if text:
+                self._progress_notification.set_message(text)
+            if details:
+                self._progress_detail_lines = [details]
+                self._progress_notification.set_detail_lines(self._progress_detail_lines)
+            return self._progress_notification
+        self.notification.show()
+        notification = self.notification.add_notification(
+            text,
+            timeout=None,
+            details=None,
+            variant='progress',
+            show_progress=True,
+            collapsible=True,
+        )
+        notification.collapse_requested.connect(self._collapse_progress_notification)
+        notification.expand_requested.connect(self._expand_progress_notification)
+        notification.closed.connect(self._on_progress_notification_closed)
+        if self._progress_detail_lines:
+            notification.set_detail_lines(self._progress_detail_lines)
+        elif details:
+            self._progress_detail_lines = [details]
+            notification.set_detail_lines(self._progress_detail_lines)
+        self._progress_notification = notification
+        self._progress_collapsed = False
+        return notification
+
+    def _collapse_progress_notification(self, notification):
+        if notification is None or notification is not self._progress_notification:
+            return
+        if self.notification is not None:
+            self.notification.set_notification_visibility(notification, False)
+        self._progress_collapsed = True
+        self.status_progress_label.setText(
+            self._format_status_progress_text(self._current_progress_message)
+        )
+        self.status_progress_label.setVisible(True)
+        self._status_progress_timer.stop()
+
+    def _expand_progress_notification(self, notification):
+        if notification is None or notification is not self._progress_notification:
+            return
+        if self.notification is not None:
+            self.notification.set_notification_visibility(notification, True)
+        self._progress_collapsed = False
+        self._status_progress_timer.stop()
+        self.status_progress_label.clear()
+        self.status_progress_label.setVisible(False)
+
+    def _restore_progress_from_status_bar(self):
+        if self._progress_notification is None:
+            self.status_progress_label.clear()
+            self.status_progress_label.setVisible(False)
+            return
+        self._progress_notification.set_collapsed(False)
+        self._expand_progress_notification(self._progress_notification)
+
+    def _on_progress_notification_closed(self, notification):
+        if notification is not self._progress_notification:
+            return
+        self._clear_progress_state()
+
+    def _clear_progress_state(self):
+        self._status_progress_timer.stop()
+        self.status_progress_label.clear()
+        self.status_progress_label.setVisible(False)
+        self._progress_notification = None
+        self._progress_collapsed = False
+        self._progress_detail_lines.clear()
+        self._current_progress_message = ''
+
+    def _append_progress_detail(self, message):
+        if not message:
+            return
+        if self._progress_detail_lines and self._progress_detail_lines[-1] == message:
+            return
+        self._progress_detail_lines.append(message)
+        if self._progress_notification is not None:
+            self._progress_notification.set_detail_lines(self._progress_detail_lines)
+
+    def _format_status_progress_text(self, message, suffix='показать'):
+        base = message or 'Загрузка...'
+        return f'{base} — {suffix}'
+
+    def _on_status_progress_timeout(self):
+        if self._progress_collapsed and self._progress_notification is not None:
+            self._progress_notification.dismiss()
+        else:
+            self.status_progress_label.clear()
+            self.status_progress_label.setVisible(False)
+
+    @staticmethod
+    def _format_exception(exc):
+        return f'{exc.__class__.__name__}: {exc}'
+
+    def notify_exception(self, message, exc, level='error', details=None):
+        if level == 'error':
+            logger.exception('%s: %s', message, exc)
+        else:
+            logger.warning('%s: %s', message, exc)
+        detail_text = details if details is not None else self._format_exception(exc)
+        timeout = None if level == 'error' else self.notifications_timeout
+        self.show_notification(message, details=detail_text, level=level, timeout=timeout)
 
     def set_statusbar_text(self, text):
         """
@@ -421,6 +560,11 @@ class MainWindow(QtWidgets.QMainWindow):
         super().closeEvent(event)
 
     def handle_result(self, result):
+        if isinstance(result, Exception):
+            self._last_worker_error = result
+            self.notify_exception('Ошибка при выполнении операции', result)
+        else:
+            self._last_worker_error = None
         self.result = result
 
     def display_result(self, result):
@@ -431,21 +575,62 @@ class MainWindow(QtWidgets.QMainWindow):
 
     @Slot()
     def on_worker_started(self):
+        if self._progress_notification is not None:
+            self._progress_notification.dismiss()
+        self._status_progress_timer.stop()
+        self.status_progress_label.clear()
+        self.status_progress_label.setVisible(False)
+        self._progress_collapsed = False
+        self._progress_detail_lines.clear()
         if not self._current_progress_message:
             self._current_progress_message = 'Загрузка...'
-        self.progress_bar.setRange(0, 0)
-        self.set_progress_bar_status(self._current_progress_message)
-        self.progress_bar.setVisible(True)
+        notification = self.show_progress_notification(self._current_progress_message)
+        if notification is not None:
+            notification.set_detail_lines(self._progress_detail_lines)
+        self._append_progress_detail(self._current_progress_message)
 
     @Slot(str)
     def set_progress_bar_status(self, message):
         self._current_progress_message = message
-        self.progress_bar.setFormat(message + '..')
+        if self._progress_notification is not None:
+            self._progress_notification.set_message(message)
+        if self._progress_collapsed:
+            self.status_progress_label.setText(
+                self._format_status_progress_text(self._current_progress_message)
+            )
+        self._append_progress_detail(message)
 
     @Slot()
     def on_worker_finished(self):
-        self.progress_bar.setRange(0, 100)
-        self.progress_bar.setValue(100)
+        notification = self._progress_notification
+        if notification is None:
+            return
+        self._status_progress_timer.stop()
+        if self._last_worker_error is not None:
+            detail_text = self._format_exception(self._last_worker_error)
+            notification.mark_failed('Ошибка', detail_text, auto_close=None)
+            self._current_progress_message = 'Ошибка'
+            self._append_progress_detail(self._current_progress_message)
+            if self._progress_collapsed:
+                self.status_progress_label.setText(
+                    self._format_status_progress_text(self._current_progress_message)
+                )
+                self.status_progress_label.setVisible(True)
+                self._status_progress_timer.stop()
+        else:
+            auto_close = None if self._progress_collapsed else 2500
+            notification.mark_complete('Готово', auto_close=auto_close)
+            self._current_progress_message = 'Готово'
+            self._append_progress_detail(self._current_progress_message)
+            if self._progress_collapsed:
+                self.status_progress_label.setText(
+                    self._format_status_progress_text(self._current_progress_message)
+                )
+                self.status_progress_label.setVisible(True)
+                self._status_progress_timer.start(4000)
+        if not self._progress_collapsed:
+            self._clear_progress_state()
+        self._last_worker_error = None
 
     def run_with_progress(self, func, progress_text="Загрузка..."):
         self.result = None
@@ -464,8 +649,6 @@ class MainWindow(QtWidgets.QMainWindow):
         event_loop.exec_()
 
         # self.status_label.clear()
-        self.progress_bar.setVisible(False)
-
         return self.result
 
     @staticmethod
@@ -495,7 +678,8 @@ class MainWindow(QtWidgets.QMainWindow):
             for parser in (json.loads, ast.literal_eval):
                 try:
                     parsed = parser(raw_value)
-                except Exception:
+                except Exception as exc:
+                    logger.debug('Ошибка парсинга состояния дерева: %s', exc)
                     continue
                 return MainWindow._coerce_tree_states(parsed)
             return {}
@@ -511,7 +695,11 @@ class MainWindow(QtWidgets.QMainWindow):
         try:
             accepted = tree_widget.schedule_state_restore(state)
         except Exception as exc:
-            logger.warning('Не удалось восстановить состояние дерева "%s": %s', plugin_name, exc)
+            self.notify_exception(
+                f'Не удалось восстановить состояние дерева "{plugin_name}"',
+                exc,
+                level='warning'
+            )
             return
         if accepted:
             self._tree_states_to_restore.pop(str(plugin_name), None)
@@ -531,7 +719,7 @@ class MainWindow(QtWidgets.QMainWindow):
                     restored_main = self.restoreState(state_bytes)
                     logger.debug('Результат восстановления состояния окна: %s', restored_main)
         except Exception as exc:
-            logger.warning('Не удалось восстановить состояние окна: %s', exc)
+            self.notify_exception('Не удалось восстановить состояние окна', exc, level='warning')
 
         try:
             if central_bytes is not None:
@@ -541,7 +729,7 @@ class MainWindow(QtWidgets.QMainWindow):
                     restored_central = self.ui.centralWidget.restoreState(central_bytes)
                     logger.debug('Результат восстановления центрального окна: %s', restored_central)
         except Exception as exc:
-            logger.warning('Не удалось восстановить состояние центрального окна: %s', exc)
+            self.notify_exception('Не удалось восстановить состояние центрального окна', exc, level='warning')
         finally:
             self._pending_window_state_bytes = None
             self._pending_central_window_state_bytes = None
@@ -586,21 +774,21 @@ class MainWindow(QtWidgets.QMainWindow):
                 logger.debug('Сохраняем геометрию окна: длина raw=%s', geometry_bytes.size())
                 self.user_settings.set('main_window_geometry', geometry_bytes)
             except Exception as exc:
-                logger.warning('Не удалось сохранить геометрию окна: %s', exc)
+                self.notify_exception('Не удалось сохранить геометрию окна', exc, level='warning')
 
             try:
                 state_bytes = self.saveState()
                 logger.debug('Сохраняем состояние окна: длина raw=%s', state_bytes.size())
                 self.user_settings.set('main_window_state', state_bytes)
             except Exception as exc:
-                logger.warning('Не удалось сохранить состояние окна: %s', exc)
+                self.notify_exception('Не удалось сохранить состояние окна', exc, level='warning')
 
             try:
                 central_state_bytes = self.ui.centralWidget.saveState()
                 logger.debug('Сохраняем состояние центрального окна: длина raw=%s', central_state_bytes.size())
                 self.user_settings.set('central_window_state', central_state_bytes)
             except Exception as exc:
-                logger.warning('Не удалось сохранить состояние центрального окна: %s', exc)
+                self.notify_exception('Не удалось сохранить состояние центрального окна', exc, level='warning')
         else:
             self.user_settings.remove('main_window_geometry')
             self.user_settings.remove('main_window_state')
@@ -624,8 +812,12 @@ class MainWindow(QtWidgets.QMainWindow):
                     continue
                 try:
                     state = tree_widget.capture_persistent_state()
-                except Exception:
-                    logger.exception('Не удалось сохранить состояние дерева для режима "%s".', plugin_key)
+                except Exception as exc:
+                    self.notify_exception(
+                        f'Не удалось сохранить состояние дерева для режима "{plugin_key}"',
+                        exc,
+                        level='warning'
+                    )
                     continue
                 tree_states[str(plugin_key)] = state
 
@@ -634,7 +826,7 @@ class MainWindow(QtWidgets.QMainWindow):
                     serialized = json.dumps(tree_states, ensure_ascii=False)
                     self.user_settings.set('tree_states', serialized)
                 except (TypeError, ValueError) as exc:
-                    logger.warning('Не удалось сериализовать состояние деревьев: %s', exc)
+                    self.notify_exception('Не удалось сериализовать состояние деревьев', exc, level='warning')
             else:
                 self.user_settings.remove('tree_states')
         else:
@@ -654,7 +846,7 @@ class MainWindow(QtWidgets.QMainWindow):
                     else:
                         logger.debug('Геометрия окна пуста, пропускаем восстановление')
                 except Exception as exc:
-                    logger.warning('Не удалось восстановить геометрию окна: %s', exc)
+                    self.notify_exception('Не удалось восстановить геометрию окна', exc, level='warning')
 
             window_state = self.user_settings.get_bytes('main_window_state')
             if not window_state.isEmpty():
