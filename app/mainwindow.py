@@ -1,5 +1,6 @@
 import ast
 import json
+from pathlib import Path
 
 from PySide2 import QtWidgets
 from PySide2.QtCore import QEventLoop, Slot
@@ -85,6 +86,11 @@ class MainWindow(QtWidgets.QMainWindow):
         self.ui = Ui_MainWindow()
         self.ui.setupUi(self)
 
+        self._modern_ui_enabled = False
+        self._modern_stylesheet = ''
+        self._modern_stylesheet_path = Path(__file__).resolve().parent.parent / 'resources' / 'styles' / 'modern_light.qss'
+        self.apply_user_interface_theme(initial=True)
+
         self.user = None
         self.init_user()
 
@@ -154,6 +160,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.notification = None
         self.notifications_timeout = 10000
         self.init_notifications()
+        self.apply_user_interface_theme()
 
         self.event_stack = EventStack()
         shortcut_undo = QShortcut(QKeySequence('Ctrl+Z'), self)
@@ -172,7 +179,7 @@ class MainWindow(QtWidgets.QMainWindow):
         """
         Инициализация виджета уведомлений
         """
-        self.notification = StackedNotifications(self)
+        self.notification = StackedNotifications(self, modern_theme=self._modern_ui_enabled)
         self.notification.setGeometry(100, 100, 600, 100)
         self.notification.hide()
 
@@ -182,6 +189,46 @@ class MainWindow(QtWidgets.QMainWindow):
         """
         self.notification.show()
         self.notification.add_notification(text, self.notifications_timeout)
+
+    def _load_modern_stylesheet(self):
+        if self._modern_stylesheet:
+            return self._modern_stylesheet
+
+        try:
+            with open(self._modern_stylesheet_path, 'r', encoding='utf-8') as stylesheet_file:
+                self._modern_stylesheet = stylesheet_file.read()
+        except FileNotFoundError:
+            logger.warning('Modern UI stylesheet not found: %s', self._modern_stylesheet_path)
+            self._modern_stylesheet = ''
+        except OSError as exc:
+            logger.error('Failed to load modern UI stylesheet: %s', exc)
+            self._modern_stylesheet = ''
+
+        return self._modern_stylesheet
+
+    def apply_user_interface_theme(self, initial: bool = False):
+        use_modern_ui = self.user_settings.get('use_modern_ui', False)
+        if isinstance(use_modern_ui, str):
+            use_modern_ui = use_modern_ui.lower() == 'true'
+        elif use_modern_ui is None:
+            use_modern_ui = False
+
+        app = QtWidgets.QApplication.instance()
+        if app is None:
+            return
+
+        if use_modern_ui:
+            stylesheet = self._load_modern_stylesheet()
+            if stylesheet:
+                app.setStyleSheet(stylesheet)
+            self._modern_ui_enabled = True
+        else:
+            if self._modern_ui_enabled or initial:
+                app.setStyleSheet('')
+            self._modern_ui_enabled = False
+
+        if hasattr(self, 'notification') and self.notification is not None:
+            self.notification.set_modern_theme(self._modern_ui_enabled)
 
     def set_statusbar_text(self, text):
         """
