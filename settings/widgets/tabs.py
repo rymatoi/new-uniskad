@@ -1,6 +1,8 @@
 from PySide2.QtGui import QFontDatabase
 from PySide2.QtWidgets import QWidget
+
 from resources.ui.ui_py.ui_settings_appearance import Ui_SettingsAppearance
+from resources.ui.ui_py.ui_settings_general import Ui_SettingsGeneral
 
 
 class AppearanceTab(QWidget):
@@ -59,3 +61,58 @@ class AppearanceTab(QWidget):
         font_size = self.mw.user_settings.get('font_size')
         if font_size:
             self.ui.fontSizeComboBox.setCurrentText(str(font_size))
+
+
+class GeneralTab(QWidget):
+    """Вкладка с основными настройками приложения."""
+
+    def __init__(self, index, parent, main_window=None):
+        super().__init__(parent)
+        self.mw = main_window
+        self.setupUi(Ui_SettingsGeneral())
+        self.init_values()
+        self.create_connections()
+
+    def setupUi(self, ui):
+        widget = QWidget(self)
+        widget.ui = ui
+        widget.ui.setupUi(widget)
+        self.ui = widget.ui
+
+    def create_connections(self):
+        self.ui.sessionTimeoutSpinBox.valueChanged.connect(
+            lambda: self.prop_changed('application_close_timeout'))
+        self.ui.notificationTimeoutSpinBox.valueChanged.connect(
+            lambda: self.prop_changed('notifications_timeout'))
+
+    def prop_changed(self, prop_name):
+        if self.mw is None:
+            return
+
+        if prop_name == 'application_close_timeout':
+            timeout = int(self.ui.sessionTimeoutSpinBox.value())
+            self.mw.user_settings.set('application_close_timeout', timeout)
+        elif prop_name == 'notifications_timeout':
+            timeout_seconds = int(self.ui.notificationTimeoutSpinBox.value())
+            self.mw.user_settings.set('notifications_timeout', timeout_seconds * 1000)
+
+    def init_values(self):
+        timeout = self.mw.user_settings.get('application_close_timeout')
+        if timeout is None:
+            timeout = 30
+        try:
+            timeout_value = int(timeout)
+        except (TypeError, ValueError):
+            timeout_value = 30
+        timeout_value = max(timeout_value, self.ui.sessionTimeoutSpinBox.minimum())
+        timeout_value = min(timeout_value, self.ui.sessionTimeoutSpinBox.maximum())
+        self.ui.sessionTimeoutSpinBox.setValue(timeout_value)
+
+        notifications_timeout = self.mw.user_settings.get('notifications_timeout', getattr(self.mw, 'notifications_timeout', 10000))
+        try:
+            notifications_seconds = int(notifications_timeout) // 1000
+        except (TypeError, ValueError):
+            notifications_seconds = getattr(self.mw, 'notifications_timeout', 10000) // 1000
+        notifications_seconds = max(notifications_seconds, self.ui.notificationTimeoutSpinBox.minimum())
+        notifications_seconds = min(notifications_seconds, self.ui.notificationTimeoutSpinBox.maximum())
+        self.ui.notificationTimeoutSpinBox.setValue(notifications_seconds)

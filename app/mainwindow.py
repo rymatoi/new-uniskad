@@ -3,7 +3,7 @@ import json
 
 from PySide2 import QtWidgets
 from PySide2.QtCore import QEventLoop, Slot
-from PySide2.QtGui import QIcon, QCloseEvent, Qt, QKeySequence
+from PySide2.QtGui import QIcon, QCloseEvent, Qt, QKeySequence, QFont
 from PySide2.QtWidgets import QMenu, QToolBar, QHBoxLayout, QToolButton, QWidget, QDialog, QShortcut, QDockWidget, \
     QAction, QProgressBar, QLabel
 from app import app_logger, _menu, basic_funcs
@@ -73,11 +73,12 @@ class MainWindow(QtWidgets.QMainWindow):
         super(MainWindow, self).__init__()
 
         self.user_settings = UserSettings()
+        app_instance = QtWidgets.QApplication.instance()
+        self._default_app_font = QFont(app_instance.font()) if app_instance else None
         self._tree_states_to_restore = {}
         self._pending_window_state_bytes = None
         self._pending_central_window_state_bytes = None
 
-        config.config.app.enable_timer(self.user_settings.get('application_close_timeout', 30))
         config.config.app._main_window_initialized = True  # TODO test
 
         self.result = None
@@ -154,6 +155,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.notification = None
         self.notifications_timeout = 10000
         self.init_notifications()
+
+        self.apply_user_settings()
 
         self.event_stack = EventStack()
         shortcut_undo = QShortcut(QKeySequence('Ctrl+Z'), self)
@@ -731,8 +734,74 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def show_settings(self):
         settings = SettingsDialog(self)
-        if settings.exec_() == QDialog.Accepted:
-            print('done')
+        settings.exec_()
+
+    def apply_user_settings(self):
+        self.user_settings.update()
+
+        self._apply_session_timeout()
+        self._apply_notifications_settings()
+        self._apply_global_font()
+        self._update_tree_view_fonts()
+
+    def _apply_session_timeout(self):
+        timeout = self.user_settings.get('application_close_timeout', 30)
+        try:
+            timeout_value = int(timeout)
+        except (TypeError, ValueError):
+            timeout_value = 30
+        if timeout_value <= 0:
+            config.config.app.disable_timer()
+        else:
+            config.config.app.enable_timer(timeout_value)
+
+    def _apply_notifications_settings(self):
+        timeout_ms = self.user_settings.get('notifications_timeout', self.notifications_timeout)
+        try:
+            timeout_ms = int(timeout_ms)
+        except (TypeError, ValueError):
+            timeout_ms = self.notifications_timeout
+        if timeout_ms <= 0:
+            timeout_ms = 1000
+        self.notifications_timeout = timeout_ms
+
+    def _apply_global_font(self):
+        app_instance = QtWidgets.QApplication.instance()
+        if app_instance is None:
+            return
+
+        use_custom_font = self.user_settings.get('use_custom_font', False)
+        if isinstance(use_custom_font, str):
+            use_custom_font = use_custom_font.lower() == 'true'
+
+        target_font = QFont(self._default_app_font) if self._default_app_font is not None else app_instance.font()
+
+        if use_custom_font:
+            font_name = self.user_settings.get('font_name')
+            font_size = self.user_settings.get('font_size')
+            if font_name:
+                target_font.setFamily(str(font_name))
+            if font_size:
+                try:
+                    target_font.setPointSize(int(font_size))
+                except (TypeError, ValueError):
+                    pass
+            app_instance.setFont(target_font)
+        elif self._default_app_font is not None:
+            app_instance.setFont(self._default_app_font)
+
+    def _update_tree_view_fonts(self):
+        font_name = self.user_settings.get('font_name')
+        font_size = self.user_settings.get('font_size')
+        for tree in self.findChildren(TreeView):
+            model = tree.model()
+            if model is None:
+                continue
+            if font_name:
+                model.font_name = font_name
+            if font_size:
+                model.font_size = font_size
+            tree.viewport().update()
 
     def _close(self):
         logger.info("Выход из программы.")
