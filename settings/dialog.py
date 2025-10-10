@@ -2,11 +2,12 @@ from PySide2.QtCore import Qt
 from PySide2.QtGui import QIcon
 
 from app import app_logger
-from db import sp
 from dialogs.base import BaseDialog
 from resources.ui.ui_py.ui_settings import Ui_SettingsDialog
 from settings.models import SettingsTreeModel
+from settings.data import get_settings_tree
 from settings.widgets.tree import SettingsTreeView
+from settings.widgets.tabs import AppearanceTab, GeneralTab
 
 logger = app_logger.get_logger(__name__)
 
@@ -27,6 +28,11 @@ class SettingsDialog(BaseDialog):
         self.setWindowTitle('Настройки')
 
         self.setWindowIcon(QIcon(":/uniskad.ico"))
+        self.treeview.set_tab_factories({
+            'appearance': AppearanceTab,
+            'general': GeneralTab,
+        })
+
         self.create_connections()  # Созадем привязки к виджетам
         self.setWindowFlag(Qt.WindowStaysOnTopHint)
 
@@ -38,7 +44,7 @@ class SettingsDialog(BaseDialog):
         self.treeview.show()
         model = SettingsTreeModel()
 
-        tree_items = sp.get_settings_tree()
+        tree_items = get_settings_tree()
         model.ini_tree(tree_items)
 
         self.treeview.setModel(model)
@@ -47,7 +53,13 @@ class SettingsDialog(BaseDialog):
         """Функция создания привязок"""
         self.ui.acceptPushButton.clicked.connect(self.accept)
         self.ui.cancelPushButton.clicked.connect(self.close)
+        self.ui.applyPushButton.clicked.connect(self.apply_changes)
 
     def accept(self) -> None:
-        self.parent().user_settings.update()
+        self.apply_changes()
         super().accept()
+
+    def apply_changes(self) -> None:
+        parent = self.parent()
+        if parent and hasattr(parent, 'apply_user_settings'):
+            parent.apply_user_settings()

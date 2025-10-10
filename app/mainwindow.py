@@ -72,6 +72,10 @@ class MainWindow(QtWidgets.QMainWindow):
 
         super(MainWindow, self).__init__()
 
+        base_font = self.font()
+        self._default_font_family = base_font.family()
+        self._default_font_size = base_font.pointSize() if base_font.pointSize() > 0 else 14
+
         self.user_settings = UserSettings()
         self._tree_states_to_restore = {}
         self._pending_window_state_bytes = None
@@ -163,6 +167,7 @@ class MainWindow(QtWidgets.QMainWindow):
         shortcut_redo.activated.connect(self.event_stack.redo)
 
         self.restore_windows_state()
+        self.apply_user_settings()
 
     def show_message_sb(self, message, timeout=5000):
         pass
@@ -731,9 +736,59 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def show_settings(self):
         settings = SettingsDialog(self)
-        if settings.exec_() == QDialog.Accepted:
-            print('done')
+        settings.exec_()
 
     def _close(self):
         logger.info("Выход из программы.")
         self.close()
+
+    def apply_user_settings(self):
+        self._apply_timeout_setting()
+        self._apply_font_settings()
+
+    def _apply_timeout_setting(self):
+        timeout = self.user_settings.get('application_close_timeout', 30)
+        try:
+            timeout = int(timeout)
+        except (TypeError, ValueError):
+            timeout = 30
+        config.config.app.enable_timer(timeout)
+
+    def _apply_font_settings(self):
+        use_custom_font = self.user_settings.get('use_custom_font', False)
+        if isinstance(use_custom_font, str):
+            use_custom_font = use_custom_font.lower() == 'true'
+
+        font_name = self.user_settings.get('font_name') if use_custom_font else None
+        font_size = self.user_settings.get('font_size') if use_custom_font else None
+
+        if isinstance(font_size, str):
+            try:
+                font_size = int(font_size)
+            except ValueError:
+                font_size = None
+
+        if font_size is None or font_size <= 0:
+            font_size = self._default_font_size
+
+        if not font_name:
+            font_name = self._default_font_family
+
+        app_font = self.font()
+        app_font.setFamily(font_name)
+        if font_size > 0:
+            app_font.setPointSize(font_size)
+        self.setFont(app_font)
+
+        app = QtWidgets.QApplication.instance()
+        if app is not None:
+            app.setFont(app_font)
+
+        for tree in self.findChildren(TreeView):
+            model = tree.model()
+            if model is None:
+                continue
+            model.font_name = font_name
+            model.font_size = font_size
+            model.layoutChanged.emit()
+            tree.viewport().update()
