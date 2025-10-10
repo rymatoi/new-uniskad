@@ -44,9 +44,16 @@ class Ui_SettingsAppearance(object):
 
         self.gridLayout.addLayout(self.horizontalLayout, 0, 0, 1, 1)
 
-        self.verticalSpacer = QSpacerItem(20, 251, QSizePolicy.Minimum, QSizePolicy.Expanding)
+        self.modernUiButton = QPushButton(SettingsAppearance)
+        self.modernUiButton.setObjectName(u"modernUiButton")
+        self.modernUiButton.setCheckable(True)
+        self.modernUiButton.setMinimumHeight(36)
 
-        self.gridLayout.addItem(self.verticalSpacer, 1, 0, 1, 1)
+        self.gridLayout.addWidget(self.modernUiButton, 1, 0, 1, 1)
+
+        self.verticalSpacer = QSpacerItem(20, 211, QSizePolicy.Minimum, QSizePolicy.Expanding)
+
+        self.gridLayout.addItem(self.verticalSpacer, 2, 0, 1, 1)
 
         self.retranslateUi(SettingsAppearance)
 
@@ -61,4 +68,6 @@ class Ui_SettingsAppearance(object):
                                                                    None))
         self.label.setText(
             QCoreApplication.translate("SettingsAppearance", u"\u0420\u0430\u0437\u043c\u0435\u0440:", None))
+        self.modernUiButton.setText(
+            QCoreApplication.translate("SettingsAppearance", u"\u0418\u043d\u0442\u0435\u0440\u0444\u0435\u0439\u0441 2025: \u0432\u044b\u043a\u043b\u044e\u0447\u0435\u043d", None))
     # retranslateUi

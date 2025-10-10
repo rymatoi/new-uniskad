@@ -26,6 +26,7 @@ class AppearanceTab(QWidget):
         self.ui.fontComboBox.currentTextChanged.connect(lambda: self.prop_changed('font_name'))
         self.ui.fontSizeComboBox.currentTextChanged.connect(lambda: self.prop_changed('font_size'))
         self.ui.customFontCheckBox.stateChanged.connect(lambda: self.prop_changed('use_custom_font'))
+        self.ui.modernUiButton.clicked.connect(self.toggle_modern_ui)
 
     def prop_changed(self, prop_name):
         if self.mw is None:
@@ -59,3 +60,19 @@ class AppearanceTab(QWidget):
         font_size = self.mw.user_settings.get('font_size')
         if font_size:
             self.ui.fontSizeComboBox.setCurrentText(str(font_size))
+
+        modern_ui = self.mw._get_bool_setting('use_modern_ui', False)
+        self.ui.modernUiButton.setChecked(modern_ui)
+        self.update_modern_ui_button_text(modern_ui)
+
+    def update_modern_ui_button_text(self, enabled: bool) -> None:
+        self.ui.modernUiButton.setText(
+            'Интерфейс 2025: включён' if enabled else 'Интерфейс 2025: выключен'
+        )
+
+    def toggle_modern_ui(self, checked: bool) -> None:
+        if self.mw is None:
+            return
+        self.mw.apply_modern_ui(checked)
+        self.ui.modernUiButton.setChecked(checked)
+        self.update_modern_ui_button_text(checked)
