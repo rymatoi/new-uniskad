@@ -77,7 +77,21 @@ class MainWindow(QtWidgets.QMainWindow):
         self._pending_window_state_bytes = None
         self._pending_central_window_state_bytes = None
 
-        config.config.app.enable_timer(self.user_settings.get('application_close_timeout', 30))
+        auto_close_enabled = self.user_settings.get('application_close_enabled', True)
+        if isinstance(auto_close_enabled, str):
+            auto_close_enabled = auto_close_enabled.lower() in {'1', 'true', 't', 'yes', 'y'}
+
+        timeout_value = self.user_settings.get('application_close_timeout', 30)
+        try:
+            timeout_minutes = int(timeout_value)
+        except (TypeError, ValueError):
+            timeout_minutes = 30
+
+        if auto_close_enabled:
+            config.config.app.enable_timer(timeout_minutes)
+        else:
+            config.config.app.disable_timer()
+
         config.config.app._main_window_initialized = True  # TODO test
 
         self.result = None
@@ -153,6 +167,14 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.notification = None
         self.notifications_timeout = 10000
+        notification_seconds = self.user_settings.get('notifications_timeout', 10)
+        try:
+            notification_seconds = int(notification_seconds)
+        except (TypeError, ValueError):
+            notification_seconds = 10
+        if notification_seconds is None or notification_seconds < 0:
+            notification_seconds = 10
+        self.notifications_timeout = notification_seconds * 1000
         self.init_notifications()
 
         self.event_stack = EventStack()
