@@ -6,7 +6,7 @@ from PySide2.QtCore import QEventLoop, Slot
 from PySide2.QtGui import QIcon, QCloseEvent, Qt, QKeySequence
 from PySide2.QtWidgets import QMenu, QToolBar, QHBoxLayout, QToolButton, QWidget, QDialog, QShortcut, QDockWidget, \
     QAction, QProgressBar, QLabel
-from app import app_logger, _menu, basic_funcs
+from app import app_logger, _menu, basic_funcs, theme_manager
 from app.cache import DataCache
 from app.history_manager.history_manager import EventStack
 from app.notifications import StackedNotifications
@@ -163,6 +163,32 @@ class MainWindow(QtWidgets.QMainWindow):
         shortcut_redo.activated.connect(self.event_stack.redo)
 
         self.restore_windows_state()
+        self.apply_saved_theme()
+
+    def modern_theme_enabled(self) -> bool:
+        value = self.user_settings.get('ui_modern_theme_enabled', False)
+        if isinstance(value, str):
+            value = value.lower() == 'true'
+        return bool(value)
+
+    def set_modern_theme_enabled(self, enabled: bool, persist: bool = True) -> None:
+        app = QtWidgets.QApplication.instance()
+        if app is None:
+            return
+
+        if persist and self.modern_theme_enabled() != enabled:
+            self.user_settings.set('ui_modern_theme_enabled', enabled)
+
+        if enabled:
+            theme_manager.apply_modern_theme(app)
+        else:
+            theme_manager.apply_classic_theme(app)
+
+        if self.notification is not None:
+            self.notification.apply_palette()
+
+    def apply_saved_theme(self) -> None:
+        self.set_modern_theme_enabled(self.modern_theme_enabled(), persist=False)
 
     def show_message_sb(self, message, timeout=5000):
         pass

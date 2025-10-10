@@ -1,6 +1,9 @@
+from typing import Optional
+
 from PySide2.QtWidgets import QApplication, QLabel, QVBoxLayout, QWidget, QPushButton, QSizePolicy, QScrollArea, \
     QHBoxLayout, QFrame
 from PySide2.QtCore import Qt, QTimer, QPoint
+from PySide2.QtGui import QPalette, QColor
 
 
 class Notification(QWidget):
@@ -9,32 +12,15 @@ class Notification(QWidget):
 
         # Set background color and rounded corners on frame
         self.frame = QFrame(self)
-        self.frame.setStyleSheet("background-color: #3c3f41; border-radius: 5px;")
         self.frame.setFrameShape(QFrame.StyledPanel)
 
         # Set label
         self.label = QLabel(self._get_short_text(text), self.frame)
-        self.label.setStyleSheet("color: white; padding: 10px;")
         self.label.setToolTip(text)
 
         # Set close button
         self.close_button = QPushButton("X", self.frame)
         self.close_button.setFixedSize(20, 20)
-        self.close_button.setStyleSheet(
-            """
-    QPushButton {
-        color: white;
-        font-weight: bold;
-        background-color: transparent;
-        border: none;
-        margin-right: 5px;
-    }
-    QPushButton:hover {
-        background-color: #2c2f30;
-        border-radius: 10px;
-    }
-    """
-        )
         self.close_button.clicked.connect(self.remove_notification)
 
         # Set timer to hide notification after timeout
@@ -54,7 +40,48 @@ class Notification(QWidget):
         self.layout().addWidget(self.frame)
         self.layout().setContentsMargins(0, 0, 0, 0)
         self.adjustSize()
+        self.apply_palette(QApplication.instance().palette())
         self.move(0, 0)
+
+    def apply_palette(self, palette: Optional[QPalette]) -> None:
+        if palette is None:
+            return
+
+        base = QColor(palette.color(QPalette.Base))
+        text = QColor(palette.color(QPalette.Text))
+        accent = QColor(palette.color(QPalette.Highlight))
+        border_color = QColor(accent)
+        border_color = border_color.lighter(150)
+
+        hover_color = QColor(accent)
+        hover_color = hover_color.lighter(140)
+        hover_rgba = f"rgba({hover_color.red()}, {hover_color.green()}, {hover_color.blue()}, 60)"
+
+        self.frame.setStyleSheet(
+            f"background-color: {base.name()};"
+            f"border-radius: 14px;"
+            f"border: 1px solid {border_color.name()};"
+            f"padding: 0;"
+        )
+        self.label.setStyleSheet(
+            f"color: {text.name()};"
+            f"padding: 10px 14px;"
+        )
+        self.close_button.setStyleSheet(
+            """
+            QPushButton {{
+                color: {text_color};
+                background-color: transparent;
+                border: none;
+                font-weight: bold;
+                margin-right: 6px;
+            }}
+            QPushButton:hover {{
+                border-radius: 10px;
+                background-color: {hover_rgba};
+            }}
+            """.format(hover_rgba=hover_rgba, text_color=text.name())
+        )
 
     def _get_short_text(self, text):
         """
@@ -99,10 +126,13 @@ class StackedNotifications(QWidget):
 
         # Set position of the notification widget
         self.update_position()
+        self.apply_palette()
 
     def add_notification(self, text, timeout=5000):
         if len(self._notifications) >= self.max_notifications:
-            self._notifications.pop(0)
+            old = self._notifications.pop(0)
+            self.layout.removeWidget(old)
+            old.deleteLater()
 
         # Create notification and add to layout
         notification = Notification(text, timeout, self)
@@ -113,22 +143,26 @@ class StackedNotifications(QWidget):
         notification.show()
 
         # Update widget height
-        self.update_height(notification)
+        self.update_height()
 
         # Set timer to update position after showing the notification
         QTimer.singleShot(100, self.update_position)
 
         # Set timer to remove notification after timeout
         QTimer.singleShot(timeout, lambda: self.remove_notification(notification))
+        notification.apply_palette(QApplication.instance().palette())
 
     def remove_notification(self, notification):
         # Remove notification from layout
         self.layout.removeWidget(notification)
+        if notification in self._notifications:
+            self._notifications.remove(notification)
+        notification.deleteLater()
 
         # Update widget height
-        self.update_height(notification)
+        self.update_height()
 
-        if self._notifications == 0:
+        if len(self._notifications) == 0:
             self.hide()
 
     def update_position(self):
@@ -143,13 +177,12 @@ class StackedNotifications(QWidget):
         # Set position of the notification widget
         self.move(x, y)
 
-    def update_height(self, notification):
+    def update_height(self):
         # Get number of notifications in layout
         count = self.layout.count()
 
         # Calculate new height
-        print(notification.height())
-        new_height = count * (self.notification_height + self.spacing) + self.spacing
+        new_height = max(0, count * (self.notification_height + self.spacing) + self.spacing)
 
         # If the new height is greater than the current height, increase the widget height
         if new_height > self.height:
@@ -163,3 +196,10 @@ class StackedNotifications(QWidget):
 
         # Set position of the notification widget
         self.update_position()
+
+    def apply_palette(self):
+        palette = QApplication.instance().palette()
+        if palette is None:
+            return
+        for notification in self._notifications:
+            notification.apply_palette(palette)
