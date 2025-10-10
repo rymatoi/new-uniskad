@@ -160,10 +160,22 @@ class TreeView(QTreeView):
         self.model().font_name = 'Times New Roman'
         self.model().font_size = 14
         if self.main_window:
-            if font_name := self.main_window.user_settings.get('font_name'):
-                self.model().font_name = font_name
-            if font_size := self.main_window.user_settings.get('font_size'):
-                self.model().font_size = font_size
+            use_custom_font = self.main_window.user_settings.get('use_custom_font', False)
+            if isinstance(use_custom_font, str):
+                use_custom_font = use_custom_font.lower() == 'true'
+            if use_custom_font:
+                if font_name := self.main_window.user_settings.get('font_name'):
+                    self.model().font_name = font_name
+                if font_size := self.main_window.user_settings.get('font_size'):
+                    try:
+                        self.model().font_size = int(font_size)
+                    except (TypeError, ValueError):
+                        self.model().font_size = font_size
+            else:
+                default_family = getattr(self.main_window, '_default_font_family', self.model().font_name)
+                default_size = getattr(self.main_window, '_default_font_size', self.model().font_size)
+                self.model().font_name = default_family
+                self.model().font_size = default_size
         self.resizeColumnToContents(0)
         self.refresh()
         self._reset_tree_state()
@@ -180,6 +192,8 @@ class TreeView(QTreeView):
         except TypeError:
             pass
         self._apply_pending_state()
+        if self.main_window and hasattr(self.main_window, 'apply_user_settings'):
+            self.main_window.apply_user_settings()
 
     def _reset_tree_state(self):
         self._search_text = ''
