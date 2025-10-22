@@ -11,6 +11,7 @@ from app.plugins.project.services.data_processors.test_dp import TestProcessor
 from app.plugins.project.services.interpolation import Interpolation
 from app.plugins.project.utils.converters.graph_converter import GraphConverter
 from app.plugins.project.services.approximation import ApproximationService
+from app.plugins.project.services.extrapolation import ExtrapolationService
 
 
 class ItemProcessor:
@@ -31,11 +32,11 @@ class ItemProcessor:
     @staticmethod
     def get_other_data(plot_data, other_data, test_nodes):
         """
-        Обрабатывает данные аппроксимаций и интерполяций.
+        Обрабатывает данные аппроксимаций, интерполяций и экстраполяций.
         
         Args:
             plot_data: Данные исходных кривых
-            other_data: Данные аппроксимаций/интерполяций в формате CustomCurve objects
+            other_data: Данные аппроксимаций/интерполяций/экстраполяций в формате CustomCurve objects
                 где values содержит JSON строку: {"name": "Испытание \"a\"", "type": "cubic", "test_id": 3214}
             test_nodes: Узлы тестов для получения стилей
         """
@@ -61,32 +62,70 @@ class ItemProcessor:
                     if curve_data['test_id'] == test_id:
                         curve_type = curve_data['type']
                         curve_name = curve_data['name']
-                        
-                        # Определяем тип кривой и применяем соответствующее преобразование
-                        if 'degree' in curve_data:  # Аппроксимация
+
+                        if curve_type == 'extrapolation':
+                            degree = int(curve_data.get('degree', 2))
+                            left_points = int(curve_data.get('left_points', 0))
+                            right_points = int(curve_data.get('right_points', 0))
+                            raw_left_limit = curve_data.get('left_limit')
+                            raw_right_limit = curve_data.get('right_limit')
+
+                            left_limit = None
+                            if raw_left_limit is not None:
+                                try:
+                                    left_limit = float(raw_left_limit)
+                                except (TypeError, ValueError):
+                                    left_limit = None
+
+                            right_limit = None
+                            if raw_right_limit is not None:
+                                try:
+                                    right_limit = float(raw_right_limit)
+                                except (TypeError, ValueError):
+                                    right_limit = None
+
+                            x_new, y_new = ExtrapolationService.polynomial_extrapolation(
+                                x,
+                                y,
+                                left_points,
+                                right_points,
+                                degree,
+                                left_limit=left_limit,
+                                right_limit=right_limit,
+                            )
+
+                            style = GraphConstants.EXTRAPOLATION_STYLE.copy()
+                            style['degree'] = degree
+                            style['left_points'] = left_points
+                            style['right_points'] = right_points
+                            if left_limit is not None:
+                                style['left_limit'] = left_limit
+                            if right_limit is not None:
+                                style['right_limit'] = right_limit
+
+                        elif 'degree' in curve_data:  # Аппроксимация
                             degree = int(curve_data['degree'])
                             x_new, y_new = ApproximationService.polynomial_fit(x, y, degree)
                             style = GraphConstants.APPROXIMATION_STYLE.copy()
-                            # Добавляем степень для точного сопоставления
                             style['degree'] = degree
+
                         else:  # Интерполяция
                             x_new, y_new = Interpolation.quadratic_interpolation(x, y, kind=curve_type)
                             style = GraphConstants.INTERPOLATION_STYLE.copy()
-                        
-                        # Добавляем тип для точного сопоставления
+
                         style['type'] = curve_type
-                        
+
                         # Используем пользовательские настройки стиля, если они есть
                         if 'color' in curve_data:
                             style['color'] = curve_data['color']
                         elif 'fill_color' in base_style:
                             style['color'] = base_style['fill_color']
-                            
+
                         if 'line_width' in curve_data:
                             style['width'] = curve_data['line_width']
-                            
+
                         style['name'] = curve_name
-                        
+
                         yield test_id, x_new, y_new, style
 
             except (InvalidCurveDataError, json.JSONDecodeError):

@@ -152,6 +152,9 @@ class PlotApproximationMixin:
             right_points: int = 20,
             degree: int = 2,
             name: Optional[str] = None,
+            color: Optional[str] = None,
+            line_width: Optional[int] = None,
+            save_to_db: bool = True,
             *,
             left_limit: Optional[float] = None,
             right_limit: Optional[float] = None,
@@ -175,9 +178,16 @@ class PlotApproximationMixin:
             # Создаем новый стиль
             curve_style = GraphConstants.EXTRAPOLATION_STYLE.copy()
             source_style = getattr(source_curve, 'style', {}) or {}
-            base_color = source_style.get('color', curve_style['color'])
-            fill_color = source_style.get('fill_color')
-            curve_style['color'] = fill_color or base_color
+
+            if color:
+                curve_style['color'] = color
+            else:
+                base_color = source_style.get('color', curve_style['color'])
+                fill_color = source_style.get('fill_color')
+                curve_style['color'] = fill_color or base_color
+
+            if line_width is not None:
+                curve_style['width'] = line_width
 
             # Добавляем кривую
             curve_name = name or f"Extrapolation (deg={degree})"
@@ -185,6 +195,24 @@ class PlotApproximationMixin:
 
             if new_curve:
                 new_curve.generated_curve_type = 'extrapolation'
+
+            if save_to_db:
+                test_id = self.data_processor.get_test_id_for_curve(source_curve)
+                if test_id is not None:
+                    custom_curve_id = self.data_processor.save_extrapolation(
+                        test_id=test_id,
+                        name=curve_name,
+                        degree=degree,
+                        left_points=left_points,
+                        right_points=right_points,
+                        left_limit=left_limit,
+                        right_limit=right_limit,
+                        color=color,
+                        line_width=line_width,
+                    )
+
+                    if new_curve and custom_curve_id:
+                        new_curve.custom_curve_id = custom_curve_id
 
         except Exception as e:
             logger.error(f"Ошибка при построении экстраполяции: {str(e)}")

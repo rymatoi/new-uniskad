@@ -82,6 +82,44 @@ class GraphDataManager:
             print(f"Ошибка при сохранении интерполяции: {str(e)}")
             return None
 
+    def save_extrapolation(
+            self,
+            test_id: int,
+            name: str,
+            degree: int,
+            left_points: int,
+            right_points: int,
+            *,
+            left_limit: Optional[float] = None,
+            right_limit: Optional[float] = None,
+            values=None,
+    ) -> Optional[object]:
+        """Сохраняет экстраполяцию в базу данных"""
+
+        try:
+            if values:
+                curve_data = values
+            else:
+                curve_data = {
+                    "name": name,
+                    "type": "extrapolation",
+                    "test_id": test_id,
+                    "degree": degree,
+                    "left_points": left_points,
+                    "right_points": right_points,
+                }
+
+                if left_limit is not None:
+                    curve_data["left_limit"] = left_limit
+                if right_limit is not None:
+                    curve_data["right_limit"] = right_limit
+
+            return self.save_custom_curve(curve_data)
+
+        except Exception as e:
+            print(f"Ошибка при сохранении экстраполяции: {str(e)}")
+            return None
+
     def save_custom_curve(self, curve_data):
         """Сохранение пользовательской кривой"""
         return sp.new_upd_custom_curve(
