@@ -1,5 +1,6 @@
-from app.plugins.project.visualization.widgets.curve import CurveItem
 from typing import Any, Union, List, Dict, Set, Callable
+
+from app.plugins.project.visualization.widgets.curve import CurveItem
 import numpy as np
 import pyqtgraph as pg
 
@@ -103,46 +104,47 @@ class PlotDataMixin:
                 del self.plot_processor.curve_map[test_id]
 
     def remove_custom_curve(self, curve) -> bool:
-        """Удаляет пользовательскую кривую из БД и с графика
-        
+        """Удаляет пользовательскую или сгенерированную кривую из БД и с графика
+
         Args:
             curve: Объект кривой для удаления
-            
+
         Returns:
             bool: True если удаление успешно, False в противном случае
         """
-        # Получаем ID кастомной кривой
-        if not hasattr(curve, 'custom_curve_id') or curve.custom_curve_id is None:
-            return False
-            
-        # Удаляем из базы данных
-        result = self.data_processor.remove_curve(curve.custom_curve_id)
-        
-        # Если удаление из БД успешно, удаляем с графика
-        if result:
-            # Удаляем из интерфейса
+        # Получаем ID кастомной кривой (может отсутствовать у экстраполяций)
+        curve_id = getattr(curve, 'custom_curve_id', None)
+
+        # Если ID есть - сначала пытаемся удалить запись из БД
+        if curve_id is not None:
+            if not self.data_processor.remove_curve(curve_id):
+                return False
+
+        # Удаляем из интерфейса
+        try:
             self.removeItem(curve)
-            
-            # Удаляем из списка кривых
-            if curve in self.curve_items:
-                self.curve_items.remove(curve)
-                
-            # Удаляем из словаря выбранных точек
-            if curve in self.selected_points:
-                del self.selected_points[curve]
-            
-            # Обновляем легенду
-            if hasattr(self.plotItem, 'legend') and self.plotItem.legend:
-                for i, (sample, label) in enumerate(list(self.plotItem.legend.items)):
-                    if getattr(sample, 'item', None) == curve:
-                        self.plotItem.legend.items.pop(i)
-                        sample.setParentItem(None)
-                        label.setParentItem(None)
-                        break
-                        
-            return True
-            
-        return False
+        except Exception:
+            # На случай если кривая уже удалена с графика
+            pass
+
+        # Удаляем из списка кривых
+        if curve in self.curve_items:
+            self.curve_items.remove(curve)
+
+        # Удаляем из словаря выбранных точек
+        if curve in self.selected_points:
+            del self.selected_points[curve]
+
+        # Обновляем легенду
+        if hasattr(self.plotItem, 'legend') and self.plotItem.legend:
+            for i, (sample, label) in enumerate(list(self.plotItem.legend.items)):
+                if getattr(sample, 'item', None) == curve:
+                    self.plotItem.legend.items.pop(i)
+                    sample.setParentItem(None)
+                    label.setParentItem(None)
+                    break
+
+        return True
 
     def check_x_val_constraint(self, i, project_id):
         """Проверяет, удовлетворяет ли значение ограничениям параметров"""
@@ -288,10 +290,14 @@ class PlotDataMixin:
         if z_key not in z_data:
             return result_groups
 
-        # Собираем все значения параметра Z
+        # Собираем все значения параметра Z, учитывая вычисленные формулы
         z_values = []
         for param_obj in z_data[z_key]:
-            if param_obj.param_prop_name == 'value':
+            prop_name = getattr(param_obj, 'param_prop_name', getattr(param_obj, 'prop_name', ''))
+
+            if prop_name == 'cformula':
+                z_values.append(param_obj.prop_value)
+            elif prop_name == 'value':
                 z_values.append(param_obj.prop_value)
 
         # Если нет значений параметра Z, возвращаем пустой результат

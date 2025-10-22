@@ -83,6 +83,16 @@ class PlotProcessor(DataProcessor):
                         curve_matches = False
 
                     if curve_matches:
+                        for field in ('left_points', 'right_points', 'left_limit', 'right_limit'):
+                            if field in curve_data:
+                                style_value = style.get(field)
+                                if style_value is None:
+                                    continue
+                                if curve_data.get(field) != style_value:
+                                    curve_matches = False
+                                    break
+
+                    if curve_matches:
                         best_match = curve_obj
                         best_match_index = i
                         break
@@ -167,6 +177,58 @@ class PlotProcessor(DataProcessor):
         custom_curve = self.data_manager.save_approximation(test_id, name, degree, values)
 
         # Обновляем кеш
+        if custom_curve:
+            self.other_data.append(custom_curve)
+
+        return custom_curve.id if custom_curve else None
+
+    def save_extrapolation(
+            self,
+            test_id,
+            name,
+            degree,
+            left_points,
+            right_points,
+            *,
+            left_limit=None,
+            right_limit=None,
+            color=None,
+            line_width=None,
+    ):
+        """Сохраняет экстраполированную кривую в БД"""
+
+        if test_id is None:
+            return None
+
+        values = {
+            "name": name,
+            "type": "extrapolation",
+            "test_id": test_id,
+            "degree": degree,
+            "left_points": left_points,
+            "right_points": right_points,
+        }
+
+        if left_limit is not None:
+            values["left_limit"] = left_limit
+        if right_limit is not None:
+            values["right_limit"] = right_limit
+        if color:
+            values["color"] = color
+        if line_width is not None:
+            values["line_width"] = line_width
+
+        custom_curve = self.data_manager.save_extrapolation(
+            test_id,
+            name,
+            degree,
+            left_points,
+            right_points,
+            left_limit=left_limit,
+            right_limit=right_limit,
+            values=values,
+        )
+
         if custom_curve:
             self.other_data.append(custom_curve)
 
