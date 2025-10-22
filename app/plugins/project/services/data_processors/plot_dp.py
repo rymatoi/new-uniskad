@@ -3,8 +3,9 @@ from app.plugins.project.services.coordinates import ItemProcessor
 from app.plugins.project.services.data_processors.base_dp import DataProcessor
 from app.plugins.project.services.data_processors.test_dp import TestProcessor
 from app.plugins.project.utils.collectors import PlotDataCollector as Collector
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 from app.plugins.project.visualization.widgets.curve import CurveItem
+from app.plugins.project.core.constants import GraphConstants
 import json
 
 
@@ -91,6 +92,45 @@ class PlotProcessor(DataProcessor):
 
             yield test_id, x, y, style
 
+        for curve in remaining_curves:
+            try:
+                curve_data = json.loads(curve.values) if isinstance(curve.values, str) else curve.values
+            except (TypeError, json.JSONDecodeError):
+                continue
+
+            if not isinstance(curve_data, dict) or 'values' not in curve_data:
+                continue
+
+            raw_values = curve_data.get('values', [])
+            try:
+                processed_values = [(float(point[0]), float(point[1])) for point in raw_values]
+            except (TypeError, ValueError):
+                continue
+
+            if not processed_values:
+                continue
+
+            x_values, y_values = zip(*processed_values)
+
+            style = GraphConstants.DEFAULT_STYLE.copy()
+            style.update({
+                'name': curve_data.get('name', 'Custom curve'),
+                'color': curve_data.get('color', '#FFD700'),
+                'line_style': curve_data.get('line_style', style.get('line_style', 'solid')),
+                'width': int(curve_data.get('width', style.get('width', 2))),
+                'symbol': curve_data.get('symbol', style.get('symbol', 'o')),
+                'symbol_size': int(curve_data.get('symbol_size', style.get('symbol_size', 8))),
+                'symbol_color': curve_data.get('symbol_color', curve_data.get('color', style.get('symbol_color'))),
+            })
+
+            fill_color = curve_data.get('fill_color') or style.get('symbol_color')
+            if fill_color:
+                style['fill_color'] = fill_color
+
+            style['custom_curve_id'] = curve.id
+
+            yield None, x_values, y_values, style
+
     def register_curve(self, test_id: int, curve: CurveItem):
         """Регистрация связи test_id -> curve"""
         self.curve_map[test_id] = curve
@@ -142,7 +182,7 @@ class PlotProcessor(DataProcessor):
 
     def save_interpolation(self, test_id, name, interp_type, color=None, line_width=None):
         """Сохраняет интерполированную кривую в БД
-        
+
         Args:
             test_id: ID теста
             name: Название кривой
@@ -173,9 +213,34 @@ class PlotProcessor(DataProcessor):
 
         return custom_curve.id if custom_curve else None
 
+    def save_manual_curve(self, name: str, values: List[Tuple[float, float]], style: Optional[Dict[str, object]] = None):
+        """Сохраняет пользовательскую кривую, созданную вручную."""
+        try:
+            serialized_values = [[float(x), float(y)] for x, y in values]
+        except (TypeError, ValueError):
+            return None
+
+        curve_data: Dict[str, object] = {
+            "name": name,
+            "values": serialized_values,
+        }
+
+        if style:
+            allowed_keys = ['color', 'line_style', 'width', 'symbol', 'symbol_size', 'symbol_color', 'fill_color']
+            for key in allowed_keys:
+                if key in style and style[key] is not None:
+                    curve_data[key] = style[key]
+
+        custom_curve = self.data_manager.save_custom_curve(curve_data)
+
+        if custom_curve:
+            self.other_data.append(custom_curve)
+
+        return custom_curve
+
     def remove_curve(self, curve_id):
         """Удаляет кастомную кривую по ID
-        
+
         Args:
             curve_id: ID кривой
             

@@ -1,7 +1,12 @@
 from app.plugins.project.visualization.widgets.curve import CurveItem
-from typing import Any, Union, List, Dict, Set, Callable
+from typing import Any, Union, List, Dict, Set, Callable, Tuple, Optional
 import numpy as np
-import pyqtgraph as pg
+
+from app import app_logger
+from app.plugins.project.core.constants import GraphConstants
+
+
+logger = app_logger.get_logger(__name__)
 
 
 class PlotDataMixin:
@@ -104,7 +109,7 @@ class PlotDataMixin:
 
     def remove_custom_curve(self, curve) -> bool:
         """Удаляет пользовательскую кривую из БД и с графика
-        
+
         Args:
             curve: Объект кривой для удаления
             
@@ -141,8 +146,42 @@ class PlotDataMixin:
                         break
                         
             return True
-            
+
         return False
+
+    def create_manual_curve(self, name: str, values: List[Tuple[Union[int, float], Union[int, float]]]) -> Optional[CurveItem]:
+        """Создает пользовательскую кривую на графике и сохраняет её в БД."""
+        if not values:
+            logger.warning("Попытка создать пользовательскую кривую без точек")
+            return None
+
+        try:
+            processed_values = [(float(x), float(y)) for x, y in values]
+        except (TypeError, ValueError) as exc:
+            logger.error(f"Некорректные данные кривой для вставки: {exc}")
+            return None
+
+        x_values, y_values = zip(*processed_values)
+
+        base_style = GraphConstants.DEFAULT_STYLE.copy()
+        manual_style = {
+            'name': name,
+            'color': '#FFD700',
+            'line_style': 'solid',
+            'width': base_style.get('width', 2),
+            'symbol': base_style.get('symbol', 'o'),
+            'symbol_size': base_style.get('symbol_size', 8),
+            'symbol_color': '#FFD700',
+            'fill_color': '#FFD700',
+        }
+
+        curve = self.add_curve(x_values, y_values, **manual_style)
+
+        if hasattr(self.data_processor, 'save_manual_curve'):
+            saved_curve = self.data_processor.save_manual_curve(name, processed_values, manual_style)
+            if saved_curve:
+                curve.custom_curve_id = saved_curve.id
+        return curve
 
     def check_x_val_constraint(self, i, project_id):
         """Проверяет, удовлетворяет ли значение ограничениям параметров"""

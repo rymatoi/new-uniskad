@@ -1,10 +1,13 @@
 from PySide2.QtCore import Qt, QPointF
-from PySide2.QtWidgets import QMenu
+from PySide2.QtWidgets import QMenu, QApplication
 from PySide2.QtGui import QCursor
 import pyqtgraph as pg
 from typing import Any, List, Tuple, Optional
 from functools import partial
 import json
+
+from app.basic_funcs import float_to_excel
+from app.plugins.project.data.adapters.excel_adapter import ExcelDataHandler
 
 from app.plugins.project.services.data_processors.plot_dp import PlotProcessor
 from app.plugins.project.visualization.views.plot_views.menu_tools.plot_menu_actions import PlotMenuActions, \
@@ -311,6 +314,9 @@ class PlotContextMenuMixin:
                         name=f"Extrapolation_{curve.name()}"
                     )
                     
+        elif action_name == PlotMenuActions.CURVE_COPY.name and curve:
+            self._copy_curve_to_clipboard(curve)
+
         elif action_name == PlotMenuActions.CURVE_DELETE.name and curve:
             # Проверяем, что это кастомная кривая
             if hasattr(curve, 'custom_curve_id') and curve.custom_curve_id is not None:
@@ -366,6 +372,9 @@ class PlotContextMenuMixin:
                 self.init_legend()
             # Просто скрываем/показываем легенду
             self.plotItem.legend.setVisible(checked)
+
+        elif action_name == PlotMenuActions.PLOT_PASTE.name:
+            self._paste_curve_from_clipboard()
 
         elif action_name == PlotMenuActions.PLOT_RESET_VIEW.name:
             self.plotItem.getViewBox().autoRange()
@@ -483,3 +492,52 @@ class PlotContextMenuMixin:
             'curve': action.property('curve')
         }
         self._handle_curve_action(data, checked)
+
+    def _copy_curve_to_clipboard(self, curve):
+        """Копирует данные кривой в буфер обмена."""
+        x_data = getattr(curve, 'xData', None)
+        y_data = getattr(curve, 'yData', None)
+
+        if x_data is None or y_data is None:
+            print("Нет данных для копирования кривой")
+            return
+
+        try:
+            points_count = min(len(x_data), len(y_data))
+            if points_count == 0:
+                print("Кривая не содержит точек для копирования")
+                return
+
+            header = f"Dep1D_CD\n{points_count}\n"
+            rows = [
+                f"{float_to_excel(float(x))}\t{float_to_excel(float(y))}"
+                for x, y in zip(x_data[:points_count], y_data[:points_count])
+            ]
+
+            clipboard = QApplication.clipboard()
+            clipboard.setText(header + "\n".join(rows))
+        except Exception as exc:
+            print(f"Не удалось скопировать кривую: {exc}")
+
+    def _paste_curve_from_clipboard(self):
+        """Создает новую пользовательскую кривую из буфера обмена."""
+        clipboard = QApplication.clipboard()
+        data = clipboard.text()
+
+        if not data:
+            print("Буфер обмена не содержит данных для вставки кривой")
+            return
+
+        try:
+            curve_name, values = ExcelDataHandler.parse_clipboard_data(data)
+        except Exception as exc:
+            print(f"Не удалось распознать данные кривой в буфере обмена: {exc}")
+            return
+
+        if not values:
+            print("В буфере обмена отсутствуют точки кривой")
+            return
+
+        created_curve = self.create_manual_curve(curve_name, values)
+        if created_curve is None:
+            print("Не удалось создать кривую из буфера обмена")
