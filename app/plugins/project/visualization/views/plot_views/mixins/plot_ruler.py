@@ -161,6 +161,13 @@ class PlotRulerMixin:
             ruler.enabled = False
             ruler.line.setVisible(False)
             ruler.delta_line.setVisible(False)
+            ruler.label.setVisible(False)
+            ruler.curve1 = None
+            ruler.curve2 = None
+            ruler.last_pos = None
+            ruler.delta_line.setData([], [])
+            if self.active_ruler_id == ruler_id:
+                self.active_ruler_id = None
             print(f"Линейка {ruler_id} удалена с графика")
     
     def _y_pos(self, x_pos: float, curve: pg.PlotDataItem) -> Optional[float]:
@@ -200,6 +207,9 @@ class PlotRulerMixin:
         ruler = self.rulers[ruler_id]
         
         if not ruler.enabled:
+            if ruler.curve1 is None and ruler.curve2 is None:
+                print(f"Линейка {ruler_id} отключена и не привязана к кривым, обновление не требуется")
+                return
             print(f"Линейка {ruler_id} не активна, включаем её")
             self.add_ruler(ruler_id)
             return
@@ -434,9 +444,12 @@ class PlotRulerMixin:
             
         # Обновляем отображение линейки
         self.update_ruler(ruler_id)
-        
-        # Устанавливаем линейку как активную
-        self.active_ruler_id = ruler_id
+
+        # Устанавливаем линейку как активную только если она привязана к кривым
+        if ruler.curve1 or ruler.curve2:
+            self.active_ruler_id = ruler_id
+        elif self.active_ruler_id == ruler_id:
+            self.active_ruler_id = None
 
     def bring_to_front(self, ruler_id=None):
         """

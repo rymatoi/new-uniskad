@@ -5,6 +5,7 @@ import pyqtgraph as pg
 from typing import Any, List, Tuple, Optional
 from functools import partial
 import json
+import numpy as np
 
 from app.plugins.project.services.data_processors.plot_dp import PlotProcessor
 from app.plugins.project.visualization.views.plot_views.menu_tools.plot_menu_actions import PlotMenuActions, \
@@ -307,17 +308,47 @@ class PlotContextMenuMixin:
             if dialog.exec_():
                 forward, backward, is_enabled = dialog.get_result()
                 if is_enabled:
-                    # Вычисляем количество точек на основе шага исходных данных
-                    x_step = (max(x_data) - min(x_data)) / len(x_data)
-                    left_points = int(abs(backward - min(x_data)) / x_step)
-                    right_points = int(abs(forward - max(x_data)) / x_step)
+                    sorted_x = np.sort(np.asarray(x_data))
+                    if sorted_x.size == 0:
+                        return
+
+                    diffs = np.diff(sorted_x)
+                    valid_diffs = diffs[~np.isclose(diffs, 0.0)]
+                    x_step = float(np.median(valid_diffs)) if valid_diffs.size else 0.0
+
+                    if np.isclose(x_step, 0.0):
+                        x_step = 1.0
+
+                    min_x = float(sorted_x[0])
+                    max_x = float(sorted_x[-1])
+
+                    forward_value = float(forward)
+                    backward_value = float(backward)
+
+                    left_span = max(0.0, min_x - backward_value)
+                    right_span = max(0.0, forward_value - max_x)
+
+                    left_points = int(np.ceil(left_span / x_step)) if left_span > 0 else 0
+                    right_points = int(np.ceil(right_span / x_step)) if right_span > 0 else 0
+
+                    max_points_per_side = getattr(ExtrapolationService, 'MAX_POINTS_PER_SIDE', 10000)
+
+                    if left_span > 0 and left_points == 0:
+                        left_points = 1
+                    if right_span > 0 and right_points == 0:
+                        right_points = 1
+
+                    left_points = min(left_points, max_points_per_side)
+                    right_points = min(right_points, max_points_per_side)
 
                     self.add_extrapolated_curve(
                         source_curve=curve,
                         left_points=left_points,
                         right_points=right_points,
                         degree=2,
-                        name=f"Extrapolation_{curve.name()}"
+                        name=f"Extrapolation_{curve.name()}",
+                        left_limit=backward_value,
+                        right_limit=forward_value,
                     )
                     
         elif action_name == PlotMenuActions.CURVE_DELETE.name and curve:
