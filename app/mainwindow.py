@@ -90,6 +90,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.user = None
         self.init_user()
 
+        self.apply_future_style()
+
         self.data_cache = DataCache()
 
         session.init_main_window(self)
@@ -167,6 +169,299 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.restore_windows_state()
         self.apply_runtime_settings()
+
+    def apply_future_style(self):
+        app = QtWidgets.QApplication.instance()
+
+        base_bg = "#0F172A"
+        card_bg = "#182238"
+        accent = "#3B82F6"
+        accent_light = "#60A5FA"
+        border = "rgba(148, 163, 184, 0.18)"
+        text_primary = "#E2E8F0"
+        text_secondary = "#94A3B8"
+        success = "#22C55E"
+        danger = "#EF4444"
+
+        qss = f"""
+        QWidget {{
+            background-color: {base_bg};
+            color: {text_primary};
+            font-family: 'Inter', 'Segoe UI', sans-serif;
+            font-size: 14px;
+        }}
+
+        QMainWindow::separator {{
+            background: {border};
+            width: 1px;
+            height: 1px;
+        }}
+
+        QMenuBar {{
+            background: transparent;
+            color: {text_primary};
+        }}
+
+        QMenuBar::item {{
+            padding: 6px 12px;
+            margin: 4px;
+            border-radius: 8px;
+            background: transparent;
+            color: {text_secondary};
+        }}
+
+        QMenuBar::item:selected {{
+            background: {card_bg};
+            color: {text_primary};
+        }}
+
+        QMenu {{
+            background-color: {card_bg};
+            border: 1px solid {border};
+            border-radius: 12px;
+            padding: 8px;
+        }}
+
+        QMenu::item {{
+            padding: 6px 14px;
+            border-radius: 8px;
+            color: {text_secondary};
+        }}
+
+        QMenu::item:selected {{
+            background-color: {accent};
+            color: white;
+        }}
+
+        QToolBar {{
+            background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                stop:0 rgba(30, 41, 59, 0.65), stop:1 rgba(15, 23, 42, 0.9));
+            border-bottom: 1px solid {border};
+            padding: 6px;
+            spacing: 8px;
+        }}
+
+        QToolButton {{
+            background-color: rgba(15, 23, 42, 0.1);
+            color: {text_primary};
+            padding: 8px 12px;
+            margin: 2px;
+            border-radius: 10px;
+            border: 1px solid transparent;
+        }}
+
+        QToolButton:hover {{
+            background-color: rgba(59, 130, 246, 0.18);
+            border: 1px solid rgba(59, 130, 246, 0.35);
+        }}
+
+        QToolButton:pressed {{
+            background-color: {accent};
+            border: 1px solid rgba(96, 165, 250, 0.6);
+        }}
+
+        QPushButton {{
+            background-color: {accent};
+            color: white;
+            border-radius: 12px;
+            padding: 8px 18px;
+            border: none;
+            font-weight: 600;
+        }}
+
+        QPushButton:hover {{
+            background-color: {accent_light};
+        }}
+
+        QPushButton:pressed {{
+            background-color: {accent};
+            border: 1px solid rgba(255, 255, 255, 0.25);
+        }}
+
+        QPushButton:disabled {{
+            background-color: rgba(148, 163, 184, 0.2);
+            color: rgba(148, 163, 184, 0.6);
+        }}
+
+        QLineEdit, QComboBox, QTextEdit, QPlainTextEdit {{
+            background-color: {card_bg};
+            border: 1px solid {border};
+            border-radius: 10px;
+            padding: 6px 10px;
+            color: {text_primary};
+        }}
+
+        QLineEdit:focus, QComboBox:focus, QTextEdit:focus, QPlainTextEdit:focus {{
+            border: 1px solid rgba(59, 130, 246, 0.6);
+        }}
+
+        QComboBox::drop-down {{
+            border: none;
+        }}
+
+        QComboBox QAbstractItemView {{
+            background: {card_bg};
+            border: 1px solid {border};
+            selection-background-color: {accent};
+            selection-color: white;
+        }}
+
+        QTreeView, QTableView {{
+            background-color: {card_bg};
+            border: 1px solid {border};
+            border-radius: 12px;
+            alternate-background-color: rgba(15, 23, 42, 0.65);
+            gridline-color: rgba(148, 163, 184, 0.12);
+        }}
+
+        QTreeView::item, QTableView::item {{
+            padding: 6px 10px;
+            color: {text_secondary};
+        }}
+
+        QTreeView::item:hover, QTableView::item:hover {{
+            background-color: rgba(59, 130, 246, 0.12);
+            color: {text_primary};
+        }}
+
+        QTreeView::item:selected, QTableView::item:selected {{
+            background-color: {accent};
+            color: white;
+        }}
+
+        QHeaderView::section {{
+            background: rgba(15, 23, 42, 0.9);
+            border: none;
+            border-bottom: 1px solid {border};
+            padding: 8px;
+            color: {text_secondary};
+            font-weight: 600;
+        }}
+
+        QStatusBar {{
+            background: rgba(15, 23, 42, 0.85);
+            border-top: 1px solid {border};
+        }}
+
+        QStatusBar QLabel {{
+            color: {text_secondary};
+            padding: 0 12px;
+        }}
+
+        QProgressBar {{
+            background: rgba(15, 23, 42, 0.6);
+            border: 1px solid {border};
+            border-radius: 8px;
+            text-align: center;
+        }}
+
+        QProgressBar::chunk {{
+            background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                stop:0 {accent}, stop:1 {accent_light});
+            border-radius: 6px;
+        }}
+
+        QDockWidget {{
+            border: 1px solid {border};
+            border-radius: 14px;
+            background-color: {card_bg};
+        }}
+
+        QDockWidget::title {{
+            background: transparent;
+            padding: 12px;
+            font-weight: 600;
+            color: {text_primary};
+        }}
+
+        QScrollBar:vertical {{
+            background: transparent;
+            width: 12px;
+            margin: 8px 0 8px 0;
+            border-radius: 6px;
+        }}
+
+        QScrollBar::handle:vertical {{
+            background: rgba(148, 163, 184, 0.4);
+            border-radius: 6px;
+            min-height: 40px;
+        }}
+
+        QScrollBar::handle:vertical:hover {{
+            background: rgba(96, 165, 250, 0.6);
+        }}
+
+        QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
+            height: 0px;
+        }}
+
+        QScrollBar:horizontal {{
+            background: transparent;
+            height: 12px;
+            margin: 0 8px 0 8px;
+            border-radius: 6px;
+        }}
+
+        QScrollBar::handle:horizontal {{
+            background: rgba(148, 163, 184, 0.4);
+            border-radius: 6px;
+            min-width: 40px;
+        }}
+
+        QScrollBar::handle:horizontal:hover {{
+            background: rgba(96, 165, 250, 0.6);
+        }}
+
+        QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{
+            width: 0px;
+        }}
+
+        QLabel {{
+            color: {text_secondary};
+        }}
+
+        QLabel[status="success"] {{
+            color: {success};
+        }}
+
+        QLabel[status="error"] {{
+            color: {danger};
+        }}
+
+        QTabBar::tab {{
+            background: rgba(15, 23, 42, 0.4);
+            padding: 8px 18px;
+            border-top-left-radius: 12px;
+            border-top-right-radius: 12px;
+            color: {text_secondary};
+            margin-right: 6px;
+        }}
+
+        QTabBar::tab:selected {{
+            background: {card_bg};
+            color: {text_primary};
+        }}
+
+        QTabWidget::pane {{
+            border: 1px solid {border};
+            border-radius: 12px;
+            top: -1px;
+            background: {card_bg};
+        }}
+
+        QToolTip {{
+            background-color: rgba(15, 23, 42, 0.95);
+            color: {text_primary};
+            padding: 8px 12px;
+            border-radius: 8px;
+            border: 1px solid {border};
+        }}
+        """
+
+        if app is not None:
+            app.setStyleSheet(qss)
+        else:
+            self.setStyleSheet(qss)
 
     def show_message_sb(self, message, timeout=5000):
         pass
