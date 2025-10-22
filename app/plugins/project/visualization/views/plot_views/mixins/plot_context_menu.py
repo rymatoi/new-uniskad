@@ -1,18 +1,24 @@
 from PySide2.QtCore import Qt, QPointF
-from PySide2.QtWidgets import QMenu
+from PySide2.QtWidgets import QApplication, QMenu
 from PySide2.QtGui import QCursor
 import pyqtgraph as pg
 from typing import Any, List, Tuple, Optional
 from functools import partial
 import json
 
+from app import app_logger
 from app.plugins.project.services.data_processors.plot_dp import PlotProcessor
 from app.plugins.project.visualization.views.plot_views.menu_tools.plot_menu_actions import PlotMenuActions, \
     ActionTarget, get_available_actions
+from app.plugins.project.data.adapters.excel_adapter import ExcelDataHandler
+from app.plugins.project.core.constants import GraphConstants
 from db import sp
 from app.plugins.project.dialogs.create_approx import ApproxDialog
 from app.plugins.project.dialogs.create_interpolation import InterpDialog
 from app.plugins.project.dialogs.extrapolation_dialog import ExtrapolationDialog
+
+
+logger = app_logger.get_logger(__name__)
 
 
 class PlotContextMenuMixin:
@@ -25,6 +31,9 @@ class PlotContextMenuMixin:
 
     def __init__(self):
         self.proxy_context = self.init_proxy_for_context_menu()
+
+        if hasattr(self.plotItem, 'vb'):
+            self.plotItem.vb.setMenuEnabled(False)
 
         self.action_states = {
             'grid': False,
@@ -81,11 +90,15 @@ class PlotContextMenuMixin:
 
     def onContextMenuRequested(self, evt):
         """Обрабатывает запрос на показ контекстного меню"""
-        if evt[0].button() != Qt.RightButton:
+        mouse_event = evt[0]
+
+        if mouse_event.button() != Qt.RightButton:
             return
 
+        mouse_event.accept()
+
         # Проверяем, не произошел ли клик по легенде
-        pos = evt[0].scenePos()
+        pos = mouse_event.scenePos()
         if hasattr(self.plotItem, 'legend') and self.plotItem.legend:
             legend = self.plotItem.legend
             for sample, label in legend.items:
@@ -98,19 +111,17 @@ class PlotContextMenuMixin:
                 # Если клик по фону легенды - прерываем обработку
                 return
 
-        mouse_point = self.plotItem.vb.mapSceneToView(pos)
-
         # Создаем меню в зависимости от места клика
-        menu = self.create_context_menu(mouse_point)
-        if menu:
+        menu = self.create_context_menu(pos)
+        if menu and not menu.isEmpty():
             menu.exec_(QCursor.pos())
 
-    def create_context_menu(self, pos: QPointF) -> Optional[QMenu]:
+    def create_context_menu(self, scene_pos: QPointF) -> Optional[QMenu]:
         """Создает контекстное меню в зависимости от позиции"""
         menu = QMenu(self)
 
         # Проверяем клик по точке
-        clicked_points = self._find_points_at_position(pos)
+        clicked_points = self._find_points_at_position(scene_pos)
         if clicked_points:
             self._add_point_specific_actions(menu, clicked_points)
             menu.addSeparator()
@@ -118,7 +129,7 @@ class PlotContextMenuMixin:
             return menu
 
         # Проверяем клик по кривой
-        clicked_curve = self._find_curve_at_position(pos)
+        clicked_curve = self._find_curve_at_position(scene_pos)
         if clicked_curve:
             self._add_curve_specific_actions(menu, curve=clicked_curve)
             return menu
@@ -127,34 +138,27 @@ class PlotContextMenuMixin:
         self._add_plot_specific_actions(menu)
         return menu if not menu.isEmpty() else None
 
-    def _find_curve_at_position(self, pos: QPointF) -> Optional[Any]:
+    def _find_curve_at_position(self, scene_pos: QPointF) -> Optional[Any]:
         """Находит кривую под курсором мыши"""
-        for curve in self.curve_items:
-            if not curve.isVisible():
+        visible_curves = [curve for curve in self.curve_items if curve.isVisible()]
+
+        visible_curves.sort(
+            key=lambda item: item.zValue() if hasattr(item, 'zValue') else 0,
+            reverse=True
+        )
+
+        for curve in visible_curves:
+            path_item = getattr(curve, 'curve', None)
+            if path_item is None:
                 continue
 
-            # Получаем ближайшую точку на кривой
-            point_index = self._find_nearest_point_index(curve, pos)
-            if point_index is not None:
-                # Проверяем, находится ли точка достаточно близко (в пределах 5 пикселей)
-                screen_pos = self.plotItem.vb.mapViewToScene(pos)
-                data_point = QPointF(curve.xData[point_index], curve.yData[point_index])
-                screen_point = self.plotItem.vb.mapViewToScene(data_point)
-
-                if (screen_pos - screen_point).manhattanLength() < 5:
+            try:
+                local_pos = path_item.mapFromScene(scene_pos)
+                if path_item.shape().contains(local_pos):
                     return curve
+            except Exception:
+                continue
         return None
-
-    def _find_nearest_point_index(self, curve: Any, pos: QPointF) -> Optional[int]:
-        """Находит индекс ближайшей точки на кривой"""
-        if len(curve.xData) == 0:
-            return None
-
-        # Находим ближайшую точку по X
-        x = pos.x()
-        nearest_idx = min(range(len(curve.xData)),
-                          key=lambda i: abs(curve.xData[i] - x))
-        return nearest_idx
 
     def _add_point_specific_actions(self, menu: QMenu, points: List[Tuple[Any, int]]):
         """Добавляет действия специфичные для точек"""
@@ -232,7 +236,10 @@ class PlotContextMenuMixin:
         curve = data['curve']
         action_name = data['action']
 
-        if action_name == PlotMenuActions.CURVE_HIDE.name and curve:
+        if action_name == PlotMenuActions.CURVE_COPY.name and curve:
+            self.copy_curve_to_clipboard(curve)
+
+        elif action_name == PlotMenuActions.CURVE_HIDE.name and curve:
             # Получаем test_id для кривой
             test_id = self.data_processor.get_test_id_for_curve(curve)
             if test_id:
@@ -312,14 +319,17 @@ class PlotContextMenuMixin:
                     )
                     
         elif action_name == PlotMenuActions.CURVE_DELETE.name and curve:
-            # Проверяем, что это кастомная кривая
-            if hasattr(curve, 'custom_curve_id') and curve.custom_curve_id is not None:
-                # Удаляем кривую с графика и из БД
-                result = self.remove_custom_curve(curve)
-                if not result:
-                    print(f"Не удалось удалить кривую {curve.name()}")
+            had_custom_id = getattr(curve, 'custom_curve_id', None) is not None
+            was_pasted_curve = getattr(curve, 'is_pasted_curve', False)
+
+            result = self.remove_custom_curve(curve)
+            if result:
+                self.action_states['curve_visibility'].pop(curve.name(), None)
             else:
-                print(f"Кривая {curve.name()} не является кастомной и не может быть удалена")
+                if had_custom_id or was_pasted_curve:
+                    print(f"Не удалось удалить кривую {curve.name()}")
+                else:
+                    print(f"Кривая {curve.name()} не является кастомной и не может быть удалена")
                 
         elif action_name == PlotMenuActions.CURVE_RULER_MARK.name and curve:
             # Получаем текущую позицию курсора
@@ -370,6 +380,9 @@ class PlotContextMenuMixin:
         elif action_name == PlotMenuActions.PLOT_RESET_VIEW.name:
             self.plotItem.getViewBox().autoRange()
 
+        elif action_name == PlotMenuActions.PLOT_PASTE_CURVE.name:
+            self.paste_curve_from_clipboard()
+
     # Добавляем методы для сохранения/загрузки состояний
     def save_states(self):
         """Сохраняет текущие состояния в настройки"""
@@ -389,7 +402,7 @@ class PlotContextMenuMixin:
             self.translation = translation
             self.is_checkable = is_checkable
 
-    def _find_points_at_position(self, mouse_point: QPointF) -> List[Tuple[Any, int]]:
+    def _find_points_at_position(self, scene_pos: QPointF) -> List[Tuple[Any, int]]:
         """Находит точки под курсором мыши"""
         clicked_points = []
 
@@ -398,11 +411,13 @@ class PlotContextMenuMixin:
                 continue
 
             points = curve.scatter.points()
-            clicked_mask = curve.scatter._maskAt(mouse_point)
 
-            for i, (point, is_clicked) in enumerate(zip(points, clicked_mask)):
-                if is_clicked:
-                    clicked_points.append((curve, i))
+            for i, point in enumerate(points):
+                try:
+                    if point.sceneBoundingRect().contains(scene_pos):
+                        clicked_points.append((curve, i))
+                except Exception:
+                    continue
 
         return clicked_points
 
@@ -437,7 +452,11 @@ class PlotContextMenuMixin:
         # Получаем элемент легенды, по которому кликнули
         pos = event.scenePos()
         legend = self.plotItem.legend
-        
+
+        legend_rect = legend.mapRectToScene(legend.boundingRect())
+        if not legend_rect.contains(pos):
+            return
+
         # Проходим по всем элементам легенды
         for sample, label in legend.items:
             if label.sceneBoundingRect().contains(pos):
@@ -445,8 +464,9 @@ class PlotContextMenuMixin:
                 curve = next((c for c in self.curve_items if c.name() == label.text), None)
                 if curve:
                     menu = self._create_legend_context_menu(curve)
-                    menu.exec_(QCursor.pos())
-                    event.accept()
+                    if not menu.isEmpty():
+                        menu.exec_(QCursor.pos())
+                        event.accept()
                 return
 
         legend_rect = legend.mapRectToScene(legend.boundingRect())
@@ -487,3 +507,67 @@ class PlotContextMenuMixin:
             'curve': action.property('curve')
         }
         self._handle_curve_action(data, checked)
+
+    def copy_curve_to_clipboard(self, curve):
+        """Копирует точки выбранной кривой в буфер обмена"""
+        if curve is None:
+            return
+
+        x_data = getattr(curve, 'xData', None)
+        y_data = getattr(curve, 'yData', None)
+
+        if x_data is None or y_data is None:
+            logger.warning("Не удалось получить данные кривой для копирования")
+            return
+
+        try:
+            clipboard_text = ExcelDataHandler.prepare_for_export(curve.name(), x_data, y_data)
+            if clipboard_text:
+                QApplication.clipboard().setText(clipboard_text)
+        except Exception as exc:
+            logger.error(f"Ошибка при копировании кривой '{curve.name()}': {exc}")
+
+    def paste_curve_from_clipboard(self):
+        """Создает новую пользовательскую кривую из данных в буфере обмена"""
+        clipboard = QApplication.clipboard()
+        data = clipboard.text()
+
+        if not data:
+            return
+
+        try:
+            curve_name, values = ExcelDataHandler.parse_clipboard_data(data)
+        except Exception as exc:
+            logger.error(f"Не удалось разобрать данные кривой из буфера обмена: {exc}")
+            return
+
+        if not values:
+            logger.warning("Буфер обмена не содержит данных для построения кривой")
+            return
+
+        x_values, y_values = zip(*values)
+
+        style = GraphConstants.DEFAULT_STYLE.copy()
+        style['name'] = curve_name or "Пользовательская кривая"
+
+        new_curve = self.add_curve(x_values, y_values, **style)
+
+        if not new_curve:
+            logger.error("Не удалось создать кривую из буфера обмена")
+            return
+
+        new_curve.is_pasted_curve = True
+        if hasattr(self, '_pasted_curve_items'):
+            self._pasted_curve_items.add(new_curve)
+
+        if hasattr(self, 'data_processor') and isinstance(self.data_processor, PlotProcessor):
+            try:
+                custom_curve = self.data_processor.save_custom_curve(curve_name, values)
+            except Exception as exc:
+                logger.error(f"Ошибка при сохранении пользовательской кривой: {exc}")
+                custom_curve = None
+
+            if custom_curve:
+                new_curve.custom_curve_id = getattr(custom_curve, 'id', None)
+        else:
+            logger.warning("Процессор данных графика не инициализирован, кривая не будет сохранена")

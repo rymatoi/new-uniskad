@@ -1,4 +1,5 @@
 from app.plugins.project.data.datamanagers.graph_datamanager import GraphDataManager
+from app.plugins.project.core.constants import GraphConstants
 from app.plugins.project.services.coordinates import ItemProcessor
 from app.plugins.project.services.data_processors.base_dp import DataProcessor
 from app.plugins.project.services.data_processors.test_dp import TestProcessor
@@ -43,38 +44,46 @@ class PlotProcessor(DataProcessor):
             yield test_id, x, y, style
 
     def get_custom_curves(self):
-        """Получение данных для кривых"""
-        curves_data = ItemProcessor.get_other_data(self.plot_data, self.other_data, self.test_nodes)
+        """Получение данных для пользовательских кривых"""
 
-        # Создаем копию списка кривых для итерации
-        remaining_curves = list(self.other_data)
+        approx_curves = []
+        custom_curves = []
+
+        for curve in self.other_data:
+            raw_values = curve.values
+            try:
+                curve_data = json.loads(raw_values) if isinstance(raw_values, str) else raw_values
+            except json.JSONDecodeError:
+                continue
+
+            if isinstance(curve_data, dict) and 'test_id' in curve_data:
+                approx_curves.append(curve)
+            elif isinstance(curve_data, dict) and 'values' in curve_data:
+                custom_curves.append((curve, curve_data))
+
+        curves_data = ItemProcessor.get_other_data(self.plot_data, approx_curves, self.test_nodes)
+        remaining_curves = list(approx_curves)
 
         for test_id, x, y, style in curves_data:
-            # Извлекаем параметры кривой из стиля для более точного сопоставления
             curve_name = style.get('name', '')
             curve_type = style.get('type', '')
             curve_degree = style.get('degree', None)
 
-            # Ищем наиболее подходящую кривую из оставшихся
             best_match = None
             best_match_index = -1
 
             for i, curve in enumerate(remaining_curves):
-                # Преобразуем значения из JSON, если необходимо
-                curve_data = json.loads(curve.values) if isinstance(curve.values, str) else curve.values
+                raw_values = curve.values
+                curve_data = json.loads(raw_values) if isinstance(raw_values, str) else raw_values
 
-                # Проверяем базовое соответствие по test_id и имени
                 if curve_data.get('test_id') != test_id or curve_data.get('name') != curve_name:
                     continue
 
-                # Проверяем дополнительные параметры для более точного сопоставления
                 curve_matches = True
 
-                # Проверяем тип кривой, если он указан
                 if curve_type and 'type' in curve_data and curve_data.get('type') != curve_type:
                     curve_matches = False
 
-                # Для аппроксимации проверяем степень
                 if curve_degree is not None and 'degree' in curve_data and curve_data.get('degree') != curve_degree:
                     curve_matches = False
 
@@ -83,13 +92,31 @@ class PlotProcessor(DataProcessor):
                     best_match_index = i
                     break
 
-            # Если нашли подходящую кривую, присваиваем ID и удаляем из оставшихся
             if best_match:
                 style['custom_curve_id'] = best_match.id
-                # Удаляем из списка оставшихся, чтобы не использовать эту кривую повторно
                 remaining_curves.pop(best_match_index)
 
             yield test_id, x, y, style
+
+        for curve, curve_data in custom_curves:
+            values = curve_data.get('values')
+            if not values:
+                continue
+
+            try:
+                x_values, y_values = zip(*values)
+            except ValueError:
+                continue
+
+            style = GraphConstants.DEFAULT_STYLE.copy()
+            style['name'] = curve_data.get('name', f"Custom Curve {curve.id}")
+            if 'color' in curve_data:
+                style['color'] = curve_data['color']
+            if 'line_width' in curve_data:
+                style['width'] = curve_data['line_width']
+            style['custom_curve_id'] = curve.id
+
+            yield None, x_values, y_values, style
 
     def register_curve(self, test_id: int, curve: CurveItem):
         """Регистрация связи test_id -> curve"""
@@ -142,7 +169,7 @@ class PlotProcessor(DataProcessor):
 
     def save_interpolation(self, test_id, name, interp_type, color=None, line_width=None):
         """Сохраняет интерполированную кривую в БД
-        
+
         Args:
             test_id: ID теста
             name: Название кривой
@@ -173,9 +200,24 @@ class PlotProcessor(DataProcessor):
 
         return custom_curve.id if custom_curve else None
 
+    def save_custom_curve(self, name: str, values) -> Optional[object]:
+        """Сохраняет произвольную пользовательскую кривую"""
+
+        curve_data = {
+            "name": name or "",
+            "values": [[float(point[0]), float(point[1])] for point in values]
+        }
+
+        custom_curve = self.data_manager.save_custom_curve(curve_data)
+
+        if custom_curve:
+            self.other_data.append(custom_curve)
+
+        return custom_curve
+
     def remove_curve(self, curve_id):
         """Удаляет кастомную кривую по ID
-        
+
         Args:
             curve_id: ID кривой
             

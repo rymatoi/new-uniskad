@@ -81,12 +81,14 @@ class ItemProcessor:
                             style['color'] = curve_data['color']
                         elif 'fill_color' in base_style:
                             style['color'] = base_style['fill_color']
-                            
+
+                        style['symbol_color'] = style.get('color', style.get('symbol_color'))
+
                         if 'line_width' in curve_data:
                             style['width'] = curve_data['line_width']
-                            
+
                         style['name'] = curve_name
-                        
+
                         yield test_id, x_new, y_new, style
 
             except (InvalidCurveDataError, json.JSONDecodeError):

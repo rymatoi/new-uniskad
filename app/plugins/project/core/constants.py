@@ -68,8 +68,8 @@ class GraphConstants:
         'width': 2,
         'line_style': 'solid',
         'symbol': None,
-        'symbol_size': 2,
-        'symbol_color': '#1f77b4',
+        'symbol_size': 0,
+        'symbol_color': DEFAULT_STYLE['symbol_color'],
     }
 
     INTERPOLATION_STYLE = {
