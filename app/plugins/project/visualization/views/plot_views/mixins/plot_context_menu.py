@@ -1,18 +1,24 @@
 from PySide2.QtCore import Qt, QPointF
-from PySide2.QtWidgets import QMenu
+from PySide2.QtWidgets import QApplication, QMenu
 from PySide2.QtGui import QCursor
 import pyqtgraph as pg
 from typing import Any, List, Tuple, Optional
 from functools import partial
 import json
 
+from app import app_logger
 from app.plugins.project.services.data_processors.plot_dp import PlotProcessor
 from app.plugins.project.visualization.views.plot_views.menu_tools.plot_menu_actions import PlotMenuActions, \
     ActionTarget, get_available_actions
+from app.plugins.project.data.adapters.excel_adapter import ExcelDataHandler
+from app.plugins.project.core.constants import GraphConstants
 from db import sp
 from app.plugins.project.dialogs.create_approx import ApproxDialog
 from app.plugins.project.dialogs.create_interpolation import InterpDialog
 from app.plugins.project.dialogs.extrapolation_dialog import ExtrapolationDialog
+
+
+logger = app_logger.get_logger(__name__)
 
 
 class PlotContextMenuMixin:
@@ -232,7 +238,10 @@ class PlotContextMenuMixin:
         curve = data['curve']
         action_name = data['action']
 
-        if action_name == PlotMenuActions.CURVE_HIDE.name and curve:
+        if action_name == PlotMenuActions.CURVE_COPY.name and curve:
+            self.copy_curve_to_clipboard(curve)
+
+        elif action_name == PlotMenuActions.CURVE_HIDE.name and curve:
             # Получаем test_id для кривой
             test_id = self.data_processor.get_test_id_for_curve(curve)
             if test_id:
@@ -370,6 +379,9 @@ class PlotContextMenuMixin:
         elif action_name == PlotMenuActions.PLOT_RESET_VIEW.name:
             self.plotItem.getViewBox().autoRange()
 
+        elif action_name == PlotMenuActions.PLOT_PASTE_CURVE.name:
+            self.paste_curve_from_clipboard()
+
     # Добавляем методы для сохранения/загрузки состояний
     def save_states(self):
         """Сохраняет текущие состояния в настройки"""
@@ -483,3 +495,63 @@ class PlotContextMenuMixin:
             'curve': action.property('curve')
         }
         self._handle_curve_action(data, checked)
+
+    def copy_curve_to_clipboard(self, curve):
+        """Копирует точки выбранной кривой в буфер обмена"""
+        if curve is None:
+            return
+
+        x_data = getattr(curve, 'xData', None)
+        y_data = getattr(curve, 'yData', None)
+
+        if x_data is None or y_data is None:
+            logger.warning("Не удалось получить данные кривой для копирования")
+            return
+
+        try:
+            clipboard_text = ExcelDataHandler.prepare_for_export(curve.name(), x_data, y_data)
+            if clipboard_text:
+                QApplication.clipboard().setText(clipboard_text)
+        except Exception as exc:
+            logger.error(f"Ошибка при копировании кривой '{curve.name()}': {exc}")
+
+    def paste_curve_from_clipboard(self):
+        """Создает новую пользовательскую кривую из данных в буфере обмена"""
+        clipboard = QApplication.clipboard()
+        data = clipboard.text()
+
+        if not data:
+            return
+
+        try:
+            curve_name, values = ExcelDataHandler.parse_clipboard_data(data)
+        except Exception as exc:
+            logger.error(f"Не удалось разобрать данные кривой из буфера обмена: {exc}")
+            return
+
+        if not values:
+            logger.warning("Буфер обмена не содержит данных для построения кривой")
+            return
+
+        x_values, y_values = zip(*values)
+
+        style = GraphConstants.DEFAULT_STYLE.copy()
+        style['name'] = curve_name or "Пользовательская кривая"
+
+        new_curve = self.add_curve(x_values, y_values, **style)
+
+        if not new_curve:
+            logger.error("Не удалось создать кривую из буфера обмена")
+            return
+
+        if hasattr(self, 'data_processor') and isinstance(self.data_processor, PlotProcessor):
+            try:
+                custom_curve = self.data_processor.save_custom_curve(curve_name, values)
+            except Exception as exc:
+                logger.error(f"Ошибка при сохранении пользовательской кривой: {exc}")
+                custom_curve = None
+
+            if custom_curve:
+                new_curve.custom_curve_id = custom_curve.id
+        else:
+            logger.warning("Процессор данных графика не инициализирован, кривая не будет сохранена")
