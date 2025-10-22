@@ -15,6 +15,7 @@ from db import sp
 from app.plugins.project.dialogs.create_approx import ApproxDialog
 from app.plugins.project.dialogs.create_interpolation import InterpDialog
 from app.plugins.project.dialogs.extrapolation_dialog import ExtrapolationDialog
+from app.plugins.project.dialogs.curve_style import CurveStyleDialog
 
 
 class PlotContextMenuMixin:
@@ -265,6 +266,9 @@ class PlotContextMenuMixin:
             project_id = getattr(getattr(self.data_processor, 'data_manager', None), 'project_id', None)
             CurveClipboard.copy_curve(curve, project_id=project_id)
 
+        elif action_name == PlotMenuActions.CURVE_STYLE.name and curve:
+            self._show_curve_style_dialog(curve)
+
         elif action_name == PlotMenuActions.CURVE_APPROXIMATION.name and curve:
             # Получаем test_id для кривой
             test_id = self.data_processor.get_test_id_for_curve(curve)
@@ -393,6 +397,95 @@ class PlotContextMenuMixin:
                     print("Линейка не инициализирована должным образом")
 
         print(f"Curve action: {action_name}, checked: {checked}, curve: {curve.name() if curve else 'all curves'}")
+
+    def _show_curve_style_dialog(self, curve):
+        """Отображает диалог настройки стиля кривой и применяет изменения"""
+
+        dialog = CurveStyleDialog(curve.style, parent=self)
+        if not dialog.exec_():
+            return
+
+        new_style = dialog.get_style()
+        if not isinstance(new_style, dict):
+            return
+
+        self._apply_curve_style(curve, new_style)
+        self._persist_curve_style(curve, new_style)
+
+    def _apply_curve_style(self, curve, style):
+        """Применяет стиль к кривой и обновляет легенду"""
+
+        old_style = curve.style.copy()
+        for key in ('color', 'line_style', 'width', 'symbol', 'symbol_size', 'symbol_color', 'fill_color'):
+            if key in style:
+                curve.style_config[key] = style[key]
+
+        # Если раньше цвета маркера совпадали с цветом линии, обновляем их
+        if 'color' in style:
+            new_color = style['color']
+            if old_style.get('symbol_color') == old_style.get('color'):
+                curve.style_config['symbol_color'] = new_color
+            if old_style.get('fill_color', old_style.get('symbol_color')) == old_style.get('color'):
+                curve.style_config['fill_color'] = new_color
+
+        curve.apply_style()
+        self._update_legend_item(curve)
+
+    def _update_legend_item(self, curve):
+        if hasattr(self.plotItem, 'legend') and self.plotItem.legend is not None:
+            for sample, label in self.plotItem.legend.items:
+                if getattr(sample, 'item', None) == curve:
+                    sample.update()
+                    break
+
+    def _persist_curve_style(self, curve, style):
+        """Сохраняет стиль кривой в БД, если для неё есть запись"""
+
+        curve_id = getattr(curve, 'custom_curve_id', None)
+        if not curve_id:
+            return
+
+        custom_curve = next(
+            (item for item in getattr(self.data_processor, 'other_data', [])
+             if getattr(item, 'id', None) == curve_id),
+            None
+        )
+
+        if custom_curve is None:
+            return
+
+        try:
+            values = json.loads(custom_curve.values) if isinstance(custom_curve.values, str) else custom_curve.values
+        except (TypeError, ValueError, json.JSONDecodeError):
+            return
+
+        if not isinstance(values, dict):
+            return
+
+        if values.get('type') == 'manual':
+            style_dict = values.setdefault('style', {})
+            for key in ('color', 'line_style', 'width', 'symbol', 'symbol_size', 'symbol_color', 'fill_color'):
+                if key in style:
+                    style_dict[key] = style[key]
+        else:
+            if 'color' in style:
+                values['color'] = style['color']
+            if 'width' in style:
+                values['line_width'] = style['width']
+            if 'line_style' in style:
+                values['line_style'] = style['line_style']
+            if 'symbol' in style:
+                values['symbol'] = style['symbol']
+            if 'symbol_size' in style:
+                values['symbol_size'] = style['symbol_size']
+
+        serialized = json.dumps(values)
+        custom_curve.values = serialized
+
+        try:
+            sp.new_upd_custom_curve((custom_curve.id, custom_curve.graph_project_id, serialized))
+        except Exception as exc:
+            print(f"Не удалось обновить стиль кривой {curve_id}: {exc}")
 
     def _handle_plot_action(self, action_name: str, checked: bool = False):
         """Обработчик действий для графика"""
