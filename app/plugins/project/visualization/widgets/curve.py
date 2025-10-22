@@ -106,7 +106,11 @@ class CurveItem(pg.PlotDataItem):
         )
 
         # Установка символов точек
-        self.setSymbol(self.style_config.get('symbol'))
+        symbol = self.style_config.get('symbol')
+        if isinstance(symbol, str) and symbol.lower() in {'none', ''}:
+            symbol = None
+        self.style_config['symbol'] = symbol
+        self.setSymbol(symbol)
         self.setSymbolSize(int(self.style_config.get('symbol_size', GraphConstants.DEFAULT_STYLE['symbol_size'])))
 
         # Цвет обводки символа

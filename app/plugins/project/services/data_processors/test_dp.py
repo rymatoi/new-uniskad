@@ -31,14 +31,30 @@ class TestProcessor:
 
     @staticmethod
     def get_item_style(item):  # TODO надо будет учитывать настройки отображений по условиям
+        symbol = item.curve_point_symbol
+        if isinstance(symbol, str) and symbol.lower() in {'none', ''}:
+            symbol = None
+
+        symbol_color = getattr(item, 'curve_symbol_color', item.curve_color)
+        if isinstance(symbol_color, str) and symbol_color.lower() in {'none', ''}:
+            symbol_color = item.curve_color
+        elif symbol_color is None:
+            symbol_color = item.curve_color
+
+        fill_color = getattr(item, 'curve_symbol_fill_color', symbol_color)
+        if isinstance(fill_color, str) and fill_color.lower() in {'none', ''}:
+            fill_color = symbol_color
+        elif fill_color is None:
+            fill_color = symbol_color
+
         return {
             'color': item.curve_color,
             'width': int(item.curve_width),
             'line_style': int(item.curve_line_style),
             'symbol_size': int(item.curve_point_size),
-            'symbol': item.curve_point_symbol,
-            'symbol_color': getattr(item, 'curve_symbol_color', item.curve_color),
-            'fill_color': item.curve_symbol_fill_color,
+            'symbol': symbol,
+            'symbol_color': symbol_color,
+            'fill_color': fill_color,
             'name': item.curve_name if item.curve_name else item.name
         }
 

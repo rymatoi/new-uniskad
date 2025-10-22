@@ -80,6 +80,8 @@ class CurveStyleDialog(BaseDialog):
         self.ui.thickness.setValue(width if width > 0 else 1)
 
         symbol_value = style.get('symbol')
+        if isinstance(symbol_value, str) and symbol_value.lower() in {'none', ''}:
+            symbol_value = None
         if symbol_value is None:
             symbol_index = 0
         else:
