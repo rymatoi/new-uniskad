@@ -1,5 +1,5 @@
 from PySide2.QtCore import Qt, QPointF
-from PySide2.QtWidgets import QMenu
+from PySide2.QtWidgets import QMenu, QApplication
 from PySide2.QtGui import QCursor
 import pyqtgraph as pg
 from typing import Any, List, Tuple, Optional
@@ -13,6 +13,8 @@ from db import sp
 from app.plugins.project.dialogs.create_approx import ApproxDialog
 from app.plugins.project.dialogs.create_interpolation import InterpDialog
 from app.plugins.project.dialogs.extrapolation_dialog import ExtrapolationDialog
+from app.plugins.project.data.adapters.excel_adapter import ExcelDataHandler
+from app.plugins.project.utils.converters.excel_converter import ExcelConverter
 
 
 class PlotContextMenuMixin:
@@ -36,6 +38,162 @@ class PlotContextMenuMixin:
         self._cache_available_actions()
         self._load_menus()
         self._sync_initial_states()
+
+    # --- Работа с буфером обмена -------------------------------------------------
+
+    def copy_curve_to_clipboard(self, curve):
+        """Копирует данные кривой в буфер обмена."""
+        if curve is None:
+            return
+
+        x_data = getattr(curve, 'xData', None)
+        y_data = getattr(curve, 'yData', None)
+
+        if x_data is None or y_data is None:
+            return
+
+        points_count = min(len(x_data), len(y_data))
+        if points_count == 0:
+            return
+
+        curve_name = curve.name() or "Кривая"
+        lines = [curve_name, str(points_count)]
+
+        for index in range(points_count):
+            x_val = x_data[index]
+            y_val = y_data[index]
+            try:
+                x_str = ExcelConverter.float_to_excel(float(x_val))
+            except (TypeError, ValueError):
+                x_str = str(x_val)
+            try:
+                y_str = ExcelConverter.float_to_excel(float(y_val))
+            except (TypeError, ValueError):
+                y_str = str(y_val)
+            lines.append(f"{x_str}\t{y_str}")
+
+        QApplication.clipboard().setText("\n".join(lines))
+
+    def copy_point_to_clipboard(self, curve, point_idx):
+        """Копирует координаты точки в буфер обмена."""
+        if curve is None:
+            return
+
+        x_data = getattr(curve, 'xData', None)
+        y_data = getattr(curve, 'yData', None)
+
+        if x_data is None or y_data is None:
+            return
+
+        if point_idx < 0 or point_idx >= min(len(x_data), len(y_data)):
+            return
+
+        x_val = x_data[point_idx]
+        y_val = y_data[point_idx]
+
+        try:
+            x_str = ExcelConverter.float_to_excel(float(x_val))
+        except (TypeError, ValueError):
+            x_str = str(x_val)
+        try:
+            y_str = ExcelConverter.float_to_excel(float(y_val))
+        except (TypeError, ValueError):
+            y_str = str(y_val)
+
+        QApplication.clipboard().setText(f"{x_str}\t{y_str}")
+
+    def paste_curve_from_clipboard(self):
+        """Создает новую кривую на основании данных из буфера обмена."""
+        clipboard_text = QApplication.clipboard().text()
+        if not clipboard_text:
+            return
+
+        parsed_data = self._parse_curve_clipboard_data(clipboard_text)
+        if parsed_data is None:
+            logger.warning("Не удалось распознать данные буфера обмена для вставки кривой.")
+            return
+
+        curve_name, values = parsed_data
+        if not values:
+            return
+
+        x_values = [point[0] for point in values]
+        y_values = [point[1] for point in values]
+
+        new_curve = self.add_curve(x_values, y_values, name=curve_name)
+
+        if hasattr(self.plotItem, 'legend') and self.plotItem.legend is not None:
+            self.plotItem.legend.addItem(new_curve, curve_name)
+
+        # Сохраняем кривую в БД, если доступен менеджер данных
+        data_manager = getattr(self.data_processor, 'data_manager', None)
+        if data_manager is None:
+            return
+
+        try:
+            payload = {'name': curve_name, 'values': values}
+            custom_curve = data_manager.save_custom_curve(payload)
+        except Exception as exc:
+            logger.warning("Не удалось сохранить пользовательскую кривую: %s", exc)
+            custom_curve = None
+
+        if custom_curve:
+            new_curve.custom_curve_id = getattr(custom_curve, 'id', None)
+            if hasattr(self.data_processor, 'other_data'):
+                self.data_processor.other_data.append(custom_curve)
+
+    def _parse_curve_clipboard_data(self, raw_text):
+        """Пытается разобрать данные о кривой из буфера обмена."""
+        if not raw_text:
+            return None
+
+        try:
+            curve_name, values = ExcelDataHandler.parse_clipboard_data(raw_text)
+            return curve_name, values
+        except Exception:
+            pass
+
+        rows = [row for row in raw_text.splitlines() if row.strip()]
+        if not rows:
+            return None
+
+        cleaned_rows = list(rows)
+
+        # Удаляем служебный заголовок, если он присутствует
+        if cleaned_rows and cleaned_rows[0].strip().lower() == 'dep1d_cd':
+            cleaned_rows.pop(0)
+            if cleaned_rows and cleaned_rows[0].strip().isdigit():
+                cleaned_rows.pop(0)
+
+        curve_name = "Импортированная кривая"
+        if cleaned_rows and len(cleaned_rows[0].split('\t')) == 1:
+            name_candidate = cleaned_rows.pop(0).strip()
+            if name_candidate:
+                curve_name = name_candidate
+
+        values = []
+        for row in cleaned_rows:
+            parts = row.split('\t')
+            if len(parts) < 2:
+                continue
+
+            x_raw = parts[0].strip()
+            y_raw = parts[1].strip()
+            if x_raw == '' or y_raw == '':
+                continue
+
+            try:
+                x_val = float(ExcelConverter.excel_to_float(x_raw))
+                y_val = float(ExcelConverter.excel_to_float(y_raw))
+            except ValueError:
+                return None
+
+            values.append((x_val, y_val))
+
+        if not values:
+            return None
+
+        return curve_name, values
 
     def _cache_available_actions(self):
         """Кэширует доступные действия из базы данных"""
@@ -221,16 +379,30 @@ class PlotContextMenuMixin:
 
     def _handle_point_action(self, data: dict, checked: bool = False):
         """Обработчик действий для точек"""
-        print(f"Point action triggered: {data}, checked={checked}")
-        curve = data['curve']
-        point_idx = data['point_idx']
-        action_name = data['action']
-        print(f"Point action: {action_name} for point {point_idx} on curve {curve.name()}")
+        curve = data.get('curve')
+        point_idx = data.get('point_idx', -1)
+        action_name = data.get('action')
+
+        if action_name == PlotMenuActions.POINT_COPY.name and curve is not None:
+            self.copy_point_to_clipboard(curve, point_idx)
+            return
+
+        logger.info(
+            "Point action: %s for point %s on curve %s (checked=%s)",
+            action_name,
+            point_idx,
+            curve.name() if curve is not None else 'unknown',
+            checked
+        )
 
     def _handle_curve_action(self, data: dict, checked: bool = False):
         """Обработчик действий для кривых"""
         curve = data['curve']
         action_name = data['action']
+
+        if action_name == PlotMenuActions.CURVE_COPY.name and curve:
+            self.copy_curve_to_clipboard(curve)
+            return
 
         if action_name == PlotMenuActions.CURVE_HIDE.name and curve:
             # Получаем test_id для кривой
@@ -353,7 +525,9 @@ class PlotContextMenuMixin:
 
     def _handle_plot_action(self, action_name: str, checked: bool = False):
         """Обработчик действий для графика"""
-        if action_name == PlotMenuActions.PLOT_GRID.name:
+        if action_name == PlotMenuActions.PLOT_PASTE_CURVE.name:
+            self.paste_curve_from_clipboard()
+        elif action_name == PlotMenuActions.PLOT_GRID.name:
             self.action_states['grid'] = checked
             self.plotItem.showGrid(checked, checked, alpha=0.3)
             if hasattr(self.plotItem, 'ctrl') and hasattr(self.plotItem.ctrl, 'gridCheck'):

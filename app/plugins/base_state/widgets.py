@@ -2672,6 +2672,8 @@ class TableWidget(QTableWidget):
                 self.filter_table()
         elif event == QKeySequence.Copy:  # Проверяем, нажата ли комбинация Ctrl+C
             self.copy_to_clipboard()
+        elif event == QKeySequence.Paste:
+            self.paste_from_clipboard()
         else:
             super().keyPressEvent(event)
 
@@ -2693,6 +2695,59 @@ class TableWidget(QTableWidget):
         # Сохраняем в буфер обмена
         clipboard = QApplication.clipboard()
         clipboard.setText(copied_data.strip())
+
+    def paste_from_clipboard(self):
+        """Вставляет данные из буфера обмена в таблицу."""
+        clipboard = QApplication.clipboard()
+        raw_text = clipboard.text()
+        if not raw_text:
+            return
+
+        rows_data = [row.split('\t') for row in raw_text.splitlines() if row]
+        if not rows_data:
+            return
+
+        selected_ranges = self.selectedRanges()
+        if selected_ranges:
+            anchor_range = selected_ranges[0]
+            start_row = anchor_range.topRow()
+            start_column = anchor_range.leftColumn()
+        else:
+            start_row = self.currentRow()
+            start_column = self.currentColumn()
+
+            if start_row < 0:
+                start_row = 0
+            if start_column < 0:
+                start_column = 0
+
+        for row_offset, raw_values in enumerate(rows_data):
+            if not raw_values:
+                continue
+
+            target_row = None
+            value_start_index = 0
+
+            potential_row_name = raw_values[0].strip()
+            if potential_row_name and potential_row_name in self.ord_rows:
+                target_row = self.ord_rows.index(potential_row_name)
+                value_start_index = 1
+            else:
+                target_row = start_row + row_offset
+
+            if target_row < 0 or target_row >= self.rowCount():
+                continue
+
+            for column_offset, value in enumerate(raw_values[value_start_index:]):
+                target_column = start_column + column_offset
+                if target_column < 0 or target_column >= self.columnCount():
+                    continue
+
+                item = self.item(target_row, target_column)
+                if item is None:
+                    continue
+
+                item.setData(Qt.EditRole, str(value))
 
     def filter_table(self):
         search_string = self.search_string.lower()
