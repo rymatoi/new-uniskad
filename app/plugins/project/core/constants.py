@@ -67,8 +67,8 @@ class GraphConstants:
         'color': '#1f77b4',
         'width': 2,
         'line_style': 'solid',
-        'symbol': DEFAULT_STYLE['symbol'],
-        'symbol_size': DEFAULT_STYLE['symbol_size'],
+        'symbol': None,
+        'symbol_size': 0,
         'symbol_color': DEFAULT_STYLE['symbol_color'],
     }
 

@@ -102,47 +102,45 @@ class PlotDataMixin:
             if test_id in self.plot_processor.curve_map:
                 del self.plot_processor.curve_map[test_id]
 
-    def remove_custom_curve(self, curve) -> bool:
-        """Удаляет пользовательскую кривую из БД и с графика
-        
-        Args:
-            curve: Объект кривой для удаления
-            
-        Returns:
-            bool: True если удаление успешно, False в противном случае
-        """
-        # Получаем ID кастомной кривой
-        if not hasattr(curve, 'custom_curve_id') or curve.custom_curve_id is None:
-            return False
-            
-        # Удаляем из базы данных
-        result = self.data_processor.remove_curve(curve.custom_curve_id)
-        
-        # Если удаление из БД успешно, удаляем с графика
-        if result:
-            # Удаляем из интерфейса
+    def _detach_curve(self, curve) -> None:
+        """Удаляет кривую из виджета и связанных структур"""
+        try:
             self.removeItem(curve)
-            
-            # Удаляем из списка кривых
-            if curve in self.curve_items:
-                self.curve_items.remove(curve)
-                
-            # Удаляем из словаря выбранных точек
-            if curve in self.selected_points:
-                del self.selected_points[curve]
-            
-            # Обновляем легенду
-            if hasattr(self.plotItem, 'legend') and self.plotItem.legend:
-                for i, (sample, label) in enumerate(list(self.plotItem.legend.items)):
-                    if getattr(sample, 'item', None) == curve:
-                        self.plotItem.legend.items.pop(i)
-                        sample.setParentItem(None)
-                        label.setParentItem(None)
-                        break
-                        
+        except Exception:
+            pass
+
+        if curve in self.curve_items:
+            self.curve_items.remove(curve)
+
+        if curve in self.selected_points:
+            del self.selected_points[curve]
+
+        if hasattr(self.plotItem, 'legend') and self.plotItem.legend:
+            for i, (sample, label) in enumerate(list(self.plotItem.legend.items)):
+                if getattr(sample, 'item', None) == curve:
+                    self.plotItem.legend.items.pop(i)
+                    sample.setParentItem(None)
+                    label.setParentItem(None)
+                    break
+
+    def remove_custom_curve(self, curve) -> bool:
+        """Удаляет пользовательскую или вставленную кривую"""
+        curve_id = getattr(curve, 'custom_curve_id', None)
+
+        # Если кривая была вставлена, разрешаем удаление без ID
+        if curve_id is None and getattr(curve, 'is_pasted_curve', False):
+            self._detach_curve(curve)
             return True
-            
-        return False
+
+        if curve_id is None:
+            return False
+
+        result = self.data_processor.remove_curve(curve_id)
+
+        if result:
+            self._detach_curve(curve)
+
+        return bool(result)
 
     def check_x_val_constraint(self, i, project_id):
         """Проверяет, удовлетворяет ли значение ограничениям параметров"""
