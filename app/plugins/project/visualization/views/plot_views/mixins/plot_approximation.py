@@ -52,8 +52,14 @@ class PlotApproximationMixin:
             if color:
                 curve_style['color'] = color
             else:
-                curve_style['color'] = source_curve.style['fill_color'] if 'fill_color' in source_curve.style else '#1f77b4'
-                
+                curve_style['color'] = (
+                    source_curve.style['fill_color']
+                    if 'fill_color' in source_curve.style
+                    else '#1f77b4'
+                )
+
+            curve_style['symbol_color'] = curve_style['color']
+
             if line_width is not None:
                 curve_style['width'] = line_width
 
