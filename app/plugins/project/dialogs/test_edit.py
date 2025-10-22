@@ -1,4 +1,5 @@
 import ast
+import json
 
 from PySide2.QtCore import QSortFilterProxyModel, QModelIndex, QRegExp, Qt, QItemSelection
 from PySide2.QtGui import QColor
@@ -187,6 +188,9 @@ class ConditionWidget(QWidget):
 
 
 class EditProjectItemDialog(BaseDialog):
+    CONDITIONS_CLIPBOARD_KEY = "__uniskad_test_conditions__"
+    FILTERS_CLIPBOARD_KEY = "__uniskad_test_filters__"
+
     LINE_STYLES = [
         (Qt.NoPen, 'Прозрачная'),
         (Qt.SolidLine, 'Линия'),
@@ -253,6 +257,10 @@ class EditProjectItemDialog(BaseDialog):
         self.ui.pointSizeSpinBox.valueChanged.connect(self.refresh)
         self.ui.addConditionButton.clicked.connect(self.add_condition)
         self.ui.addConditionButton_2.clicked.connect(self.add_filter)
+        self.ui.copyButton.clicked.connect(self.copy_conditions_to_clipboard)
+        self.ui.pasteButton.clicked.connect(self.paste_conditions_from_clipboard)
+        self.ui.copyButton_2.clicked.connect(self.copy_filters_to_clipboard)
+        self.ui.pasteButton_2.clicked.connect(self.paste_filters_from_clipboard)
 
     def set_condition_param(self, param):
         self.condition_parameter = param
@@ -292,16 +300,30 @@ class EditProjectItemDialog(BaseDialog):
         self.curves = utils.collect_project_params(sp.get_project_test_params(project_item._data.id))
 
     def add_condition(self, style=None):
-        condition_widget = ConditionWidget(self.container_lay.count(), self.curves.keys(), parent=self, style=style)
+        normalized_style = self._normalize_condition_payload(style, strict=False) if style else None
+        condition_widget = ConditionWidget(
+            self.container_lay.count(),
+            self.curves.keys(),
+            parent=self,
+            style=normalized_style
+        )
         self.container_lay.insertWidget(condition_widget.number - 1, condition_widget)
         if condition_widget.number != 1:
             condition_widget.combobox.setEnabled(False)
+        return condition_widget
 
     def add_filter(self, style=None):
-        filter_widget = FilterWidget(self.f_container_lay.count(), self.curves.keys(), parent=self, style=style)
+        normalized_style = self._normalize_filter_payload(style, strict=False) if style else None
+        filter_widget = FilterWidget(
+            self.f_container_lay.count(),
+            self.curves.keys(),
+            parent=self,
+            style=normalized_style
+        )
         self.f_container_lay.insertWidget(filter_widget.number - 1, filter_widget)
         # if filter_widget.number != 1:
         #     filter_widget.combobox.setEnabled(False)
+        return filter_widget
 
     def condition_count(self):
         return self.container_lay.count() - 1
@@ -406,40 +428,8 @@ class EditProjectItemDialog(BaseDialog):
         curve.curve_point_size = self.ui.pointSizeSpinBox.value()
         curve.display_as_curve = self.ui.displayCheckBox.isChecked()
 
-        conditions = []
-        for i in range(self.condition_count()):
-
-            widget = self.container_lay.itemAt(i)
-            condition_widget = widget.widget()
-
-            x = condition_widget.combobox.currentText()
-            if x in self.curves:
-                conditions.append({
-                    'name': condition_widget.name_lineedit.text(),
-                    'x': x,
-                    'val': condition_widget.lineedit.text(),
-                    'color': condition_widget.color.color().name(),
-                    'point_size': condition_widget.point_size.value(),
-                    'type': utils.SYMBOLS[condition_widget.type_combobox.currentIndex()][0]
-                })
-
-        filters = []
-        for i in range(self.filter_count()):
-
-            widget = self.f_container_lay.itemAt(i)
-            filter_widget = widget.widget()
-
-            x = filter_widget.Xcombobox.currentText()
-            y = filter_widget.Ycombobox.currentText()
-            _condition = filter_widget.condition_combobox.currentText()
-            percents = filter_widget.spinbox.value()
-            if x in self.curves and y in self.curves:
-                filters.append({
-                    'x': x,
-                    'y': y,
-                    'condition': _condition,
-                    'condition_percent': percents
-                })
+        conditions = self._collect_conditions()
+        filters = self._collect_filters()
 
         styles = (
             ('curve_width', f'{curve.curve_width}'),
@@ -476,6 +466,223 @@ class EditProjectItemDialog(BaseDialog):
         props = sp.new_update_project_from_record_array(props)
         self.item.update_class_props(props)
         super().accept()
+
+    def _collect_conditions(self):
+        conditions = []
+        for i in range(self.condition_count()):
+            item = self.container_lay.itemAt(i)
+            condition_widget = item.widget()
+            if condition_widget is None:
+                continue
+
+            x = condition_widget.combobox.currentText()
+            if x in self.curves:
+                conditions.append({
+                    'name': condition_widget.name_lineedit.text(),
+                    'x': x,
+                    'val': condition_widget.lineedit.text(),
+                    'color': condition_widget.color.color().name(),
+                    'point_size': condition_widget.point_size.value(),
+                    'type': utils.SYMBOLS[condition_widget.type_combobox.currentIndex()][0]
+                })
+        return conditions
+
+    def _collect_filters(self):
+        filters = []
+        for i in range(self.filter_count()):
+            item = self.f_container_lay.itemAt(i)
+            filter_widget = item.widget()
+            if filter_widget is None:
+                continue
+
+            x = filter_widget.Xcombobox.currentText()
+            y = filter_widget.Ycombobox.currentText()
+            _condition = filter_widget.condition_combobox.currentText()
+            percents = filter_widget.spinbox.value()
+            if x in self.curves and y in self.curves:
+                filters.append({
+                    'x': x,
+                    'y': y,
+                    'condition': _condition,
+                    'condition_percent': percents
+                })
+        return filters
+
+    def copy_conditions_to_clipboard(self):
+        payload = {
+            'type': self.CONDITIONS_CLIPBOARD_KEY,
+            'conditions': self._collect_conditions(),
+            'use_conditions': self.ui.applyCheckBox.isChecked()
+        }
+        self._set_clipboard_payload(payload)
+
+    def paste_conditions_from_clipboard(self):
+        payload = self._read_clipboard_payload(self.CONDITIONS_CLIPBOARD_KEY)
+        if payload is None:
+            self._show_clipboard_warning('Буфер обмена не содержит сохраненных условий.')
+            return
+
+        conditions = payload.get('conditions')
+        if not isinstance(conditions, list):
+            self._show_clipboard_warning('Некорректный формат данных условий в буфере обмена.')
+            return
+
+        self._set_conditions_from_data(conditions)
+        if 'use_conditions' in payload:
+            self.ui.applyCheckBox.setChecked(bool(payload['use_conditions']))
+
+    def copy_filters_to_clipboard(self):
+        payload = {
+            'type': self.FILTERS_CLIPBOARD_KEY,
+            'filters': self._collect_filters(),
+            'use_filters': self.ui.applyCheckBox_2.isChecked()
+        }
+        self._set_clipboard_payload(payload)
+
+    def paste_filters_from_clipboard(self):
+        payload = self._read_clipboard_payload(self.FILTERS_CLIPBOARD_KEY)
+        if payload is None:
+            self._show_clipboard_warning('Буфер обмена не содержит сохраненных фильтров.')
+            return
+
+        filters = payload.get('filters')
+        if not isinstance(filters, list):
+            self._show_clipboard_warning('Некорректный формат данных фильтров в буфере обмена.')
+            return
+
+        self._set_filters_from_data(filters)
+        if 'use_filters' in payload:
+            self.ui.applyCheckBox_2.setChecked(bool(payload['use_filters']))
+
+    def _set_conditions_from_data(self, conditions):
+        self._clear_conditions()
+        sanitized = [self._normalize_condition_payload(cond, strict=True) for cond in conditions]
+        sanitized = [cond for cond in sanitized if cond is not None]
+
+        for condition in sanitized:
+            self.add_condition(condition)
+
+    def _set_filters_from_data(self, filters):
+        self._clear_filters()
+        sanitized = [self._normalize_filter_payload(flt, strict=True) for flt in filters]
+        sanitized = [flt for flt in sanitized if flt is not None]
+
+        for filter_style in sanitized:
+            self.add_filter(filter_style)
+
+    def _clear_conditions(self):
+        for i in reversed(range(self.condition_count())):
+            item = self.container_lay.itemAt(i)
+            widget = item.widget()
+            if widget is None:
+                continue
+            self.container_lay.removeWidget(widget)
+            widget.setParent(None)
+            widget.deleteLater()
+        self.condition_parameter = None
+
+    def _clear_filters(self):
+        for i in reversed(range(self.filter_count())):
+            item = self.f_container_lay.itemAt(i)
+            widget = item.widget()
+            if widget is None:
+                continue
+            self.f_container_lay.removeWidget(widget)
+            widget.setParent(None)
+            widget.deleteLater()
+
+    def _normalize_condition_payload(self, data, strict=True):
+        if not isinstance(data, dict):
+            return None
+
+        x = data.get('x')
+        if not x:
+            return None
+        if strict and x not in self.curves:
+            return None
+
+        name = data.get('name')
+        try:
+            name = '' if name is None else str(name)
+        except Exception:
+            name = ''
+
+        val = data.get('val', '')
+        try:
+            val = str(val)
+        except Exception:
+            val = ''
+
+        color = data.get('color') or '#000000'
+        if not QColor(color).isValid():
+            color = '#000000'
+
+        valid_symbols = {symbol for symbol, _ in utils.SYMBOLS}
+        default_symbol = utils.SYMBOLS[0][0] if utils.SYMBOLS else 'o'
+        symbol = data.get('type') or default_symbol
+        if symbol not in valid_symbols:
+            symbol = default_symbol
+
+        try:
+            point_size = int(data.get('point_size', 3))
+        except (TypeError, ValueError):
+            point_size = 3
+
+        return {
+            'name': name,
+            'x': x,
+            'val': val,
+            'color': color,
+            'point_size': point_size,
+            'type': symbol
+        }
+
+    def _normalize_filter_payload(self, data, strict=True):
+        if not isinstance(data, dict):
+            return None
+
+        x = data.get('x')
+        y = data.get('y')
+        if not x or not y:
+            return None
+        if strict and (x not in self.curves or y not in self.curves):
+            return None
+
+        condition = data.get('condition', '>')
+        if condition not in ('>', '<', '='):
+            condition = '>'
+
+        percent = data.get('condition_percent', 0)
+        try:
+            percent = float(percent)
+        except (TypeError, ValueError):
+            percent = 0.0
+
+        return {
+            'x': x,
+            'y': y,
+            'condition': condition,
+            'condition_percent': percent
+        }
+
+    def _set_clipboard_payload(self, payload):
+        QApplication.clipboard().setText(json.dumps(payload, ensure_ascii=False))
+
+    def _read_clipboard_payload(self, expected_type):
+        clipboard = QApplication.clipboard()
+        text = clipboard.text()
+        if not text:
+            return None
+        try:
+            payload = json.loads(text)
+        except json.JSONDecodeError:
+            return None
+        if not isinstance(payload, dict) or payload.get('type') != expected_type:
+            return None
+        return payload
+
+    def _show_clipboard_warning(self, message):
+        QMessageBox.warning(self, 'Буфер обмена', message)
 
     @classmethod
     def modal(cls, parent=None):
