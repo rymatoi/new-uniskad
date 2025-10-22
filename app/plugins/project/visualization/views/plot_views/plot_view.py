@@ -82,8 +82,11 @@ class PlotView(BasePlotView):
             # Сохраняем ID кастомной кривой, если есть
             if hasattr(style, 'get'):
                 custom_curve_id = style.get('custom_curve_id')
-                if custom_curve_id:
-                    curve.custom_curve_id = custom_curve_id
+                if custom_curve_id is not None:
+                    try:
+                        curve.custom_curve_id = int(custom_curve_id)
+                    except (TypeError, ValueError):
+                        curve.custom_curve_id = custom_curve_id
 
                 curve_type = style.get('type')
                 generated_types_map = {

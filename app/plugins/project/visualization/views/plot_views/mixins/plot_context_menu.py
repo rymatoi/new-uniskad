@@ -8,6 +8,7 @@ import json
 import numpy as np
 
 from app.plugins.project.services.data_processors.plot_dp import PlotProcessor
+from app.plugins.project.core.constants import GraphConstants
 from app.plugins.project.visualization.views.plot_views.menu_tools.plot_menu_actions import PlotMenuActions, \
     ActionTarget, get_available_actions
 from app.plugins.project.visualization.views.plot_views.menu_tools.curve_clipboard import CurveClipboard
@@ -15,6 +16,7 @@ from db import sp
 from app.plugins.project.dialogs.create_approx import ApproxDialog
 from app.plugins.project.dialogs.create_interpolation import InterpDialog
 from app.plugins.project.dialogs.extrapolation_dialog import ExtrapolationDialog
+from app.plugins.project.dialogs.curve_style import CurveStyleDialog
 
 
 class PlotContextMenuMixin:
@@ -265,6 +267,9 @@ class PlotContextMenuMixin:
             project_id = getattr(getattr(self.data_processor, 'data_manager', None), 'project_id', None)
             CurveClipboard.copy_curve(curve, project_id=project_id)
 
+        elif action_name == PlotMenuActions.CURVE_STYLE.name and curve:
+            self._show_curve_style_dialog(curve)
+
         elif action_name == PlotMenuActions.CURVE_APPROXIMATION.name and curve:
             # Получаем test_id для кривой
             test_id = self.data_processor.get_test_id_for_curve(curve)
@@ -394,6 +399,242 @@ class PlotContextMenuMixin:
 
         print(f"Curve action: {action_name}, checked: {checked}, curve: {curve.name() if curve else 'all curves'}")
 
+    def _show_curve_style_dialog(self, curve):
+        """Отображает диалог настройки стиля кривой и применяет изменения"""
+
+        dialog = CurveStyleDialog(curve.style, parent=self)
+        if not dialog.exec_():
+            return
+
+        new_style = dialog.get_style()
+        if not isinstance(new_style, dict):
+            return
+
+        self._apply_curve_style(curve, new_style)
+        self._persist_curve_style(curve)
+
+    def _apply_curve_style(self, curve, style):
+        """Применяет стиль к кривой и обновляет легенду"""
+
+        old_style = curve.style.copy()
+        for key in ('color', 'line_style', 'width', 'symbol', 'symbol_size', 'symbol_color', 'fill_color'):
+            if key in style:
+                curve.style_config[key] = style[key]
+
+        # Если раньше цвета маркера совпадали с цветом линии, обновляем их
+        if 'color' in style:
+            new_color = style['color']
+            if old_style.get('symbol_color') == old_style.get('color'):
+                curve.style_config['symbol_color'] = new_color
+            if old_style.get('fill_color', old_style.get('symbol_color')) == old_style.get('color'):
+                curve.style_config['fill_color'] = new_color
+
+        curve.apply_style()
+        self._update_legend_item(curve)
+
+    def _update_legend_item(self, curve):
+        if hasattr(self.plotItem, 'legend') and self.plotItem.legend is not None:
+            for sample, label in self.plotItem.legend.items:
+                if getattr(sample, 'item', None) == curve:
+                    sample.update()
+                    break
+
+    def _persist_curve_style(self, curve):
+        """Сохраняет стиль кривой в БД и в связанных данных."""
+
+        applied_style = curve.style.copy()
+
+        curve_id = self._extract_custom_curve_id(curve, applied_style)
+        if curve_id is not None:
+            if self._persist_custom_curve_style(curve_id, applied_style):
+                return
+
+        test_id = self.data_processor.get_test_id_for_curve(curve)
+        if test_id is not None:
+            self._persist_test_curve_style(test_id, applied_style)
+
+    def _extract_custom_curve_id(self, curve, style):
+        curve_id = getattr(curve, 'custom_curve_id', None)
+        if curve_id is None and isinstance(style, dict):
+            curve_id = style.get('custom_curve_id')
+
+        if curve_id is None:
+            return None
+
+        try:
+            normalized_id = int(curve_id)
+        except (TypeError, ValueError):
+            normalized_id = curve_id
+
+        if getattr(curve, 'custom_curve_id', None) != normalized_id:
+            curve.custom_curve_id = normalized_id
+
+        if isinstance(style, dict):
+            style['custom_curve_id'] = normalized_id
+
+        return normalized_id
+
+    def _get_cached_custom_curve(self, curve_id):
+        def matches(candidate):
+            candidate_id = getattr(candidate, 'id', None)
+            try:
+                return int(candidate_id) == int(curve_id)
+            except (TypeError, ValueError):
+                return candidate_id == curve_id
+
+        other_data = getattr(self.data_processor, 'other_data', []) or []
+        for item in other_data:
+            if matches(item):
+                return item
+
+        data_manager = getattr(self.data_processor, 'data_manager', None)
+        if data_manager is None:
+            return None
+
+        try:
+            refreshed = data_manager.load_custom_curves()
+        except Exception as exc:
+            print(f"Не удалось перечитать пользовательские кривые: {exc}")
+            return None
+
+        try:
+            self.data_processor.other_data = list(refreshed)
+        except Exception:
+            self.data_processor.other_data = refreshed
+
+        for item in getattr(self.data_processor, 'other_data', []) or []:
+            if matches(item):
+                return item
+
+        return None
+
+    def _persist_custom_curve_style(self, curve_id, style):
+        custom_curve = self._get_cached_custom_curve(curve_id)
+
+        if custom_curve is None:
+            return False
+
+        try:
+            values = json.loads(custom_curve.values) if isinstance(custom_curve.values, str) else custom_curve.values
+        except (TypeError, ValueError, json.JSONDecodeError):
+            return False
+
+        if not isinstance(values, dict):
+            return False
+
+        if values.get('type') == 'manual':
+            style_dict = values.setdefault('style', {})
+            for key in ('color', 'line_style', 'width', 'symbol', 'symbol_size', 'symbol_color', 'fill_color'):
+                if key in style:
+                    style_dict[key] = style[key]
+        else:
+            mapping = {
+                'color': 'color',
+                'width': 'line_width',
+                'line_style': 'line_style',
+                'symbol': 'symbol',
+                'symbol_size': 'symbol_size',
+                'symbol_color': 'symbol_color',
+                'fill_color': 'fill_color',
+            }
+            for source_key, target_key in mapping.items():
+                if source_key in style:
+                    values[target_key] = style[source_key]
+
+        serialized = json.dumps(values)
+
+        try:
+            updated = sp.new_upd_custom_curve((custom_curve.id, custom_curve.graph_project_id, serialized))
+        except Exception as exc:
+            print(f"Не удалось обновить стиль кривой {curve_id}: {exc}")
+            return False
+        else:
+            if updated is not None and hasattr(updated, 'values'):
+                custom_curve.values = updated.values
+            else:
+                custom_curve.values = serialized
+            return True
+
+    def _persist_test_curve_style(self, test_id, style):
+        test_node = getattr(self.data_processor, 'test_nodes', {}).get(test_id)
+        if test_node is None:
+            return
+
+        data = getattr(test_node, '_data', None)
+        if data is None:
+            return
+
+        updates = {}
+
+        color = style.get('color')
+        if color:
+            updates['curve_color'] = color
+
+        width = style.get('width')
+        if width is not None:
+            updates['curve_width'] = int(width)
+
+        line_style = style.get('line_style')
+        if line_style is not None:
+            updates['curve_line_style'] = int(GraphConstants.resolve_pen_style(line_style))
+
+        symbol = style.get('symbol')
+        if symbol is not None:
+            updates['curve_point_symbol'] = symbol if symbol is not None else 'None'
+        elif 'symbol' in style:
+            updates['curve_point_symbol'] = 'None'
+
+        symbol_size = style.get('symbol_size')
+        if symbol_size is not None:
+            updates['curve_point_size'] = int(symbol_size)
+
+        symbol_color = style.get('symbol_color') or color
+        if symbol_color is not None:
+            updates['curve_symbol_color'] = symbol_color
+
+        fill_color = style.get('fill_color') or symbol_color
+        if fill_color is not None:
+            updates['curve_symbol_fill_color'] = fill_color
+
+        if not updates:
+            return
+
+        props_payload = []
+        parent_id = getattr(data, 'id_up', None)
+        if parent_id is None:
+            parent_id = getattr(data, 'id_up_prod', None)
+
+        for prop_name, prop_value in updates.items():
+            props_payload.append((
+                None,
+                data.id,
+                parent_id,
+                7,
+                prop_name,
+                '' if prop_value is None else str(prop_value),
+                None,
+                None,
+                None,
+                0,
+                None
+            ))
+
+        try:
+            updated_props = sp.new_update_project_from_record_array(props_payload)
+        except Exception as exc:
+            print(f"Не удалось обновить стиль испытания {test_id}: {exc}")
+            return
+
+        if updated_props:
+            if hasattr(test_node, 'update_class_props'):
+                test_node.update_class_props(updated_props)
+
+            for prop_name, prop_value in updates.items():
+                value = prop_value
+                if isinstance(value, str) and value.lower() in {'none', ''}:
+                    if prop_name in {'curve_point_symbol', 'curve_symbol_color', 'curve_symbol_fill_color'}:
+                        value = None
+                setattr(test_node, prop_name, value)
     def _handle_plot_action(self, action_name: str, checked: bool = False):
         """Обработчик действий для графика"""
         if action_name == PlotMenuActions.PLOT_PASTE.name:

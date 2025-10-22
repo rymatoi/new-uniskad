@@ -40,6 +40,42 @@ class ItemProcessor:
                 где values содержит JSON строку: {"name": "Испытание \"a\"", "type": "cubic", "test_id": 3214}
             test_nodes: Узлы тестов для получения стилей
         """
+        def _normalize_optional(value):
+            if isinstance(value, str):
+                stripped = value.strip()
+                if stripped.lower() in {'', 'none'}:
+                    return None
+                return stripped
+            return value
+
+        def _normalize_int(value):
+            if value is None:
+                return None
+            try:
+                return int(value)
+            except (TypeError, ValueError):
+                return None
+
+        def _normalize_line_style(value):
+            normalized = _normalize_optional(value)
+            if normalized is None:
+                return None
+            if isinstance(normalized, str):
+                lowered = normalized.lower()
+                if lowered in GraphConstants.STRING_LINE_STYLES:
+                    return lowered
+                for key in GraphConstants.STRING_LINE_STYLES:
+                    if key in lowered:
+                        return key
+                try:
+                    return int(lowered)
+                except (TypeError, ValueError):
+                    return lowered
+            try:
+                return int(normalized)
+            except (TypeError, ValueError):
+                return normalized
+
         for test_id, values in plot_data.items():
             try:
                 # Получаем исходные координаты
@@ -116,13 +152,36 @@ class ItemProcessor:
                         style['type'] = curve_type
 
                         # Используем пользовательские настройки стиля, если они есть
-                        if 'color' in curve_data:
-                            style['color'] = curve_data['color']
+                        color_value = _normalize_optional(curve_data.get('color'))
+                        if color_value is not None:
+                            style['color'] = color_value
                         elif 'fill_color' in base_style:
                             style['color'] = base_style['fill_color']
 
-                        if 'line_width' in curve_data:
-                            style['width'] = curve_data['line_width']
+                        line_width = _normalize_int(curve_data.get('line_width'))
+                        if line_width is not None:
+                            style['width'] = line_width
+
+                        line_style_value = _normalize_line_style(curve_data.get('line_style'))
+                        if line_style_value is not None:
+                            style['line_style'] = line_style_value
+
+                        if 'symbol' in curve_data:
+                            style['symbol'] = _normalize_optional(curve_data.get('symbol'))
+
+                        symbol_size = _normalize_int(curve_data.get('symbol_size'))
+                        if symbol_size is not None:
+                            style['symbol_size'] = symbol_size
+
+                        if 'symbol_color' in curve_data:
+                            symbol_color = _normalize_optional(curve_data.get('symbol_color'))
+                            if symbol_color is not None:
+                                style['symbol_color'] = symbol_color
+
+                        if 'fill_color' in curve_data:
+                            fill_color = _normalize_optional(curve_data.get('fill_color'))
+                            if fill_color is not None:
+                                style['fill_color'] = fill_color
 
                         style['name'] = curve_name
 
