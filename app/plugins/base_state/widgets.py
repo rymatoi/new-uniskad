@@ -1158,8 +1158,18 @@ class TreeView(QTreeView):
         if not self.DOUBLE_CLICK_OPEN:
             return
 
-        if self._opened_tabs.get(index, None):
-            self._opened_tabs[index].raise_()
+        existing_tab = self._opened_tabs.get(index)
+        if existing_tab is not None:
+            if not existing_tab.isVisible():
+                try:
+                    existing_tab.show()
+                except Exception:
+                    logger.exception('Не удалось отобразить ранее открытую вкладку.')
+            existing_tab.raise_()
+            try:
+                existing_tab.activateWindow()
+            except Exception:
+                logger.exception('Не удалось активировать ранее открытую вкладку.')
             identifier = self._node_identifier(index)
             if identifier:
                 self._active_tab_identifier = str(identifier)
