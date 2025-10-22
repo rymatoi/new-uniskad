@@ -3,8 +3,9 @@ from app.plugins.project.services.coordinates import ItemProcessor
 from app.plugins.project.services.data_processors.base_dp import DataProcessor
 from app.plugins.project.services.data_processors.test_dp import TestProcessor
 from app.plugins.project.utils.collectors import PlotDataCollector as Collector
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 from app.plugins.project.visualization.widgets.curve import CurveItem
+from app.plugins.project.core.constants import GraphConstants
 import json
 
 
@@ -43,53 +44,84 @@ class PlotProcessor(DataProcessor):
             yield test_id, x, y, style
 
     def get_custom_curves(self):
-        """Получение данных для кривых"""
-        curves_data = ItemProcessor.get_other_data(self.plot_data, self.other_data, self.test_nodes)
+        """Получение данных для дополнительных кривых"""
 
-        # Создаем копию списка кривых для итерации
-        remaining_curves = list(self.other_data)
+        manual_curves: List[Tuple[Any, Dict[str, Any]]] = []
+        approx_curves: List[Tuple[Any, Dict[str, Any]]] = []
 
-        for test_id, x, y, style in curves_data:
-            # Извлекаем параметры кривой из стиля для более точного сопоставления
-            curve_name = style.get('name', '')
-            curve_type = style.get('type', '')
-            curve_degree = style.get('degree', None)
+        for curve in self.other_data:
+            curve_values = json.loads(curve.values) if isinstance(curve.values, str) else curve.values
+            if isinstance(curve_values, dict) and ('points' in curve_values or curve_values.get('type') == 'manual'):
+                manual_curves.append((curve, curve_values))
+            else:
+                approx_curves.append((curve, curve_values))
 
-            # Ищем наиболее подходящую кривую из оставшихся
-            best_match = None
-            best_match_index = -1
+        if approx_curves:
+            approx_objects = [curve for curve, _ in approx_curves]
+            curves_data = ItemProcessor.get_other_data(self.plot_data, approx_objects, self.test_nodes)
 
-            for i, curve in enumerate(remaining_curves):
-                # Преобразуем значения из JSON, если необходимо
-                curve_data = json.loads(curve.values) if isinstance(curve.values, str) else curve.values
+            remaining_curves = list(approx_curves)
 
-                # Проверяем базовое соответствие по test_id и имени
-                if curve_data.get('test_id') != test_id or curve_data.get('name') != curve_name:
+            for test_id, x, y, style in curves_data:
+                curve_name = style.get('name', '')
+                curve_type = style.get('type', '')
+                curve_degree = style.get('degree', None)
+
+                best_match = None
+                best_match_index = -1
+
+                for i, (curve_obj, curve_data) in enumerate(remaining_curves):
+                    if curve_data.get('test_id') != test_id or curve_data.get('name') != curve_name:
+                        continue
+
+                    curve_matches = True
+
+                    if curve_type and 'type' in curve_data and curve_data.get('type') != curve_type:
+                        curve_matches = False
+
+                    if curve_degree is not None and 'degree' in curve_data and curve_data.get('degree') != curve_degree:
+                        curve_matches = False
+
+                    if curve_matches:
+                        best_match = curve_obj
+                        best_match_index = i
+                        break
+
+                if best_match:
+                    style['custom_curve_id'] = best_match.id
+                    remaining_curves.pop(best_match_index)
+
+                yield test_id, x, y, style
+
+        for curve_obj, curve_data in manual_curves:
+            points = curve_data.get('points') or []
+            if not points:
+                continue
+
+            x_values: List[float] = []
+            y_values: List[float] = []
+
+            for point in points:
+                if not isinstance(point, (list, tuple)) or len(point) < 2:
                     continue
+                try:
+                    x_val = float(point[0])
+                    y_val = float(point[1])
+                except (TypeError, ValueError):
+                    continue
+                x_values.append(x_val)
+                y_values.append(y_val)
 
-                # Проверяем дополнительные параметры для более точного сопоставления
-                curve_matches = True
+            if not x_values or not y_values:
+                continue
 
-                # Проверяем тип кривой, если он указан
-                if curve_type and 'type' in curve_data and curve_data.get('type') != curve_type:
-                    curve_matches = False
+            style = curve_data.get('style', {}).copy()
+            base_style = GraphConstants.DEFAULT_STYLE.copy()
+            base_style.update(style)
+            base_style['name'] = curve_data.get('name', base_style.get('name', 'Кривая'))
+            base_style['custom_curve_id'] = curve_obj.id
 
-                # Для аппроксимации проверяем степень
-                if curve_degree is not None and 'degree' in curve_data and curve_data.get('degree') != curve_degree:
-                    curve_matches = False
-
-                if curve_matches:
-                    best_match = curve
-                    best_match_index = i
-                    break
-
-            # Если нашли подходящую кривую, присваиваем ID и удаляем из оставшихся
-            if best_match:
-                style['custom_curve_id'] = best_match.id
-                # Удаляем из списка оставшихся, чтобы не использовать эту кривую повторно
-                remaining_curves.pop(best_match_index)
-
-            yield test_id, x, y, style
+            yield curve_data.get('test_id'), x_values, y_values, base_style
 
     def register_curve(self, test_id: int, curve: CurveItem):
         """Регистрация связи test_id -> curve"""
@@ -198,3 +230,24 @@ class PlotProcessor(DataProcessor):
         """
         # Удаляем кривую из other_data
         self.other_data = [curve for curve in self.other_data if curve.id != curve_id]
+
+    def save_manual_curve(self, name: str, points: List[Tuple[float, float]], style: Dict[str, Any],
+                          metadata: Optional[Dict[str, Any]] = None) -> Optional[int]:
+        """Сохраняет произвольную кривую (например, вставленную из буфера обмена)."""
+
+        payload = {
+            'name': name,
+            'type': 'manual',
+            'points': [[float(x), float(y)] for x, y in points],
+            'style': style,
+            'metadata': metadata or {},
+        }
+
+        custom_curve = self.data_manager.save_custom_curve(payload)
+
+        if custom_curve:
+            self.other_data.append(custom_curve)
+            return custom_curve.id
+
+        return None
+
