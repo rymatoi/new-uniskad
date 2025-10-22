@@ -1,5 +1,6 @@
-from app.plugins.project.visualization.widgets.curve import CurveItem
 from typing import Any, Union, List, Dict, Set, Callable
+
+from app.plugins.project.visualization.widgets.curve import CurveItem
 import numpy as np
 import pyqtgraph as pg
 
@@ -288,10 +289,14 @@ class PlotDataMixin:
         if z_key not in z_data:
             return result_groups
 
-        # Собираем все значения параметра Z
+        # Собираем все значения параметра Z, учитывая вычисленные формулы
         z_values = []
         for param_obj in z_data[z_key]:
-            if param_obj.param_prop_name == 'value':
+            prop_name = getattr(param_obj, 'param_prop_name', getattr(param_obj, 'prop_name', ''))
+
+            if prop_name == 'cformula':
+                z_values.append(param_obj.prop_value)
+            elif prop_name == 'value':
                 z_values.append(param_obj.prop_value)
 
         # Если нет значений параметра Z, возвращаем пустой результат
