@@ -25,6 +25,7 @@ class PlotDataMixin:
         self.data_processor: Any = self.init_data_processor()
         self.constraints = {}
         self.param_constraints = []
+        self._pasted_curve_items: Set[CurveItem] = set()
 
         self.selected_points = {}
 
@@ -115,6 +116,9 @@ class PlotDataMixin:
         if curve in self.selected_points:
             del self.selected_points[curve]
 
+        if curve in self._pasted_curve_items:
+            self._pasted_curve_items.discard(curve)
+
         if hasattr(self.plotItem, 'legend') and self.plotItem.legend:
             for i, (sample, label) in enumerate(list(self.plotItem.legend.items)):
                 if getattr(sample, 'item', None) == curve:
@@ -128,7 +132,7 @@ class PlotDataMixin:
         curve_id = getattr(curve, 'custom_curve_id', None)
 
         # Если кривая была вставлена, разрешаем удаление без ID
-        if curve_id is None and getattr(curve, 'is_pasted_curve', False):
+        if curve_id is None and (getattr(curve, 'is_pasted_curve', False) or curve in self._pasted_curve_items):
             self._detach_curve(curve)
             return True
 

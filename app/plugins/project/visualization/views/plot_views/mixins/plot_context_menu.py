@@ -452,7 +452,11 @@ class PlotContextMenuMixin:
         # Получаем элемент легенды, по которому кликнули
         pos = event.scenePos()
         legend = self.plotItem.legend
-        
+
+        legend_rect = legend.mapRectToScene(legend.boundingRect())
+        if not legend_rect.contains(pos):
+            return
+
         # Проходим по всем элементам легенды
         for sample, label in legend.items:
             if label.sceneBoundingRect().contains(pos):
@@ -460,8 +464,9 @@ class PlotContextMenuMixin:
                 curve = next((c for c in self.curve_items if c.name() == label.text), None)
                 if curve:
                     menu = self._create_legend_context_menu(curve)
-                    menu.exec_(QCursor.pos())
-                    event.accept()
+                    if not menu.isEmpty():
+                        menu.exec_(QCursor.pos())
+                        event.accept()
                 return
 
         # Если клик по фону легенды, показываем меню настроек легенды
@@ -548,6 +553,8 @@ class PlotContextMenuMixin:
             return
 
         new_curve.is_pasted_curve = True
+        if hasattr(self, '_pasted_curve_items'):
+            self._pasted_curve_items.add(new_curve)
 
         if hasattr(self, 'data_processor') and isinstance(self.data_processor, PlotProcessor):
             try:
@@ -557,6 +564,6 @@ class PlotContextMenuMixin:
                 custom_curve = None
 
             if custom_curve:
-                new_curve.custom_curve_id = custom_curve.id
+                new_curve.custom_curve_id = getattr(custom_curve, 'id', None)
         else:
             logger.warning("Процессор данных графика не инициализирован, кривая не будет сохранена")
