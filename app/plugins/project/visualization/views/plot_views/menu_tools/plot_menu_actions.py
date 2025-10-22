@@ -48,6 +48,7 @@ class PlotMenuActions:
     PLOT_RESET_VIEW = MenuAction("reset_view", "Сбросить масштаб", ActionTarget.PLOT, order=10)
     PLOT_GRID = MenuAction("toggle_grid", "Показать сетку", ActionTarget.PLOT, is_checkable=True, order=20)
     PLOT_LEGEND = MenuAction("toggle_legend", "Показать легенду", ActionTarget.PLOT, is_checkable=True, order=30)
+    PLOT_PASTE = MenuAction("paste_curve", "Вставить кривую", ActionTarget.PLOT, order=35)
     PLOT_EXPORT = MenuAction("export_plot", "Экспортировать график", ActionTarget.PLOT, order=40)
 
     @classmethod
@@ -88,6 +89,7 @@ def get_available_actions(menu_items: List[Menu]) -> List[MenuAction]:
         PlotMenuActions.CURVE_STYLE.name,
         PlotMenuActions.CURVE_HIDE.name,
         PlotMenuActions.CURVE_DELETE.name,
+        PlotMenuActions.PLOT_PASTE.name,
     }
 
     return [action for action in all_actions

@@ -1,5 +1,5 @@
 from PySide2.QtCore import Qt, QPointF
-from PySide2.QtWidgets import QMenu
+from PySide2.QtWidgets import QMenu, QApplication
 from PySide2.QtGui import QCursor
 import pyqtgraph as pg
 from typing import Any, List, Tuple, Optional
@@ -13,6 +13,8 @@ from db import sp
 from app.plugins.project.dialogs.create_approx import ApproxDialog
 from app.plugins.project.dialogs.create_interpolation import InterpDialog
 from app.plugins.project.dialogs.extrapolation_dialog import ExtrapolationDialog
+from app.basic_funcs import float_to_excel, excel_to_float
+from app import basic_funcs, app_logger
 
 
 class PlotContextMenuMixin:
@@ -24,6 +26,7 @@ class PlotContextMenuMixin:
     remove_custom_curve: callable  # Ссылка на метод PlotDataMixin
 
     def __init__(self):
+        self.logger = app_logger.get_logger(__name__)
         self.proxy_context = self.init_proxy_for_context_menu()
 
         self.action_states = {
@@ -219,18 +222,131 @@ class PlotContextMenuMixin:
             # Используем метод класса напрямую
             qa.triggered.connect(self._on_plot_action_triggered)
 
+    # --- Clipboard helpers -------------------------------------------------
+    def _copy_point_to_clipboard(self, curve, point_idx: int) -> bool:
+        if curve is None:
+            return False
+        try:
+            x_value = curve.xData[point_idx]
+            y_value = curve.yData[point_idx]
+        except (TypeError, IndexError, AttributeError):
+            return False
+
+        clipboard = QApplication.clipboard()
+        clipboard.setText(f"{float_to_excel(x_value)}\t{float_to_excel(y_value)}")
+        return True
+
+    def _copy_curve_to_clipboard(self, curve) -> bool:
+        if curve is None:
+            return False
+
+        x_data = getattr(curve, 'xData', None)
+        y_data = getattr(curve, 'yData', None)
+
+        if x_data is None or y_data is None:
+            return False
+
+        try:
+            points = list(zip(x_data, y_data))
+        except TypeError:
+            return False
+
+        if not points:
+            return False
+
+        curve_name = curve.name() if hasattr(curve, 'name') else 'Curve'
+        data_lines = [f"{float_to_excel(x)}\t{float_to_excel(y)}" for x, y in points]
+        payload = "\n".join([curve_name, str(len(points))] + data_lines)
+        QApplication.clipboard().setText(payload)
+        return True
+
+    def _parse_clipboard_curve(self):
+        clipboard = QApplication.clipboard()
+        raw_data = clipboard.text()
+        if not raw_data:
+            return None
+
+        lines = [line for line in raw_data.splitlines() if line.strip()]
+        if not lines:
+            return None
+
+        name = lines[0].strip()
+        data_start = 1
+        expected_count = None
+
+        if len(lines) > 1:
+            try:
+                expected_count = int(lines[1].strip())
+                data_start = 2
+            except ValueError:
+                pass
+
+        points = []
+        for line in lines[data_start:]:
+            parts = line.split('\t')
+            if len(parts) < 2:
+                continue
+            try:
+                x_val = float(excel_to_float(parts[0]))
+                y_val = float(excel_to_float(parts[1]))
+            except ValueError:
+                continue
+            points.append((x_val, y_val))
+            if expected_count is not None and len(points) >= expected_count:
+                break
+
+        if not points:
+            return None
+
+        return name, points
+
+    def _paste_curve_from_clipboard(self) -> bool:
+        parsed = self._parse_clipboard_curve()
+        if parsed is None:
+            return False
+
+        curve_name, points = parsed
+        x_values = [pt[0] for pt in points]
+        y_values = [pt[1] for pt in points]
+
+        try:
+            new_curve = self.add_curve(x_values, y_values, name=curve_name)
+        except Exception as exc:
+            self.logger.exception('Failed to add curve from clipboard: %s', exc)
+            return False
+
+        custom_curve = None
+        if hasattr(self, 'data_processor') and self.data_processor is not None:
+            try:
+                custom_curve = self.data_processor.save_custom_curve(curve_name, points)
+            except Exception:
+                self.logger.exception('Failed to persist custom curve "%s"', curve_name)
+
+        if custom_curve and hasattr(new_curve, 'custom_curve_id'):
+            new_curve.custom_curve_id = custom_curve.id
+
+        return True
+
     def _handle_point_action(self, data: dict, checked: bool = False):
         """Обработчик действий для точек"""
-        print(f"Point action triggered: {data}, checked={checked}")
         curve = data['curve']
         point_idx = data['point_idx']
         action_name = data['action']
-        print(f"Point action: {action_name} for point {point_idx} on curve {curve.name()}")
+
+        if action_name == PlotMenuActions.POINT_COPY.name and curve is not None:
+            if not self._copy_point_to_clipboard(curve, point_idx):
+                basic_funcs.error('Ошибка', 'Не удалось скопировать точку в буфер обмена.')
+            return
 
     def _handle_curve_action(self, data: dict, checked: bool = False):
         """Обработчик действий для кривых"""
         curve = data['curve']
         action_name = data['action']
+
+        if action_name == PlotMenuActions.CURVE_COPY.name and curve is not None:
+            if not self._copy_curve_to_clipboard(curve):
+                basic_funcs.error('Ошибка', 'Не удалось скопировать данные кривой.')
+            return
 
         if action_name == PlotMenuActions.CURVE_HIDE.name and curve:
             # Получаем test_id для кривой
@@ -343,13 +459,18 @@ class PlotContextMenuMixin:
                         else:
                             # Для старого формата - просто вызываем обычный метод
                             self.set_ruler_mark(view_pos.x(), curve)
-                    else:
-                        # Используем активную линейку
-                        self.set_ruler_mark(view_pos.x(), curve)
                 else:
-                    print("Линейка не инициализирована должным образом")
-
-        print(f"Curve action: {action_name}, checked: {checked}, curve: {curve.name() if curve else 'all curves'}")
+                    # Используем активную линейку
+                    self.set_ruler_mark(view_pos.x(), curve)
+            else:
+                print("Линейка не инициализирована должным образом")
+        else:
+            self.logger.debug(
+                "Curve action handled: %s (checked=%s) for %s",
+                action_name,
+                checked,
+                curve.name() if curve else 'all curves'
+            )
 
     def _handle_plot_action(self, action_name: str, checked: bool = False):
         """Обработчик действий для графика"""
@@ -369,6 +490,10 @@ class PlotContextMenuMixin:
 
         elif action_name == PlotMenuActions.PLOT_RESET_VIEW.name:
             self.plotItem.getViewBox().autoRange()
+
+        elif action_name == PlotMenuActions.PLOT_PASTE.name:
+            if not self._paste_curve_from_clipboard():
+                basic_funcs.error('Ошибка', 'Не удалось вставить кривую из буфера обмена.')
 
     # Добавляем методы для сохранения/загрузки состояний
     def save_states(self):

@@ -2672,6 +2672,8 @@ class TableWidget(QTableWidget):
                 self.filter_table()
         elif event == QKeySequence.Copy:  # Проверяем, нажата ли комбинация Ctrl+C
             self.copy_to_clipboard()
+        elif event == QKeySequence.Paste:  # Проверяем, нажата ли комбинация Ctrl+V
+            self.paste_from_clipboard()
         else:
             super().keyPressEvent(event)
 
@@ -2693,6 +2695,53 @@ class TableWidget(QTableWidget):
         # Сохраняем в буфер обмена
         clipboard = QApplication.clipboard()
         clipboard.setText(copied_data.strip())
+
+    def paste_from_clipboard(self):
+        """Вставляет данные из буфера обмена в выделенные ячейки."""
+        clipboard = QApplication.clipboard()
+        data = clipboard.text()
+        if not data:
+            return
+
+        rows_data = [row for row in data.splitlines() if row.strip()]
+        if not rows_data:
+            return
+
+        selection = self.selectedRanges()
+        if selection:
+            anchor_row = selection[0].topRow()
+            anchor_col = selection[0].leftColumn()
+        else:
+            anchor_row = self.currentRow()
+            anchor_col = self.currentColumn()
+
+        if anchor_row < 0 or anchor_col < 0:
+            return
+
+        for row_offset, row in enumerate(rows_data):
+            target_row = anchor_row + row_offset
+            if target_row >= self.rowCount():
+                break
+
+            values = row.split('\t')
+            if not values:
+                continue
+
+            # Игнорируем имя строки, если оно совпадает с текущей
+            if values and values[0] == self.ord_rows[target_row]:
+                values = values[1:]
+
+            for col_offset, value in enumerate(values):
+                target_col = anchor_col + col_offset
+                if target_col >= self.columnCount():
+                    break
+
+                item = self.item(target_row, target_col)
+                if item is None:
+                    continue
+
+                # Используем стандартный путь редактирования, чтобы сохранить логику формул
+                item.setData(Qt.EditRole, value.strip())
 
     def filter_table(self):
         search_string = self.search_string.lower()
