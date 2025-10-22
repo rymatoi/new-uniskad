@@ -444,32 +444,83 @@ class PlotContextMenuMixin:
 
         applied_style = curve.style.copy()
 
-        curve_id = getattr(curve, 'custom_curve_id', None)
-        if curve_id:
-            self._persist_custom_curve_style(curve_id, applied_style)
-            return
+        curve_id = self._extract_custom_curve_id(curve, applied_style)
+        if curve_id is not None:
+            if self._persist_custom_curve_style(curve_id, applied_style):
+                return
 
         test_id = self.data_processor.get_test_id_for_curve(curve)
         if test_id is not None:
             self._persist_test_curve_style(test_id, applied_style)
 
+    def _extract_custom_curve_id(self, curve, style):
+        curve_id = getattr(curve, 'custom_curve_id', None)
+        if curve_id is None and isinstance(style, dict):
+            curve_id = style.get('custom_curve_id')
+
+        if curve_id is None:
+            return None
+
+        try:
+            normalized_id = int(curve_id)
+        except (TypeError, ValueError):
+            normalized_id = curve_id
+
+        if getattr(curve, 'custom_curve_id', None) != normalized_id:
+            curve.custom_curve_id = normalized_id
+
+        if isinstance(style, dict):
+            style['custom_curve_id'] = normalized_id
+
+        return normalized_id
+
+    def _get_cached_custom_curve(self, curve_id):
+        def matches(candidate):
+            candidate_id = getattr(candidate, 'id', None)
+            try:
+                return int(candidate_id) == int(curve_id)
+            except (TypeError, ValueError):
+                return candidate_id == curve_id
+
+        other_data = getattr(self.data_processor, 'other_data', []) or []
+        for item in other_data:
+            if matches(item):
+                return item
+
+        data_manager = getattr(self.data_processor, 'data_manager', None)
+        if data_manager is None:
+            return None
+
+        try:
+            refreshed = data_manager.load_custom_curves()
+        except Exception as exc:
+            print(f"Не удалось перечитать пользовательские кривые: {exc}")
+            return None
+
+        try:
+            self.data_processor.other_data = list(refreshed)
+        except Exception:
+            self.data_processor.other_data = refreshed
+
+        for item in getattr(self.data_processor, 'other_data', []) or []:
+            if matches(item):
+                return item
+
+        return None
+
     def _persist_custom_curve_style(self, curve_id, style):
-        custom_curve = next(
-            (item for item in getattr(self.data_processor, 'other_data', [])
-             if getattr(item, 'id', None) == curve_id),
-            None
-        )
+        custom_curve = self._get_cached_custom_curve(curve_id)
 
         if custom_curve is None:
-            return
+            return False
 
         try:
             values = json.loads(custom_curve.values) if isinstance(custom_curve.values, str) else custom_curve.values
         except (TypeError, ValueError, json.JSONDecodeError):
-            return
+            return False
 
         if not isinstance(values, dict):
-            return
+            return False
 
         if values.get('type') == 'manual':
             style_dict = values.setdefault('style', {})
@@ -496,11 +547,13 @@ class PlotContextMenuMixin:
             updated = sp.new_upd_custom_curve((custom_curve.id, custom_curve.graph_project_id, serialized))
         except Exception as exc:
             print(f"Не удалось обновить стиль кривой {curve_id}: {exc}")
+            return False
         else:
             if updated is not None and hasattr(updated, 'values'):
                 custom_curve.values = updated.values
             else:
                 custom_curve.values = serialized
+            return True
 
     def _persist_test_curve_style(self, test_id, style):
         test_node = getattr(self.data_processor, 'test_nodes', {}).get(test_id)
