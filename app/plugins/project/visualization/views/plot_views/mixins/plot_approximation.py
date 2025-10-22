@@ -159,7 +159,10 @@ class PlotApproximationMixin:
 
             # Создаем новый стиль
             curve_style = GraphConstants.EXTRAPOLATION_STYLE.copy()
-            curve_style['color'] = source_curve.style['fill_color']
+            source_style = getattr(source_curve, 'style', {}) or {}
+            base_color = source_style.get('color', curve_style['color'])
+            fill_color = source_style.get('fill_color')
+            curve_style['color'] = fill_color or base_color
 
             # Добавляем кривую
             curve_name = name or f"Extrapolation (deg={degree})"

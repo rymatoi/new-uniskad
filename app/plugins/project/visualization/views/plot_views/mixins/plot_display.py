@@ -91,8 +91,8 @@ class PlotDisplayMixin:
         self._fix_performance()
         self.setBackground('w')
         self.showGrid(x=True, y=True, alpha=0.3)
-        self.setLabel('left', self.item.graph_label_x)
-        self.setLabel('bottom', self.item.graph_label_y)
+        self.setLabel('left', self.item.graph_label_y)
+        self.setLabel('bottom', self.item.graph_label_x)
         self.plotItem.setMenuEnabled(False)
 
     def update_display_settings_from_item(self):

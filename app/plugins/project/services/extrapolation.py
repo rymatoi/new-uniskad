@@ -18,19 +18,42 @@ class ExtrapolationService:
         Returns:
             tuple: (x_extrap, y_extrap) - экстраполированные координаты
         """
-        # Строим полином для экстраполяции
-        polynomial = Polynomial.fit(x=x, y=y, deg=degree)
+        x_values = np.asarray(x, dtype=float)
+        y_values = np.asarray(y, dtype=float)
 
-        # Создаем точки для экстраполяции
-        x_step = (max(x) - min(x)) / len(x)
-            
-        # Создаем массивы точек для всех участков
-        x_left = np.linspace(min(x) - left_points * x_step, min(x), left_points)
-        x_middle = x  # исходные точки
-        x_right = np.linspace(max(x), max(x) + right_points * x_step, right_points)
-            
-        # Объединяем все точки в один массив
-        x_extrap = np.concatenate([x_left, x_middle, x_right])
+        if x_values.size == 0 or y_values.size == 0:
+            return x_values, y_values
+
+        sort_idx = np.argsort(x_values)
+        x_sorted = x_values[sort_idx]
+        y_sorted = y_values[sort_idx]
+
+        effective_degree = min(int(degree), x_sorted.size - 1)
+        if effective_degree < 1:
+            return x_sorted, y_sorted
+
+        polynomial = Polynomial.fit(x=x_sorted, y=y_sorted, deg=effective_degree)
+
+        diffs = np.diff(x_sorted)
+        valid_diffs = diffs[~np.isclose(diffs, 0.0)]
+        x_step = float(np.median(valid_diffs)) if valid_diffs.size else 1.0
+        if np.isclose(x_step, 0.0):
+            x_step = 1.0
+
+        left_points = max(0, int(left_points))
+        right_points = max(0, int(right_points))
+
+        if left_points > 0:
+            x_left = x_sorted[0] - x_step * np.arange(left_points, 0, -1, dtype=float)
+        else:
+            x_left = np.array([], dtype=float)
+
+        if right_points > 0:
+            x_right = x_sorted[-1] + x_step * np.arange(1, right_points + 1, dtype=float)
+        else:
+            x_right = np.array([], dtype=float)
+
+        x_extrap = np.concatenate((x_left, x_sorted, x_right))
         y_extrap = polynomial(x_extrap)
 
-        return x_extrap, y_extrap 
+        return x_extrap, y_extrap
