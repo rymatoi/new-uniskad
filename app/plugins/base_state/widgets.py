@@ -2825,15 +2825,54 @@ class TableWidget(QTableWidget):
         return False
 
     def apply_filters(self, filters):
-        filters = ast.literal_eval(filters)
-        for i, column in enumerate(self.ord_columns):
-            for filter in filters:
-                row_num = self.ord_rows.index(filter['x'])
+        if not filters:
+            return
+
+        if isinstance(filters, str):
+            try:
+                filters = ast.literal_eval(filters)
+            except (ValueError, SyntaxError):
+                logger.warning('Не удалось разобрать сохраненные фильтры: %s', filters)
+                return
+
+        if not isinstance(filters, Iterable):
+            logger.warning('Некорректный формат фильтров: %s', filters)
+            return
+
+        missing_rows = set()
+
+        for i, _column in enumerate(self.ord_columns):
+            for filter_data in filters:
+                if not isinstance(filter_data, dict):
+                    continue
+
+                x_value = filter_data.get('x')
+                y_value = filter_data.get('y')
+
+                if x_value not in self.ord_rows:
+                    if x_value is not None:
+                        missing_rows.add(str(x_value))
+                    continue
+
+                if y_value not in self.ord_rows:
+                    if y_value is not None:
+                        missing_rows.add(str(y_value))
+                    continue
+
+                row_num = self.ord_rows.index(x_value)
                 cell_item = self.item(row_num, i)
-                if self.is_value_broken(i, filter['x'], filter['y'], filter['condition'], filter['condition_percent']):
+
+                if cell_item is None:
+                    continue
+
+                if self.is_value_broken(i, x_value, y_value, filter_data.get('condition'),
+                                        filter_data.get('condition_percent')):
                     cell_item.update_cell('broken', 'True')
                 else:
                     cell_item.update_cell('broken', 'False')
+
+        if missing_rows:
+            logger.warning('Не удалось применить фильтры: отсутствуют строки %s', ', '.join(sorted(missing_rows)))
 
     def set_vertical_headers(self):
         self.setVerticalHeaderLabels(self.ord_rows)
