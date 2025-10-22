@@ -449,6 +449,10 @@ class PlotContextMenuMixin:
                     event.accept()
                 return
 
+        legend_rect = legend.mapRectToScene(legend.boundingRect())
+        if not legend_rect.contains(pos):
+            return
+
         # Если клик по фону легенды, показываем меню настроек легенды
         menu = self._create_legend_context_menu()
         if not menu.isEmpty():
