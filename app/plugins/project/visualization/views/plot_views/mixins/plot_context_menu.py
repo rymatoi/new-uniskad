@@ -352,14 +352,17 @@ class PlotContextMenuMixin:
                     )
                     
         elif action_name == PlotMenuActions.CURVE_DELETE.name and curve:
-            # Проверяем, что это кастомная кривая
-            if hasattr(curve, 'custom_curve_id') and curve.custom_curve_id is not None:
-                # Удаляем кривую с графика и из БД
+            # Проверяем, что кривая является пользовательской или сгенерированной (аппр./интерп./экстрап.)
+            generated_type = getattr(curve, 'generated_curve_type', None)
+            has_custom_id = getattr(curve, 'custom_curve_id', None) is not None
+
+            if has_custom_id or generated_type in {'approximation', 'interpolation', 'extrapolation'}:
+                # Удаляем кривую с графика (и из БД, если нужно)
                 result = self.remove_custom_curve(curve)
                 if not result:
                     print(f"Не удалось удалить кривую {curve.name()}")
             else:
-                print(f"Кривая {curve.name()} не является кастомной и не может быть удалена")
+                print(f"Кривая {curve.name()} не является пользовательской и не может быть удалена")
                 
         elif action_name == PlotMenuActions.CURVE_RULER_MARK.name and curve:
             # Получаем текущую позицию курсора

@@ -61,6 +61,9 @@ class PlotApproximationMixin:
             curve_name = name or f"Approximation (deg={degree})"
             new_curve = self.add_curve(x_smooth, y_smooth, name=curve_name, **curve_style)
 
+            if new_curve:
+                new_curve.generated_curve_type = 'approximation'
+
             # Сохраняем в БД, если требуется
             if save_to_db:
                 custom_curve_id = self.data_processor.save_approximation(
@@ -122,6 +125,9 @@ class PlotApproximationMixin:
             curve_name = name or f"Interpolation ({kind})"
             new_curve = self.add_curve(x_smooth, y_smooth, name=curve_name, **curve_style)
 
+            if new_curve:
+                new_curve.generated_curve_type = 'interpolation'
+
             # Сохраняем в БД, если требуется
             if save_to_db:
                 custom_curve_id = self.data_processor.save_interpolation(
@@ -175,7 +181,10 @@ class PlotApproximationMixin:
 
             # Добавляем кривую
             curve_name = name or f"Extrapolation (deg={degree})"
-            self.add_curve(x_extrap, y_extrap, name=curve_name, **curve_style)
+            new_curve = self.add_curve(x_extrap, y_extrap, name=curve_name, **curve_style)
+
+            if new_curve:
+                new_curve.generated_curve_type = 'extrapolation'
 
         except Exception as e:
             logger.error(f"Ошибка при построении экстраполяции: {str(e)}")

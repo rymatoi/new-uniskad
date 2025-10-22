@@ -85,6 +85,15 @@ class PlotView(BasePlotView):
                 if custom_curve_id:
                     curve.custom_curve_id = custom_curve_id
 
+                curve_type = style.get('type')
+                generated_types_map = {
+                    'polynomial': 'approximation',
+                    'interpolation': 'interpolation',
+                    'extrapolation': 'extrapolation',
+                }
+                if curve_type in generated_types_map:
+                    curve.generated_curve_type = generated_types_map[curve_type]
+
         # Применяем настройки сетки
         self.apply_grid_settings()
 
