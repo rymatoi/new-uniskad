@@ -1,4 +1,4 @@
-from app.plugins.project.utils.converters.graph_converter import excel_to_float
+from app.basic_funcs import excel_to_float
 
 
 class ExcelDataHandler:
