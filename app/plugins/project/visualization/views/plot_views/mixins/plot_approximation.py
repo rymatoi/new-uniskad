@@ -145,7 +145,10 @@ class PlotApproximationMixin:
             left_points: int = 20,
             right_points: int = 20,
             degree: int = 2,
-            name: Optional[str] = None
+            name: Optional[str] = None,
+            *,
+            left_limit: Optional[float] = None,
+            right_limit: Optional[float] = None,
     ) -> None:
         """Добавляет экстраполированную кривую на график на основе исходной кривой"""
         try:
@@ -154,7 +157,13 @@ class PlotApproximationMixin:
 
             # Используем сервис для экстраполяции
             x_extrap, y_extrap = ExtrapolationService.polynomial_extrapolation(
-                x_data, y_data, left_points, right_points, degree
+                x_data,
+                y_data,
+                left_points,
+                right_points,
+                degree,
+                left_limit=left_limit,
+                right_limit=right_limit,
             )
 
             # Создаем новый стиль

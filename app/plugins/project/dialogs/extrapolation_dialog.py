@@ -26,12 +26,14 @@ class ExtrapolationDialog(QDialog):
         self.backward_input = QLineEdit(self)
 
         # Добавляем валидаторы
-        double_validator = QDoubleValidator()
+        double_validator = QDoubleValidator(self)
+        double_validator.setNotation(QDoubleValidator.StandardNotation)
+        double_validator.setDecimals(6)
         self.forward_input.setValidator(double_validator)
         self.backward_input.setValidator(double_validator)
 
-        self.forward_input.setText(str(self.forward_value))
-        self.backward_input.setText(str(self.backward_value))
+        self.forward_input.setText(self._format_value(self.forward_value))
+        self.backward_input.setText(self._format_value(self.backward_value))
 
         self.off = QCheckBox(self)
         self.off.setChecked(off)
@@ -77,3 +79,10 @@ class ExtrapolationDialog(QDialog):
 
     def get_result(self):
         return self.forward_value, self.backward_value, self.off.isChecked()
+
+    @staticmethod
+    def _format_value(value: float) -> str:
+        formatted = f"{value:.6f}"
+        if '.' in formatted:
+            formatted = formatted.rstrip('0').rstrip('.')
+        return formatted or "0"

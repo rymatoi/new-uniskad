@@ -322,18 +322,33 @@ class PlotContextMenuMixin:
                     min_x = float(sorted_x[0])
                     max_x = float(sorted_x[-1])
 
-                    left_span = max(0.0, min_x - float(backward))
-                    right_span = max(0.0, float(forward) - max_x)
+                    forward_value = float(forward)
+                    backward_value = float(backward)
+
+                    left_span = max(0.0, min_x - backward_value)
+                    right_span = max(0.0, forward_value - max_x)
 
                     left_points = int(np.ceil(left_span / x_step)) if left_span > 0 else 0
                     right_points = int(np.ceil(right_span / x_step)) if right_span > 0 else 0
+
+                    max_points_per_side = getattr(ExtrapolationService, 'MAX_POINTS_PER_SIDE', 10000)
+
+                    if left_span > 0 and left_points == 0:
+                        left_points = 1
+                    if right_span > 0 and right_points == 0:
+                        right_points = 1
+
+                    left_points = min(left_points, max_points_per_side)
+                    right_points = min(right_points, max_points_per_side)
 
                     self.add_extrapolated_curve(
                         source_curve=curve,
                         left_points=left_points,
                         right_points=right_points,
                         degree=2,
-                        name=f"Extrapolation_{curve.name()}"
+                        name=f"Extrapolation_{curve.name()}",
+                        left_limit=backward_value,
+                        right_limit=forward_value,
                     )
                     
         elif action_name == PlotMenuActions.CURVE_DELETE.name and curve:
