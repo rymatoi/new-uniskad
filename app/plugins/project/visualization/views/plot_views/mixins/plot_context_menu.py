@@ -9,6 +9,7 @@ import json
 from app.plugins.project.services.data_processors.plot_dp import PlotProcessor
 from app.plugins.project.visualization.views.plot_views.menu_tools.plot_menu_actions import PlotMenuActions, \
     ActionTarget, get_available_actions
+from app.plugins.project.visualization.views.plot_views.menu_tools.curve_clipboard import CurveClipboard
 from db import sp
 from app.plugins.project.dialogs.create_approx import ApproxDialog
 from app.plugins.project.dialogs.create_interpolation import InterpDialog
@@ -199,7 +200,11 @@ class PlotContextMenuMixin:
 
     def _add_plot_specific_actions(self, menu: QMenu):
         """Добавляет действия специфичные для графика"""
+        clipboard_available = CurveClipboard.can_paste()
+
         for action in self.plot_menu:
+            if action.name == PlotMenuActions.PLOT_PASTE.name and not clipboard_available:
+                continue
             qa = menu.addAction(action.translation)
             qa.setCheckable(action.is_checkable)
 
@@ -254,6 +259,10 @@ class PlotContextMenuMixin:
                 for sample, label in self.plotItem.legend.items:
                     if label.text == curve.name():
                         sample.update()
+
+        elif action_name == PlotMenuActions.CURVE_COPY.name and curve:
+            project_id = getattr(getattr(self.data_processor, 'data_manager', None), 'project_id', None)
+            CurveClipboard.copy_curve(curve, project_id=project_id)
 
         elif action_name == PlotMenuActions.CURVE_APPROXIMATION.name and curve:
             # Получаем test_id для кривой
@@ -353,7 +362,10 @@ class PlotContextMenuMixin:
 
     def _handle_plot_action(self, action_name: str, checked: bool = False):
         """Обработчик действий для графика"""
-        if action_name == PlotMenuActions.PLOT_GRID.name:
+        if action_name == PlotMenuActions.PLOT_PASTE.name:
+            self._paste_curve_from_clipboard()
+
+        elif action_name == PlotMenuActions.PLOT_GRID.name:
             self.action_states['grid'] = checked
             self.plotItem.showGrid(checked, checked, alpha=0.3)
             if hasattr(self.plotItem, 'ctrl') and hasattr(self.plotItem.ctrl, 'gridCheck'):
@@ -369,6 +381,55 @@ class PlotContextMenuMixin:
 
         elif action_name == PlotMenuActions.PLOT_RESET_VIEW.name:
             self.plotItem.getViewBox().autoRange()
+
+    def _paste_curve_from_clipboard(self):
+        """Вставляет кривую из буфера обмена."""
+
+        clipboard_curve = CurveClipboard.peek()
+        if clipboard_curve is None or not clipboard_curve.points:
+            return
+
+        base_name = clipboard_curve.name or "Вставленная кривая"
+        curve_name = self._generate_unique_curve_name(base_name)
+
+        points = list(clipboard_curve.points)
+        x_values, y_values = zip(*points)
+
+        style = clipboard_curve.style.copy()
+        style['name'] = curve_name
+
+        metadata = clipboard_curve.metadata.copy()
+        metadata.setdefault('source', metadata.get('source', 'clipboard'))
+        metadata.setdefault('original_name', clipboard_curve.metadata.get('copied_from', clipboard_curve.name))
+        metadata.setdefault('project_id', getattr(getattr(self.data_processor, 'data_manager', None), 'project_id', None))
+
+        custom_curve_id = self.data_processor.save_manual_curve(curve_name, points, style.copy(), metadata)
+        if not custom_curve_id:
+            return
+
+        new_curve = self.add_curve(x_values, y_values, **style)
+        new_curve.custom_curve_id = custom_curve_id
+
+    def _generate_unique_curve_name(self, base_name: str) -> str:
+        """Создает уникальное имя для вставляемой кривой."""
+
+        if not base_name:
+            base_name = "Вставленная кривая"
+
+        existing_names = {curve.name() for curve in self.curve_items if hasattr(curve, 'name')}
+        if base_name not in existing_names:
+            return base_name
+
+        copy_name = f"{base_name} (копия)"
+        if copy_name not in existing_names:
+            return copy_name
+
+        counter = 2
+        while True:
+            candidate = f"{base_name} (копия {counter})"
+            if candidate not in existing_names:
+                return candidate
+            counter += 1
 
     # Добавляем методы для сохранения/загрузки состояний
     def save_states(self):
