@@ -1,5 +1,6 @@
-from PySide2.QtGui import QIcon, Qt
-from PySide2.QtWidgets import QDialogButtonBox
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QIcon
+from PySide6.QtWidgets import QDialogButtonBox
 
 from app.basic_funcs import error
 from db import sp

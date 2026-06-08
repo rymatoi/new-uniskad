@@ -1,6 +1,6 @@
-from PySide2.QtCore import Qt, QPointF
-from PySide2.QtWidgets import QMenu
-from PySide2.QtGui import QCursor
+from PySide6.QtCore import Qt, QPointF
+from PySide6.QtWidgets import QMenu
+from PySide6.QtGui import QCursor
 import pyqtgraph as pg
 from typing import Any, List, Tuple, Optional
 from functools import partial

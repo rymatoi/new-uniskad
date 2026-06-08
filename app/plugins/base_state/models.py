@@ -1,11 +1,11 @@
 from collections import defaultdict
 from copy import copy
 from typing import List
-import PySide2
-from PySide2.QtCore import QAbstractItemModel, QPointF, Signal, QPersistentModelIndex
-from PySide2.QtGui import QIcon, QFont, QColor, QPainter, QPen, QPixmap
+import PySide6
+from PySide6.QtCore import QAbstractItemModel, QPointF, Signal, QPersistentModelIndex
+from PySide6.QtGui import QIcon, QFont, QColor, QPainter, QPen, QPixmap
 
-from PySide2.QtCore import Qt, QModelIndex
+from PySide6.QtCore import Qt, QModelIndex
 
 replace_dict = {
     'True': True,
@@ -521,7 +521,7 @@ class TreeModel(QAbstractItemModel):
                 return self.createIndex(_parent.row(), 0, _parent)
         return QModelIndex()
 
-    def headerData(self, section: int, orientation: PySide2.QtCore.Qt.Orientation, role: int = ...):
+    def headerData(self, section: int, orientation: PySide6.QtCore.Qt.Orientation, role: int = ...):
         if orientation == Qt.Horizontal and role == Qt.DisplayRole:
             return self.headers[section]
 
@@ -769,7 +769,7 @@ class TreeModel(QAbstractItemModel):
         self.endInsertRows()
         return True
 
-    def flags(self, index: PySide2.QtCore.QModelIndex) -> PySide2.QtCore.Qt.ItemFlags:
+    def flags(self, index: PySide6.QtCore.QModelIndex) -> PySide6.QtCore.Qt.ItemFlags:
         defaultFlags = super().flags(index)
         if self.CHECKABLE:
             defaultFlags |= Qt.ItemIsUserCheckable
@@ -778,7 +778,7 @@ class TreeModel(QAbstractItemModel):
         else:
             return Qt.ItemIsDropEnabled | defaultFlags
 
-    def removeRows(self, row: int, count: int, parent: PySide2.QtCore.QModelIndex = ...) -> bool:
+    def removeRows(self, row: int, count: int, parent: PySide6.QtCore.QModelIndex = ...) -> bool:
         parent_ = self.nodeFromIndex(parent)
         self.beginRemoveRows(parent, row, row + count - 1)
         for i in range(count):

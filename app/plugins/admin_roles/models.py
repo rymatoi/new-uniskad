@@ -1,4 +1,5 @@
-from PySide2.QtGui import QIcon, Qt
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QIcon
 
 from app.basic_funcs import info, error
 from app.plugins.admin_roles.dialogs.create_role import CreateRoleDialog

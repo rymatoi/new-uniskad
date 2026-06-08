@@ -1,7 +1,7 @@
 import json
 
-from PySide2.QtCore import QItemSelection
-from PySide2.QtWidgets import QDialogButtonBox, QComboBox
+from PySide6.QtCore import QItemSelection
+from PySide6.QtWidgets import QDialogButtonBox, QComboBox
 
 from app.plugins.base_state.widgets import ExtendedComboBox
 from app.plugins.project import utils

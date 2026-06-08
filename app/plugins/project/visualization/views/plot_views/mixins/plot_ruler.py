@@ -1,7 +1,7 @@
 from typing import Any, Optional, TypeVar, List, Dict, Set, Callable
 import numpy as np
 import pyqtgraph as pg
-from PySide2.QtCore import Qt, QPointF
+from PySide6.QtCore import Qt, QPointF
 
 PlotWidgetType = TypeVar('PlotWidgetType', bound='pg.PlotWidget')
 

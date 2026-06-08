@@ -7,7 +7,7 @@ from inspect import signature
 import asyncpg
 import typing
 
-from PySide2.QtCore import QObject, QThread, Signal, Qt
+from PySide6.QtCore import QObject, QThread, Signal, Qt
 from asyncpg import RaiseError
 from config.config import config
 

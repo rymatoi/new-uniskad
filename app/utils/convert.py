@@ -1,4 +1,4 @@
-from PySide2 import QtCore
+from PySide6 import QtCore
 import pyqtgraph as pg
 import pyqtgraph.functions as fn
 import matplotlib

@@ -8,8 +8,8 @@ from openpyxl.drawing.colors import ColorChoice
 from openpyxl.chart.marker import Marker
 from openpyxl.chart.shapes import GraphicalProperties
 from openpyxl.drawing.line import LineProperties
-from PySide2.QtGui import QColor
-from PySide2.QtCore import Qt
+from PySide6.QtGui import QColor
+from PySide6.QtCore import Qt
 
 from openpyxl.chart.axis import ChartLines
 from app.plugins.project.core.constants import GraphConstants

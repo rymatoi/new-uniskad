@@ -1,4 +1,4 @@
-from PySide2.QtGui import QIcon
+from PySide6.QtGui import QIcon
 
 from app.basic_funcs import error
 from app.plugins.admin_users.dialogs.create_user import CreateUserDialog

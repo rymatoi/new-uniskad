@@ -1,4 +1,4 @@
-from PySide2.QtCore import Signal
+from PySide6.QtCore import Signal
 from app.plugins.project.visualization.widgets.curve import CurveItem
 
 

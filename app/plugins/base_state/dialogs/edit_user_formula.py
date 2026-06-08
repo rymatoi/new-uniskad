@@ -1,4 +1,4 @@
-from PySide2.QtWidgets import QTreeWidgetItem, QDialog, QTreeWidgetItemIterator, QTreeWidget
+from PySide6.QtWidgets import QTreeWidgetItem, QDialog, QTreeWidgetItemIterator, QTreeWidget
 from app import basic_funcs
 from app.plugins.base_state.dialogs.test_data_selection import TestDataSelectionDialog
 from app.plugins.project import utils

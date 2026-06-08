@@ -1,9 +1,10 @@
 import re
 from functools import cached_property
 
-from PySide2 import QtCore, QtGui, QtWidgets
-from PySide2.QtGui import QStandardItemModel, QFont, QStandardItem, Qt
-from PySide2.QtWidgets import QCompleter, QStyledItemDelegate
+from PySide6 import QtCore, QtGui, QtWidgets
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QStandardItemModel, QFont, QStandardItem
+from PySide6.QtWidgets import QCompleter, QStyledItemDelegate
 
 
 class FormulaDelegate(QStyledItemDelegate):

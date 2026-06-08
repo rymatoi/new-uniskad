@@ -2,8 +2,8 @@ import json
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
-from PySide2.QtGui import QColor
-from PySide2.QtWidgets import QApplication
+from PySide6.QtGui import QColor
+from PySide6.QtWidgets import QApplication
 
 from app.plugins.project.core.constants import GraphConstants
 from app.plugins.project.data.adapters.excel_adapter import ExcelDataHandler

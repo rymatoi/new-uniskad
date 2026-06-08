@@ -1,6 +1,6 @@
 from copy import copy
 
-from PySide2.QtCore import QModelIndex
+from PySide6.QtCore import QModelIndex
 
 from app.basic_funcs import error
 from app.plugins.base_state.widgets import TreeView, Tab

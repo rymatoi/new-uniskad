@@ -1,5 +1,5 @@
-from PySide2.QtCore import QModelIndex
-from PySide2.QtGui import QIcon
+from PySide6.QtCore import QModelIndex
+from PySide6.QtGui import QIcon
 
 from app.basic_funcs import get_text
 from app.plugins.base_state.models import Node, TreeModel

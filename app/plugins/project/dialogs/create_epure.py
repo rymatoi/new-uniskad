@@ -1,7 +1,7 @@
 from copy import copy
 
-from PySide2.QtCore import QSortFilterProxyModel
-from PySide2.QtGui import QIcon
+from PySide6.QtCore import QSortFilterProxyModel
+from PySide6.QtGui import QIcon
 
 from app import basic_funcs
 from app.plugins.base_state.models import TreeModel, Node

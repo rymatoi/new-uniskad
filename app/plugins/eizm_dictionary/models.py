@@ -1,4 +1,4 @@
-from PySide2.QtWidgets import QDialog
+from PySide6.QtWidgets import QDialog
 from app.plugins.base_state.models import Node, TreeModel
 from app.plugins.eizm_dictionary.dialogs.create_eizm import CreateEizmDialog
 from db import sp

@@ -1,7 +1,7 @@
 from copy import copy
 
-from PySide2.QtCore import Qt
-from PySide2.QtWidgets import QWidget, QVBoxLayout, QFormLayout, QCheckBox
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QFormLayout, QCheckBox
 
 from app import app_logger
 from app.plugins.admin_roles.models import RoleActionTreeModel, RoleNode

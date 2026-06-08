@@ -6,7 +6,7 @@ matplotlib.use('module://app.utils.backend_emf')
 import matplotlib.pyplot as plt
 import pyqtgraph.functions as fn
 from matplotlib.ticker import MultipleLocator
-from PySide2.QtCore import Qt
+from PySide6.QtCore import Qt
 
 
 class PlotEMFExporter:

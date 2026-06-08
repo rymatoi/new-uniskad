@@ -1,4 +1,4 @@
-from PySide2.QtCore import Qt, QModelIndex
+from PySide6.QtCore import Qt, QModelIndex
 
 from app import app_logger
 from app.plugins.admin_users.models import UserNode, ActiveFolder, InactiveFolder

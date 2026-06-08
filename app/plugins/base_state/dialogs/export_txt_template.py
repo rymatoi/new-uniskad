@@ -1,7 +1,7 @@
 import os.path
 
-from PySide2.QtCore import QDir, QItemSelection, QItemSelectionModel
-from PySide2.QtWidgets import QAbstractItemView, QDialogButtonBox, QMessageBox, QFileDialog
+from PySide6.QtCore import QDir, QItemSelection, QItemSelectionModel
+from PySide6.QtWidgets import QAbstractItemView, QDialogButtonBox, QMessageBox, QFileDialog
 
 from app import basic_funcs
 from db import sp

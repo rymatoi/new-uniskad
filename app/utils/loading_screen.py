@@ -1,5 +1,5 @@
-from PySide2.QtCore import QThread, Signal, Qt, QRunnable, Slot, QObject
-from PySide2.QtWidgets import QDialog, QVBoxLayout, QLabel
+from PySide6.QtCore import QThread, Signal, Qt, QRunnable, Slot, QObject
+from PySide6.QtWidgets import QDialog, QVBoxLayout, QLabel
 
 
 class DatabaseWorker(QThread):

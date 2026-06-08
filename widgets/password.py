@@ -1,7 +1,7 @@
 import typing
 
-from PySide2 import QtWidgets
-from PySide2.QtGui import QIcon
+from PySide6 import QtWidgets
+from PySide6.QtGui import QIcon
 
 
 class PasswordEdit(QtWidgets.QLineEdit):

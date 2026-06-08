@@ -1,7 +1,8 @@
 from datetime import datetime
-from PySide2.QtGui import QIcon, QPixmap, QPainter, Qt
-from PySide2.QtPrintSupport import QPrinter, QPrintDialog
-from PySide2.QtWidgets import QAction
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QIcon, QPixmap, QPainter, QAction
+from PySide6.QtPrintSupport import QPrinter, QPrintDialog
+
 from pyqtgraph import InfiniteLine
 
 from app import app_logger, basic_funcs

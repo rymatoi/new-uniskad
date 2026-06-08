@@ -1,6 +1,6 @@
-from PySide2.QtWidgets import QApplication, QLabel, QVBoxLayout, QWidget, QPushButton, QSizePolicy, QScrollArea, \
+from PySide6.QtWidgets import QApplication, QLabel, QVBoxLayout, QWidget, QPushButton, QSizePolicy, QScrollArea, \
     QHBoxLayout, QFrame
-from PySide2.QtCore import Qt, QTimer, QPoint
+from PySide6.QtCore import Qt, QTimer, QPoint
 
 
 class Notification(QWidget):
@@ -133,7 +133,7 @@ class StackedNotifications(QWidget):
 
     def update_position(self):
         # Get screen geometry and widget size
-        screen = QApplication.desktop().screenGeometry(self)
+        screen = self.screen().availableGeometry()
         widget_rect = self.geometry()
 
         # Calculate position of the notification widget

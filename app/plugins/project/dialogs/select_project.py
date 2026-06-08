@@ -2,9 +2,9 @@ import ast
 from copy import copy, deepcopy
 from datetime import datetime
 
-from PySide2.QtCore import QSortFilterProxyModel, QModelIndex, QRegExp, Qt, QItemSelection
-from PySide2.QtGui import QBrush, QColor, QIcon
-from PySide2.QtWidgets import QTreeWidgetItem, QMessageBox, QToolButton, QMenu, QAction
+from PySide6.QtCore import QSortFilterProxyModel, QModelIndex, QRegularExpression, Qt, QItemSelection
+from PySide6.QtGui import QBrush, QColor, QIcon, QAction
+from PySide6.QtWidgets import QTreeWidgetItem, QMessageBox, QToolButton, QMenu
 
 from app.plugins.project.dialogs.select_user import UserSelectionDialog
 from app.plugins.project.models import ProjectTreeModel, ProjectNode
@@ -475,8 +475,8 @@ class ProjectSelectionDialog(BaseDialog):
 
     def search_line_changed(self, text):
         """Изменение содержимого поисковой строки"""
-        # search = QRegExp(text, Qt.CaseInsensitive, QRegExp.RegExp)
-        # self.proxy.setFilterRegExp(search)  # Применяем регулярное выражение для фильтрации пользователей
+        # search = QRegularExpression(text, QRegularExpression.PatternOption.CaseInsensitiveOption)
+        # self.proxy.setFilterRegularExpression(search)  # Применяем регулярное выражение для фильтрации пользователей
 
     def cancel(self):
         """Обработка кнопки отмены """

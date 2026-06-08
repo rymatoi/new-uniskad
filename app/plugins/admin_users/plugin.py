@@ -1,4 +1,4 @@
-from PySide2.QtWidgets import QTreeView
+from PySide6.QtWidgets import QTreeView
 
 from app import app_logger
 from app.plugins.admin_users.models import AdminUsersTreeModel

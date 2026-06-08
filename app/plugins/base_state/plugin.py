@@ -1,5 +1,5 @@
-from PySide2.QtCore import QObject, Qt
-from PySide2.QtWidgets import QMessageBox, QTabWidget, QSplitter
+from PySide6.QtCore import QObject, Qt
+from PySide6.QtWidgets import QMessageBox, QTabWidget, QSplitter
 
 from app import app_logger
 from app.plugins.base_state.widgets import TreeView

@@ -1,5 +1,5 @@
 import numpy as np
-from PySide2.QtCore import Qt
+from PySide6.QtCore import Qt
 
 from app.plugins.project.core.constants import GraphConstants
 from app.plugins.project.visualization.widgets.legend_proxy import LegendProxyPlotDataItem

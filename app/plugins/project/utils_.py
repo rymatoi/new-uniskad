@@ -1,6 +1,6 @@
 from collections import OrderedDict
 
-from PySide2.QtCore import Qt
+from PySide6.QtCore import Qt
 
 LINE_STYLES = [
     (Qt.NoPen, 'Прозрачная'),

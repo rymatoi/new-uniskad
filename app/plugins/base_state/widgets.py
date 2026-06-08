@@ -4,12 +4,12 @@ from collections.abc import Iterable
 from copy import copy
 from datetime import datetime
 
-from PySide2 import QtCore, QtWidgets
-from PySide2.QtCore import Qt, QSortFilterProxyModel, QSize, QLocale, QTimer, QPersistentModelIndex, QModelIndex, \
+from PySide6 import QtCore, QtWidgets
+from PySide6.QtCore import Qt, QSortFilterProxyModel, QSize, QLocale, QTimer, QPersistentModelIndex, QModelIndex, \
     QItemSelectionModel
-from PySide2.QtGui import QIcon, QCursor, QColor, QFont, QBrush, QKeySequence
-from PySide2.QtWidgets import QTreeView, QMenu, QColorDialog, QInputDialog, QDockWidget, \
-    QHBoxLayout, QToolButton, QWidget, QLabel, QAbstractItemView, QAction, QLineEdit, QShortcut, \
+from PySide6.QtGui import QIcon, QCursor, QColor, QFont, QBrush, QKeySequence, QAction, QShortcut
+from PySide6.QtWidgets import QTreeView, QMenu, QColorDialog, QInputDialog, QDockWidget, \
+    QHBoxLayout, QToolButton, QWidget, QLabel, QAbstractItemView, QLineEdit, \
     QFontDialog, QComboBox, QCompleter, QTableWidget, QTableWidgetItem, QVBoxLayout, QTreeWidget, QTreeWidgetItem, \
     QApplication, QStyle, QSizePolicy, QDialog, QDialogButtonBox, QTextBrowser
 from openpyxl.workbook import Workbook

@@ -2,8 +2,8 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 import pyqtgraph as pg
-from PySide2.QtCore import Qt
-from PySide2.QtCore import QPointF
+from PySide6.QtCore import Qt
+from PySide6.QtCore import QPointF
 
 if TYPE_CHECKING:
     from typing import Optional

@@ -1,6 +1,6 @@
-from PySide2.QtCore import QSortFilterProxyModel, QModelIndex, QRegExp, Qt, QItemSelection
-from PySide2.QtGui import QIcon
-from PySide2.QtWidgets import QDialogButtonBox
+from PySide6.QtCore import QSortFilterProxyModel, QModelIndex, QRegularExpression, Qt, QItemSelection
+from PySide6.QtGui import QIcon
+from PySide6.QtWidgets import QDialogButtonBox
 
 from app.plugins.eizm_dictionary.models import EizmDictionaryTreeModel
 from db import sp
@@ -55,8 +55,8 @@ class LinkEizmDialog(BaseDialog):
 
     def search_line_changed(self, text):
         """Изменение содержимого поисковой строки"""
-        search = QRegExp(text, Qt.CaseInsensitive, QRegExp.RegExp)
-        self.proxy.setFilterRegExp(search)  # Применяем регулярное выражение для фильтрации пользователей
+        search = QRegularExpression(text, QRegularExpression.PatternOption.CaseInsensitiveOption)
+        self.proxy.setFilterRegularExpression(search)  # Применяем регулярное выражение для фильтрации пользователей
 
     def cancel(self):
         """Обработка кнопки отмены """

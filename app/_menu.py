@@ -1,6 +1,7 @@
 from operator import attrgetter
 
-from PySide2.QtWidgets import QAction, QMenu
+from PySide6.QtGui import QAction
+from PySide6.QtWidgets import QMenu
 
 
 class CustomMenu:  # узлы дерева меню в программе

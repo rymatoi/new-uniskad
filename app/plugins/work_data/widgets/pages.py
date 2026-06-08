@@ -1,5 +1,6 @@
-from PySide2.QtGui import QIcon, QCursor
-from PySide2.QtWidgets import QAction, QMenu
+from PySide6.QtGui import QIcon, QCursor
+from PySide6.QtGui import QAction
+from PySide6.QtWidgets import QMenu
 
 from app import basic_funcs, _menu
 from app.basic_funcs import timing_decorator

@@ -1,9 +1,9 @@
 import ast
 import json
 
-from PySide2.QtCore import QSortFilterProxyModel, QModelIndex, QRegExp, Qt, QItemSelection
-from PySide2.QtGui import QColor
-from PySide2.QtWidgets import *
+from PySide6.QtCore import QSortFilterProxyModel, QModelIndex, QRegularExpression, Qt, QItemSelection
+from PySide6.QtGui import QColor
+from PySide6.QtWidgets import *
 
 from app.plugins.base_state.widgets import ExtendedComboBox
 from app.plugins.project import utils_ as utils

@@ -1,6 +1,6 @@
-from PySide2 import QtWidgets, QtCore
+from PySide6 import QtWidgets, QtCore
 import pyqtgraph as pg
-from PySide2.QtWidgets import QStatusBar, QLabel, QFrame
+from PySide6.QtWidgets import QStatusBar, QLabel, QFrame
 
 from app.plugins.project.visualization.views.plot_views.epure_view import EpureView
 from app.plugins.project.visualization.views.plot_views.plot_view import PlotView

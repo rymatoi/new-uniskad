@@ -1,9 +1,9 @@
 import os
 import re
 
-from PySide2.QtWidgets import QApplication, QMainWindow, QTextBrowser, QTreeWidget, QTreeWidgetItem, QVBoxLayout, \
+from PySide6.QtWidgets import QApplication, QMainWindow, QTextBrowser, QTreeWidget, QTreeWidgetItem, QVBoxLayout, \
     QWidget, QSplitter
-from PySide2.QtCore import Qt, QUrl
+from PySide6.QtCore import Qt, QUrl
 from bs4 import BeautifulSoup
 
 from dialogs.base import BaseDialog

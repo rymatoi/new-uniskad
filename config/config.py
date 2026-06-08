@@ -1,9 +1,9 @@
 import base64
 import os.path
 
-from PySide2 import QtWidgets
-from PySide2.QtCore import QSettings, QTranslator, QLocale, QLibraryInfo
-from PySide2.QtWidgets import QDialog
+from PySide6 import QtWidgets
+from PySide6.QtCore import QSettings, QTranslator, QLocale, QLibraryInfo
+from PySide6.QtWidgets import QDialog
 from cryptography.fernet import Fernet
 
 from app import app_logger

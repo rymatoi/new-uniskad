@@ -2,8 +2,8 @@ from app.basic_funcs import to_float
 from app.formula import FormulaLineEdit
 from db import sp
 from dialogs.base import BaseDialog
-from PySide2.QtCore import Qt
-from PySide2.QtWidgets import QLabel
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QLabel
 from resources.ui.ui_py.ui_row_settings import Ui_RowSettingsDialog
 
 

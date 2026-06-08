@@ -1,8 +1,8 @@
 import numpy as np
 from typing import Optional
 import pyqtgraph as pg
-from PySide2.QtGui import QColor
-from PySide2.QtCore import Qt
+from PySide6.QtGui import QColor
+from PySide6.QtCore import Qt
 
 from app.plugins.project.core.constants import GraphConstants
 

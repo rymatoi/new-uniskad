@@ -1,5 +1,5 @@
-from PySide2.QtCore import Qt
-from PySide2.QtWidgets import QTreeWidgetItem
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QTreeWidgetItem
 
 from app.plugins.base_state.widgets import ExtendedComboBox
 from app.plugins.project import utils

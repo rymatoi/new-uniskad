@@ -2,7 +2,8 @@ import json
 from copy import copy
 from datetime import datetime
 
-from PySide2.QtGui import QIcon, Qt
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QIcon
 
 from app import basic_funcs
 from app.plugins.base_state.models import TreeModel, Node, ANY_CHILD_TYPE

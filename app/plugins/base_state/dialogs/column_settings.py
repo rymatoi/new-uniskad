@@ -1,4 +1,4 @@
-from PySide2.QtCore import Qt
+from PySide6.QtCore import Qt
 
 from dialogs.base import BaseDialog
 from resources.ui.ui_py.ui_column_settings import Ui_ColumnSettingsDialog

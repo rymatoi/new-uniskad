@@ -1,6 +1,6 @@
 import ast
 import re
-from PySide2.QtWidgets import QTreeWidgetItem, QDialog, QTreeWidgetItemIterator
+from PySide6.QtWidgets import QTreeWidgetItem, QDialog, QTreeWidgetItemIterator
 from app import basic_funcs
 from app.plugins.base_state.dialogs.edit_user_formula import EditUserFormulaDialog
 from app.plugins.project import utils

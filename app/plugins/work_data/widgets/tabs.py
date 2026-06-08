@@ -1,6 +1,7 @@
-from PySide2.QtCore import QDir, QStandardPaths, QUrl
-from PySide2.QtGui import QDesktopServices, Qt
-from PySide2.QtWidgets import QLabel
+from PySide6.QtCore import QDir, QStandardPaths, QUrl
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QDesktopServices
+from PySide6.QtWidgets import QLabel
 
 from app.basic_funcs import timing_decorator
 from app.plugins.base_state.widgets import Tab

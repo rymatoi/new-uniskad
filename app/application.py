@@ -1,6 +1,6 @@
-from PySide2.QtCore import QTimer
-from PySide2.QtGui import QKeyEvent, QMouseEvent
-from PySide2.QtWidgets import QApplication, QMainWindow, QDialog
+from PySide6.QtCore import QTimer
+from PySide6.QtGui import QKeyEvent, QMouseEvent
+from PySide6.QtWidgets import QApplication, QMainWindow, QDialog
 
 
 class Application(QApplication):

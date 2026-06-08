@@ -1,7 +1,7 @@
-import PySide2
-from PySide2.QtCore import QEvent, Qt
-from PySide2.QtGui import QColor
-from PySide2.QtWidgets import QDialog, QMenu
+import PySide6
+from PySide6.QtCore import QEvent, Qt
+from PySide6.QtGui import QColor
+from PySide6.QtWidgets import QDialog, QMenu
 from pyqtgraph import Point
 import pyqtgraph as pg
 
@@ -50,7 +50,7 @@ class CustomLegend(pg.LegendItem):
         self.last_pos_offset = Point(offset)
         self.calculate_pos()
 
-    def event(self, event: PySide2.QtCore.QEvent) -> bool:
+    def event(self, event: PySide6.QtCore.QEvent) -> bool:
         if event.type() == QEvent.UngrabMouse:
             self._parent.main_window.event_stack.add_event(
                 LegendPositionChangeEvent(self, self.old_pos, self.current_pos))

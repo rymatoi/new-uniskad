@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from typing import Dict
 
-from PySide2.QtCore import Qt, Signal
-from PySide2.QtGui import QFont, QFontDatabase
-from PySide2.QtWidgets import (
+from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QFont, QFontDatabase
+from PySide6.QtWidgets import (
     QCheckBox,
     QDialogButtonBox,
     QFontComboBox,

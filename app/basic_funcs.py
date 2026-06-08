@@ -4,10 +4,10 @@ import os
 from datetime import datetime
 
 import xlrd
-from PySide2.QtGui import QIcon
-from PySide2.QtWidgets import QInputDialog, QLineEdit, QMessageBox
-from PySide2.QtCore import QDir, Qt
-from PySide2.QtWidgets import QFileDialog
+from PySide6.QtGui import QIcon
+from PySide6.QtWidgets import QInputDialog, QLineEdit, QMessageBox
+from PySide6.QtCore import QDir, Qt
+from PySide6.QtWidgets import QFileDialog
 
 from dateutil import parser
 import re

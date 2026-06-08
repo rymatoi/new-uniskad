@@ -1,4 +1,4 @@
-from PySide2.QtWidgets import *
+from PySide6.QtWidgets import *
 
 from app.basic_funcs import to_float
 from app.plugins.base_state.widgets import ExtendedComboBox
@@ -6,9 +6,9 @@ from db import sp
 from dialogs.base import BaseDialog
 from resources.ui.ui_py.ui_conditions_dialog import Ui_AddConditionsDialog
 
-from PySide2.QtCore import QSortFilterProxyModel, QModelIndex, QRegExp, Qt, QItemSelection
-from PySide2.QtGui import QColor
-from PySide2.QtWidgets import QDialogButtonBox
+from PySide6.QtCore import QSortFilterProxyModel, QModelIndex, QRegularExpression, Qt, QItemSelection
+from PySide6.QtGui import QColor
+from PySide6.QtWidgets import QDialogButtonBox
 
 from app.plugins.work_data.models import WorkDataTreeModel
 from db import sp

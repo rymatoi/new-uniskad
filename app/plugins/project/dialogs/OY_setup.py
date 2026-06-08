@@ -1,4 +1,4 @@
-from PySide2.QtWidgets import QDialogButtonBox, QTableWidgetItem
+from PySide6.QtWidgets import QDialogButtonBox, QTableWidgetItem
 
 from app import basic_funcs
 from dialogs.base import BaseDialog

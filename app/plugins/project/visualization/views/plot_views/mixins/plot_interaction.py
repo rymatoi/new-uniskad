@@ -1,7 +1,7 @@
-import PySide2
+import PySide6
 import pyqtgraph as pg
-from PySide2.QtCore import QPointF, Qt
-from PySide2.QtWidgets import QGraphicsItem
+from PySide6.QtCore import QPointF, Qt
+from PySide6.QtWidgets import QGraphicsItem
 from typing import Any, Callable
 
 from pyqtgraph import PlotWidget

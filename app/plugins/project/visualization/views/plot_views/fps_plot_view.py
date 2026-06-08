@@ -1,7 +1,7 @@
 import time
 
 import pyqtgraph as pg
-from PySide2 import QtCore, QtGui
+from PySide6 import QtCore, QtGui
 
 
 class FPSPlotWidget(pg.PlotWidget):

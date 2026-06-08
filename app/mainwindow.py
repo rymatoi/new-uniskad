@@ -2,11 +2,11 @@ import ast
 import json
 from typing import Any, Dict, Optional
 
-from PySide2 import QtWidgets
-from PySide2.QtCore import QEventLoop, QSize, Slot
-from PySide2.QtGui import QIcon, QCloseEvent, Qt, QKeySequence, QFont
-from PySide2.QtWidgets import QMenu, QToolBar, QHBoxLayout, QToolButton, QWidget, QDialog, QShortcut, QDockWidget, \
-    QAction, QProgressBar, QLabel
+from PySide6 import QtWidgets
+from PySide6.QtCore import QEventLoop, QSize, Slot, Qt
+from PySide6.QtGui import QIcon, QCloseEvent, QKeySequence, QFont, QAction, QShortcut
+from PySide6.QtWidgets import QMenu, QToolBar, QHBoxLayout, QToolButton, QWidget, QDialog, QDockWidget, \
+    QProgressBar, QLabel
 from app import app_logger, _menu, basic_funcs
 from app.cache import DataCache
 from app.history_manager.history_manager import EventStack

@@ -1,4 +1,4 @@
-from PySide2.QtGui import QIcon
+from PySide6.QtGui import QIcon
 
 from app import basic_funcs
 from app.plugins.base_state.models import Node, TreeModel

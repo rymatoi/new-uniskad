@@ -1,6 +1,7 @@
-from PySide2.QtCore import QUrl, QStandardPaths, QDir
-from PySide2.QtGui import QDesktopServices, Qt
-from PySide2.QtWidgets import QLabel
+from PySide6.QtCore import QUrl, QStandardPaths, QDir
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QDesktopServices
+from PySide6.QtWidgets import QLabel
 from app.plugins.base_state.widgets import Tab
 from app.plugins.project.widgets.pages import ProjectPlotPage, ProjectTablePage1
 from db import sp

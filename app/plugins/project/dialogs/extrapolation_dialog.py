@@ -1,7 +1,7 @@
-from PySide2.QtWidgets import (
+from PySide6.QtWidgets import (
     QApplication, QDialog, QVBoxLayout, QFormLayout, QLineEdit, QPushButton, QHBoxLayout, QMessageBox, QCheckBox
 )
-from PySide2.QtGui import QDoubleValidator
+from PySide6.QtGui import QDoubleValidator
 
 
 class ExtrapolationDialog(QDialog):

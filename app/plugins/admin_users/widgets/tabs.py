@@ -1,4 +1,4 @@
-from PySide2.QtCore import QModelIndex
+from PySide6.QtCore import QModelIndex
 
 from app.basic_funcs import error
 from app.plugins.admin_roles.models import AdminRolesTreeModel

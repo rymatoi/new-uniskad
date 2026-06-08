@@ -1,5 +1,5 @@
-from PySide2.QtCore import QSortFilterProxyModel, QModelIndex, QRegExp, Qt, QItemSelection
-from PySide2.QtWidgets import QDialogButtonBox
+from PySide6.QtCore import QSortFilterProxyModel, QModelIndex, QRegularExpression, Qt, QItemSelection
+from PySide6.QtWidgets import QDialogButtonBox
 
 from app.plugins.synonym_dictionary.models import SynonymDictionaryTreeModel, StandardNode, SynonymNode
 from db import sp
@@ -82,8 +82,8 @@ class ParameterConfirmDialog(BaseDialog):
 
     def search_line_changed(self, text):
         """Изменение содержимого поисковой строки"""
-        search = QRegExp(text, Qt.CaseInsensitive, QRegExp.RegExp)
-        self.proxy.setFilterRegExp(search)  # Применяем регулярное выражение для фильтрации пользователей
+        search = QRegularExpression(text, QRegularExpression.PatternOption.CaseInsensitiveOption)
+        self.proxy.setFilterRegularExpression(search)  # Применяем регулярное выражение для фильтрации пользователей
 
     def cancel(self):
         """Обработка кнопки отмены """

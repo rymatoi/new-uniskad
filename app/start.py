@@ -1,7 +1,7 @@
 import locale
 import sys
 
-from PySide2.QtWidgets import QDialog
+from PySide6.QtWidgets import QDialog
 
 from app import app_logger
 from config import config
@@ -12,7 +12,7 @@ from app.mainwindow import MainWindow
 
 logger = app_logger.get_logger(__name__)
 
-from PySide2.QtCore import QLocale
+from PySide6.QtCore import QLocale
 
 
 def log_unhandled_exception(exc_type, exc_value, exc_traceback):
