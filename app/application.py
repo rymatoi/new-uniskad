@@ -2,7 +2,7 @@ from PySide6.QtCore import QTimer
 from PySide6.QtGui import QFont, QKeyEvent, QMouseEvent
 from PySide6.QtWidgets import QApplication, QMainWindow, QDialog, QWidget
 
-from app.interface_style import FriendlyProxyStyle
+from app.interface_style import CONTAINER_STYLE_SHEET, FriendlyProxyStyle
 
 
 class Application(QApplication):
@@ -10,6 +10,7 @@ class Application(QApplication):
         super().__init__(*argv)
         self._default_font = QFont(self.font())
         self.setStyle(FriendlyProxyStyle(self.style()))
+        self.setStyleSheet(CONTAINER_STYLE_SHEET)
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.close_main_window)
         self.timer_disabled = False
