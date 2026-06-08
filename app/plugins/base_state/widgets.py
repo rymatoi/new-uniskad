@@ -413,7 +413,7 @@ class TreeView(QTreeView):
     def refresh(self):
         for row in range(self.model().rowCount()):
             index = self.model().index(row, 0)
-            hidden = self.model().data(index, Qt.UserRole)
+            hidden = self.model().data(index, Qt.ItemDataRole.UserRole)
             if not self.HIDE_REMOVED_ITEMS:
                 self.setItemVisibility(self.model(), index, False)
             else:
@@ -423,7 +423,7 @@ class TreeView(QTreeView):
         self.setRowHidden(index.row(), index.parent(), hidden)
         for i in range(model.rowCount(index)):
             childIndex = model.index(i, 0, index)
-            hidden = model.data(childIndex, Qt.UserRole)
+            hidden = model.data(childIndex, Qt.ItemDataRole.UserRole)
             if not self.HIDE_REMOVED_ITEMS:
                 self.setItemVisibility(model, childIndex, False)
             else:
@@ -759,7 +759,7 @@ class TreeView(QTreeView):
         if not node or getattr(node, 'search_highlight', False) == highlight:
             return
         node.search_highlight = highlight
-        self.model().dataChanged.emit(index, index, [Qt.BackgroundRole])
+        self.model().dataChanged.emit(index, index, [Qt.ItemDataRole.BackgroundRole])
 
     def _clear_highlight(self):
         model = self.model()
@@ -1041,7 +1041,7 @@ class TreeView(QTreeView):
             row = index.row()
             if row > 0 and index.parent().isValid():
                 destination_index = self.model().index(row - 1, index.column(), index.parent())
-                hidden_state = self.model().data(destination_index, Qt.UserRole)
+                hidden_state = self.model().data(destination_index, Qt.ItemDataRole.UserRole)
                 new_index = self.model().moveItem(index, destination_index)
                 if new_index:
                     self.setItemVisibility(self.model(), new_index, hidden_state)
@@ -1052,7 +1052,7 @@ class TreeView(QTreeView):
             parent_index = index.parent()
             if row < self.model().rowCount(parent_index) - 1 and parent_index.isValid():
                 destination_index = self.model().index(row + 1, index.column(), parent_index)
-                hidden_state = self.model().data(destination_index, Qt.UserRole)
+                hidden_state = self.model().data(destination_index, Qt.ItemDataRole.UserRole)
                 new_index = self.model().moveItem(index, destination_index)
                 if new_index:
                     self.setItemVisibility(self.model(), new_index, hidden_state)
@@ -1759,7 +1759,7 @@ class TableItem(QTableWidgetItem):
     def data(self, role: int):
         tw = self.tableWidget()
 
-        if role == Qt.DisplayRole:
+        if role == Qt.ItemDataRole.DisplayRole:
 
             if not self.dep_inited:
                 self.init_dependencies()
@@ -1768,10 +1768,10 @@ class TableItem(QTableWidgetItem):
 
             return self.value()
 
-        if role == Qt.EditRole:
+        if role == Qt.ItemDataRole.EditRole:
             return self.get('formula', str, '')
 
-        if role == Qt.BackgroundColorRole:
+        if role == Qt.ItemDataRole.BackgroundRole:
             if self.highlighted:
                 if self.get('broken', bool, False):
                     return QColor('#d7d7d7')
@@ -1782,10 +1782,10 @@ class TableItem(QTableWidgetItem):
                 if bg_color := self.get('font_bgcolor', str, None):
                     return QColor(bg_color)
 
-        if role == Qt.TextColorRole:
+        if role == Qt.ItemDataRole.ForegroundRole:
             return QColor(self.get('font_text_color', str))
 
-        if role == Qt.FontRole:
+        if role == Qt.ItemDataRole.FontRole:
             font = QFont()
             # font.setFamily(self.get('font_name', 'Times'))
             font.setBold(self.get('font_bold', bool, False))
@@ -1793,13 +1793,13 @@ class TableItem(QTableWidgetItem):
             font.setPixelSize(self.get('font_size', int, 14))
             return font
 
-        if role == Qt.TextAlignmentRole:
+        if role == Qt.ItemDataRole.TextAlignmentRole:
             return tw.get_column_prop(self.key[1], 'alignment', int, 4)
 
         return super().data(role)
 
     def setData(self, role: int, value) -> None:
-        if role == Qt.EditRole:
+        if role == Qt.ItemDataRole.EditRole:
             if isinstance(value, str):
                 current_formula = self.get('formula', str, '')
                 if value == current_formula:
@@ -1818,7 +1818,7 @@ class TableItem(QTableWidgetItem):
                 if table is not None and table.model() is not None:
                     index = table.indexFromItem(self)
                     if index.isValid():
-                        table.model().dataChanged.emit(index, index, [Qt.DisplayRole])
+                        table.model().dataChanged.emit(index, index, [Qt.ItemDataRole.DisplayRole])
 
     def update_dependencies(self):
         for cell_key in self.dependencies:
@@ -2158,7 +2158,7 @@ class TableItem(QTableWidgetItem):
         table = self.tableWidget()
         if table is not None and table.model() is not None:
             index = table.model().index(self.row(), self.column())
-            table.model().dataChanged.emit(index, index, [Qt.BackgroundColorRole])
+            table.model().dataChanged.emit(index, index, [Qt.ItemDataRole.BackgroundRole])
 
     def get(self, prop, cast_type=None, default=None):
         if prop not in self.cell:
@@ -2431,7 +2431,7 @@ class TablePage1(QtWidgets.QWidget):
         text = self.formula_edit.text()
         self._applying_formula = True
         try:
-            self.table.model().setData(index, text, Qt.EditRole)
+            self.table.model().setData(index, text, Qt.ItemDataRole.EditRole)
         finally:
             self._applying_formula = False
         self.refresh_formula_result(item)

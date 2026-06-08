@@ -145,7 +145,7 @@ class ProjectSelectionDialog(BaseDialog):
     def on_item_changed(self, item, column):
         if column != 0:
             return
-        item_data = item.data(0, Qt.UserRole)
+        item_data = item.data(0, Qt.ItemDataRole.UserRole)
         item_data.project_prop = 'name'
         item_data.project_prop_value = item.text(column)
         result = sp.new_update_project_from_record(item_data.table_fit(PROJECT_TABLE))
@@ -154,7 +154,7 @@ class ProjectSelectionDialog(BaseDialog):
     def force_rename(self, item, value):
         self.ui.othersProjectsTreeWidget.itemChanged.disconnect(self.on_item_changed)
         self.ui.ownProjectsTreeWidget.itemChanged.disconnect(self.on_item_changed)
-        item.setData(0, Qt.UserRole, value)
+        item.setData(0, Qt.ItemDataRole.UserRole, value)
         self.ui.othersProjectsTreeWidget.itemChanged.connect(self.on_item_changed)
         self.ui.ownProjectsTreeWidget.itemChanged.connect(self.on_item_changed)
 
@@ -191,7 +191,7 @@ class ProjectSelectionDialog(BaseDialog):
         return {o.old_id: o.new_id for o in id_mapping}
 
     def update_ids(self, projects, id_mapping):
-        _projects_data = [deepcopy(p.data(0, Qt.UserRole)) for p in projects]
+        _projects_data = [deepcopy(p.data(0, Qt.ItemDataRole.UserRole)) for p in projects]
         for p in _projects_data:
             p.project_id = id_mapping.get(p.project_id, p.project_id)
             p.project_id_up = id_mapping.get(p.project_id_up, p.project_id_up)
@@ -221,8 +221,8 @@ class ProjectSelectionDialog(BaseDialog):
         def add_item(project, parent=None):
             item = QTreeWidgetItem([project.prop_value, project.creation_date.strftime('%Y-%m-%d')])
             item.setFlags(item.flags() | Qt.ItemIsEditable)
-            item.setData(0, Qt.UserRole, project)
-            item.setData(0, Qt.DecorationRole, QIcon(self.icons[project.project_type]))
+            item.setData(0, Qt.ItemDataRole.UserRole, project)
+            item.setData(0, Qt.ItemDataRole.DecorationRole, QIcon(self.icons[project.project_type]))
             if parent:
                 parent.addChild(item)
             else:
@@ -236,7 +236,7 @@ class ProjectSelectionDialog(BaseDialog):
 
         # Добавить корневые элементы в таблицу
         for project in projects_by_id.values():
-            if project.project_id_up == (root_item.data(0, Qt.UserRole).project_id if root_item else 1):
+            if project.project_id_up == (root_item.data(0, Qt.ItemDataRole.UserRole).project_id if root_item else 1):
                 add_item(project, root_item)
 
     def build_tree(self):
@@ -259,7 +259,7 @@ class ProjectSelectionDialog(BaseDialog):
         is_search_empty = not search_term.strip()
 
         def match_item(item):
-            project = item.data(0, Qt.UserRole)
+            project = item.data(0, Qt.ItemDataRole.UserRole)
             if project:
                 if self.search_mode == 'name':
                     return search_term in project.prop_value.lower()
@@ -304,7 +304,7 @@ class ProjectSelectionDialog(BaseDialog):
     def search_item_recursive(self, item, auto_open_id):
         for i in range(item.childCount()):
             child = item.child(i)
-            project = child.data(0, Qt.UserRole)
+            project = child.data(0, Qt.ItemDataRole.UserRole)
             if project and str(project.id) == auto_open_id:
                 self.res = project
                 return True
@@ -364,7 +364,7 @@ class ProjectSelectionDialog(BaseDialog):
 
         project_items, data_items, graph_id_list = self.collect_selected_project_data()
         id_mapping = sp.pass_project_to_another_user(data_items, graph_id_list,
-                                                     root_item.data(0, Qt.UserRole).project_id_up,
+                                                     root_item.data(0, Qt.ItemDataRole.UserRole).project_id_up,
                                                      self.main_window.user.id)
         if id_mapping:
             print('Передался')
@@ -383,13 +383,13 @@ class ProjectSelectionDialog(BaseDialog):
             return
         project_items = self.collect_all_children(root_item)
         project_items = [item for item in set(project_items) if
-                         item.data(0, Qt.UserRole).deleted is False or item.data(0, Qt.UserRole).deleted == 'False']
+                         item.data(0, Qt.ItemDataRole.UserRole).deleted is False or item.data(0, Qt.ItemDataRole.UserRole).deleted == 'False']
 
         data_items = [obj.table_fit(PROJECT_TABLE) for obj in
-                      list(set(self.project_props[root_item.data(0, Qt.UserRole).project_id]))]
+                      list(set(self.project_props[root_item.data(0, Qt.ItemDataRole.UserRole).project_id]))]
         graph_id_list = []
         for item in project_items:
-            for obj in self.project_props[item.data(0, Qt.UserRole).project_id]:
+            for obj in self.project_props[item.data(0, Qt.ItemDataRole.UserRole).project_id]:
                 data_items += [obj.table_fit(PROJECT_TABLE)]
                 if obj.project_prop == 'graph_type' and obj.project_prop_value == 'xy':
                     graph_id_list.append(obj.project_id)
@@ -427,12 +427,12 @@ class ProjectSelectionDialog(BaseDialog):
             if selected_own:
                 tree = self.ui.ownProjectsTreeWidget
                 selected = selected_own[0]
-                item = selected.data(0, Qt.UserRole)
+                item = selected.data(0, Qt.ItemDataRole.UserRole)
                 success = sp.delete_project(item.id, True, True, True)  # TODO проекты удаляются полностью
             elif selected_other:
                 tree = self.ui.othersProjectsTreeWidget
                 selected = selected_other[0]
-                item = selected.data(0, Qt.UserRole)
+                item = selected.data(0, Qt.ItemDataRole.UserRole)
                 success = sp.delete_project(item.id, True, True, True)  # TODO проекты удаляются полностью
             if selected is None:
                 return
@@ -464,12 +464,12 @@ class ProjectSelectionDialog(BaseDialog):
         selected_other = self.ui.othersProjectsTreeWidget.selectedItems()
 
         if selected_own:
-            item = selected_own[0].data(0, Qt.UserRole)
+            item = selected_own[0].data(0, Qt.ItemDataRole.UserRole)
             self.res = item  # Получаем выбранного пользователя
             self.accept()
 
         elif selected_other:
-            item = selected_other[0].data(0, Qt.UserRole)
+            item = selected_other[0].data(0, Qt.ItemDataRole.UserRole)
             self.res = item  # Получаем выбранного пользователя
             self.accept()
 
@@ -487,10 +487,10 @@ class ProjectSelectionDialog(BaseDialog):
         if selected.count():
             _selected = selected.indexes()[0]
             item = self.ui.ownProjectsTreeWidget.itemFromIndex(_selected)
-            if item.data(0, Qt.UserRole).type_ in ['project', 'project_root']:
+            if item.data(0, Qt.ItemDataRole.UserRole).type_ in ['project', 'project_root']:
                 self.ui.copyButton.setEnabled(True)
                 self.ui.renameButton.setEnabled(True)
-                if item.data(0, Qt.UserRole).type_ == 'project':
+                if item.data(0, Qt.ItemDataRole.UserRole).type_ == 'project':
                     self.ui.selectButton.setEnabled(True)
                 else:
                     self.ui.selectButton.setEnabled(False)

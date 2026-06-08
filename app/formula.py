@@ -42,12 +42,12 @@ class FormulaDelegate(QStyledItemDelegate):
         return editor
 
     def setEditorData(self, editor, index):
-        text = index.model().data(index, Qt.EditRole)
+        text = index.model().data(index, Qt.ItemDataRole.EditRole)
         editor.setText(text)
 
     def setModelData(self, editor, model, index):
         text = editor.text()
-        model.setData(index, text, Qt.EditRole)
+        model.setData(index, text, Qt.ItemDataRole.EditRole)
 
 
 class FormulaLineEdit(QtWidgets.QLineEdit):
