@@ -41,3 +41,11 @@ class BasePlotView(FPSPlotWidget, PlotDataMixin, PlotInteractionMixin, PlotDispl
         # Дополнительная инициализация атрибутов линейки
         self.ruler_curve1 = None
         self.ruler_curve2 = None
+
+    def clear(self) -> None:
+        """Clear graph data through PlotDataMixin instead of PlotWidget.clear.
+
+        FPSPlotWidget appears before the mixins in the MRO, so without this
+        override ``self.clear()`` bypasses the application-side cleanup.
+        """
+        PlotDataMixin.clear(self)

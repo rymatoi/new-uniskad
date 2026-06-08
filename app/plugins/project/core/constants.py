@@ -1,6 +1,8 @@
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
 
+from app.plugins.project.utils_ import qt_enum_value
+
 
 class GraphConstants:
     LINE_STYLES = {
@@ -37,7 +39,7 @@ class GraphConstants:
 
         # Fallback for Qt.PenStyle or unexpected type
         try:
-            int_value = int(value)
+            int_value = qt_enum_value(value)
         except (TypeError, ValueError):
             return Qt.PenStyle.SolidLine
         return cls.LINE_STYLES.get(int_value, Qt.PenStyle.SolidLine)

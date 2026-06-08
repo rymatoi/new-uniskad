@@ -1,5 +1,7 @@
 from functools import lru_cache
 
+from app.plugins.project.utils_ import qt_enum_value
+
 
 class TestProcessor:
     @staticmethod
@@ -34,7 +36,7 @@ class TestProcessor:
         return {
             'color': item.curve_color,
             'width': int(item.curve_width),
-            'line_style': int(item.curve_line_style),
+            'line_style': qt_enum_value(item.curve_line_style),
             'symbol_size': int(item.curve_point_size),
             'symbol': item.curve_point_symbol,
             'symbol_color': getattr(item, 'curve_symbol_color', item.curve_color),
