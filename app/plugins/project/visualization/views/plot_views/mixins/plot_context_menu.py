@@ -83,7 +83,7 @@ class PlotContextMenuMixin:
 
     def onContextMenuRequested(self, evt):
         """Обрабатывает запрос на показ контекстного меню"""
-        if evt[0].button() != Qt.RightButton:
+        if evt[0].button() != Qt.MouseButton.RightButton:
             return
 
         # Проверяем, не произошел ли клик по легенде
@@ -374,7 +374,7 @@ class PlotContextMenuMixin:
                 if hasattr(self, 'set_ruler_mark'):
                     # Устанавливаем метку линейки
                     # Если зажат Ctrl, создаем новую линейку
-                    #new_ruler = action.modifiers() & Qt.ControlModifier
+                    #new_ruler = action.modifiers() & Qt.KeyboardModifier.ControlModifier
                     new_ruler = False
                     if new_ruler:
                         # Для нового формата с несколькими линейками
@@ -526,7 +526,7 @@ class PlotContextMenuMixin:
 
     def _handle_legend_click(self, event):
         """Обработчик клика по легенде"""
-        if event.button() != Qt.RightButton:
+        if event.button() != Qt.MouseButton.RightButton:
             return
 
         # Получаем элемент легенды, по которому кликнули

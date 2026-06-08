@@ -15,7 +15,7 @@ class CreateUserDialog(BaseDialog):
         # Create form fields
         self.username_line_edit = QtWidgets.QLineEdit()
         self.password_line_edit = PasswordEdit()
-        # self.password_line_edit.setEchoMode(QtWidgets.QLineEdit.Password)
+        # self.password_line_edit.setEchoMode(QtWidgets.QLineEdit.EchoMode.Password)
         self.firstname_line_edit = QtWidgets.QLineEdit()
         self.secondname_line_edit = QtWidgets.QLineEdit()
         # self.lastname_line_edit = QtWidgets.QLineEdit()
@@ -37,7 +37,7 @@ class CreateUserDialog(BaseDialog):
         form_layout.addRow("Роль:", self.options_combo_box)
 
         # Create button box
-        button_box = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
+        button_box = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.StandardButton.Ok | QtWidgets.QDialogButtonBox.StandardButton.Cancel)
         button_box.accepted.connect(self.create_user)
         button_box.rejected.connect(self.close)
 

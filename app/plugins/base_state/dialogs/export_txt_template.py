@@ -93,12 +93,12 @@ class ExportTxtDialog(BaseDialog):
     @property
     def convert_button(self) -> "QPushButton":
         """Кнопка для конвертации"""
-        return self.ui.buttonBox.button(QDialogButtonBox.Ok)
+        return self.ui.buttonBox.button(QDialogButtonBox.StandardButton.Ok)
 
     @property
     def cancel_button(self) -> "QPushButton":
         """Кнопка для отмены"""
-        return self.ui.buttonBox.button(QDialogButtonBox.Cancel)
+        return self.ui.buttonBox.button(QDialogButtonBox.StandardButton.Cancel)
 
     def replace_text(self):
         selected_item = self.ui.paramListWidget.currentItem()

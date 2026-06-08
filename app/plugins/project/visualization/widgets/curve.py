@@ -57,7 +57,7 @@ class CurveItem(pg.PlotDataItem):
     def _convert_color(self, color):
         """Преобразует входное значение в QColor"""
         if color is None:
-            return QColor(Qt.black)
+            return QColor(Qt.GlobalColor.black)
 
         if isinstance(color, QColor):
             return color
@@ -82,13 +82,13 @@ class CurveItem(pg.PlotDataItem):
                 return QColor(getattr(Qt, color))
             except AttributeError:
                 print(f"Не удалось преобразовать цвет {color}, используем черный")
-                return QColor(Qt.black)
+                return QColor(Qt.GlobalColor.black)
 
         # На случай неожиданных типов
         qt_color = QColor(color)
         if qt_color.isValid():
             return qt_color
-        return QColor(Qt.black)
+        return QColor(Qt.GlobalColor.black)
 
     def apply_style(self):
         """Применение стиля к кривой"""

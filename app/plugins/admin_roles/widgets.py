@@ -63,7 +63,7 @@ class AdminRoleTab(Tab):
 
         for action in checked_actions:
             action.prop_name = 'checked'
-            action.prop_value = Qt.Checked
+            action.prop_value = Qt.CheckState.Checked
 
         return modes + _locations + actions + checked_actions
 

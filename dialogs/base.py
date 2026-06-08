@@ -11,7 +11,7 @@ class BaseDialog(QtWidgets.QDialog):
         self.res = None  # Данные, возвращаемые из диалога
         self.setWindowIcon(QIcon(":/uniskad.ico"))
         if not flags:
-            flags = self.windowFlags() & ~Qt.WindowContextHelpButtonHint
+            flags = self.windowFlags() & ~Qt.WindowType.WindowContextHelpButtonHint
             self.setWindowFlags(flags)
 
     def get_result(self) -> Any:

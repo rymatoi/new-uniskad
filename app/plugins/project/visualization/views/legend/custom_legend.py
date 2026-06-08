@@ -29,7 +29,7 @@ class CustomLegend(pg.LegendItem):
         self.available_actions = []
         self.legend_menu = self._load_menu('any', 'legend')
 
-        self._background_color = QColor(Qt.white)
+        self._background_color = QColor(Qt.GlobalColor.white)
         self._border_color = QColor(100, 100, 100)
         self._background_opacity = 1.0
 
@@ -51,7 +51,7 @@ class CustomLegend(pg.LegendItem):
         self.calculate_pos()
 
     def event(self, event: PySide6.QtCore.QEvent) -> bool:
-        if event.type() == QEvent.UngrabMouse:
+        if event.type() == QEvent.Type.UngrabMouse:
             self._parent.main_window.event_stack.add_event(
                 LegendPositionChangeEvent(self, self.old_pos, self.current_pos))
         return super().event(event)
@@ -115,7 +115,7 @@ class CustomLegend(pg.LegendItem):
             parent=self._parent
         )
 
-        if dialog.exec_() == QDialog.Accepted:
+        if dialog.exec_() == QDialog.DialogCode.Accepted:
             result = dialog.get_result()
             if not result:
                 return

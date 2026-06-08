@@ -1,4 +1,4 @@
-from PySide6.QtWidgets import QTreeView
+from PySide6.QtWidgets import QAbstractItemView
 
 from app import app_logger
 from app.plugins.admin_users.models import AdminUsersTreeModel
@@ -28,7 +28,7 @@ class AdminUsersPlugin(BasePlugin):
 
         self.users_treeview = AdminUsersTreeView(self._parent, main_window=self._parent)
         self.users_treeview.setModel(model)
-        self.users_treeview.setSelectionMode(QTreeView.SingleSelection)
+        self.users_treeview.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
 
         # self.users_treeview.add_folders(True)
         # self.users_treeview.sort_items_to_folders(True)

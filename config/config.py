@@ -13,7 +13,7 @@ from dialogs.create_config import CreateConfigDialog
 app = Application()  # создание экземпляра приложения
 translator = QTranslator()
 
-# translator.load('qt_' + QLocale.system().name(), QLibraryInfo.location(QLibraryInfo.TranslationsPath))
+# translator.load('qt_' + QLocale.system().name(), QLibraryInfo.location(QLibraryInfo.LibraryPath.TranslationsPath))
 val = translator.load('qt_' + QLocale.system().name(), os.path.normpath('./resources/translation/'))
 # val = translator.load("qt_ru.qm", './resources/translation/')
 app.installTranslator(translator)
@@ -37,7 +37,7 @@ class Config:
 
     def create(self):
         create_config_dialog = CreateConfigDialog()
-        if create_config_dialog.exec_() == QDialog.Accepted:
+        if create_config_dialog.exec_() == QDialog.DialogCode.Accepted:
             config_data = create_config_dialog.get_result()
             self.settings.save('host', config_data.rhost, 'remote_database')
             self.settings.save('port', config_data.rport, 'remote_database')
@@ -92,7 +92,7 @@ class Settings:
 
     # Инициализация экземпляра класса "Settings"
     def __init__(self, config_path=CONFIG_FILE):
-        self.settings = QSettings(config_path, QSettings.IniFormat)
+        self.settings = QSettings(config_path, QSettings.Format.IniFormat)
 
     # Создание и возврат экземпляра библиотечного класса FERNET, который содержит методы шифрования/дешифрования
     def get_fernet_key(self) -> Fernet:

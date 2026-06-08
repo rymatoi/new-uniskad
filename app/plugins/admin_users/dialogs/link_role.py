@@ -29,16 +29,16 @@ class LinkRoleDialog(BaseDialog):
         self.proxy.setSourceModel(self.model)
         self.ui.treeView.setModel(self.proxy)  # загрузка полученного списка в виджет
         self.ui.treeView.setIconSize(QSize(16, 16))
-        # self.ui.buttonBox.button(QDialogButtonBox.Ok).setEnabled(
+        # self.ui.buttonBox.button(QDialogButtonBox.StandardButton.Ok).setEnabled(
         #     False)  # делаем кнопку применения недоступной пока не выбран проект
-        # self.ui.treeView.header().setResizeMode(QHeaderView.ResizeToContents)  # Подгоняем колонки под контент
+        # self.ui.treeView.header().setResizeMode(QHeaderView.ResizeMode.ResizeToContents)  # Подгоняем колонки под контент
         self.setWindowIcon(QIcon(":/uniskad.ico"))
         self.create_connections()  # создаем привязки
 
     def create_connections(self):
         """Создание привязок для обработки кнопок"""
-        self.ui.buttonBox.button(QDialogButtonBox.Ok).clicked.connect(self.select_item)
-        self.ui.buttonBox.button(QDialogButtonBox.Cancel).clicked.connect(self.cancel)
+        self.ui.buttonBox.button(QDialogButtonBox.StandardButton.Ok).clicked.connect(self.select_item)
+        self.ui.buttonBox.button(QDialogButtonBox.StandardButton.Cancel).clicked.connect(self.cancel)
         self.ui.lineEdit.textChanged.connect(self.search_line_changed)
         self.ui.treeView.doubleClicked.connect(self.select_item)
         # self.ui.treeView.selectionModel().selectionChanged.connect(self.change_selected_item)

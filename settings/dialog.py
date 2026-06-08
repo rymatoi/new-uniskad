@@ -38,14 +38,14 @@ class SettingsDialog(BaseDialog):
             "restore_last_project": True,
             "show_status_bar": True,
             "use_custom_font": False,
-            "font_name": QFontDatabase.systemFont(QFontDatabase.GeneralFont).family(),
+            "font_name": QFontDatabase.systemFont(QFontDatabase.SystemFont.GeneralFont).family(),
             "font_size": 10,
             "enable_notifications": True,
             "notifications_timeout": 10,
         }
 
         self.setWindowTitle("Настройки")
-        self.setWindowFlag(Qt.WindowStaysOnTopHint, False)
+        self.setWindowFlag(Qt.WindowType.WindowStaysOnTopHint, False)
 
         self._dirty = False
 
@@ -75,19 +75,19 @@ class SettingsDialog(BaseDialog):
         self._init_data_tab()
 
         self.button_box = QDialogButtonBox(
-            QDialogButtonBox.Ok | QDialogButtonBox.Cancel | QDialogButtonBox.Apply,
-            Qt.Horizontal,
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel | QDialogButtonBox.StandardButton.Apply,
+            Qt.Orientation.Horizontal,
             self,
         )
         main_layout.addWidget(self.button_box)
 
-        self.apply_button = self.button_box.button(QDialogButtonBox.Apply)
+        self.apply_button = self.button_box.button(QDialogButtonBox.StandardButton.Apply)
         if self.apply_button:
             self.apply_button.setEnabled(False)
 
     def _init_general_tab(self) -> None:
         layout = QFormLayout()
-        layout.setFieldGrowthPolicy(QFormLayout.ExpandingFieldsGrow)
+        layout.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
 
         self.close_timeout_spin = QSpinBox(self.general_tab)
         self.close_timeout_spin.setRange(1, 360)
@@ -114,7 +114,7 @@ class SettingsDialog(BaseDialog):
         session_group.setLayout(layout)
 
         notifications_layout = QFormLayout()
-        notifications_layout.setFieldGrowthPolicy(QFormLayout.ExpandingFieldsGrow)
+        notifications_layout.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
 
         self.notifications_enabled_checkbox = QCheckBox(
             "Показывать всплывающие уведомления", self.general_tab
@@ -136,7 +136,7 @@ class SettingsDialog(BaseDialog):
 
     def _init_appearance_tab(self) -> None:
         layout = QFormLayout()
-        layout.setFieldGrowthPolicy(QFormLayout.ExpandingFieldsGrow)
+        layout.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
 
         self.use_custom_font_checkbox = QCheckBox("Использовать собственный шрифт", self.appearance_tab)
         layout.addRow("", self.use_custom_font_checkbox)

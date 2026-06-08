@@ -78,7 +78,7 @@ class LoadingDialog(QDialog):
         self.setLayout(layout)
         self.setFixedWidth(100)
         self.setFixedWidth(200)
-        self.setWindowFlags(self.windowFlags() & ~Qt.WindowContextHelpButtonHint)
+        self.setWindowFlags(self.windowFlags() & ~Qt.WindowType.WindowContextHelpButtonHint)
 
     def update_label_text(self):
         self.loading_dialog.label.setText('Завершено')

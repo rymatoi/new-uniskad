@@ -24,7 +24,7 @@ class Ui_SettingsDialog(object):
         self.gridLayout.setObjectName(u"gridLayout")
         self.splitter = QSplitter(SettingsDialog)
         self.splitter.setObjectName(u"splitter")
-        self.splitter.setOrientation(Qt.Horizontal)
+        self.splitter.setOrientation(Qt.Orientation.Horizontal)
         self.treeView = QTreeView(self.splitter)
         self.treeView.setObjectName(u"treeView")
         self.splitter.addWidget(self.treeView)
@@ -36,7 +36,7 @@ class Ui_SettingsDialog(object):
 
         self.horizontalGroupBox = QGroupBox(SettingsDialog)
         self.horizontalGroupBox.setObjectName(u"horizontalGroupBox")
-        sizePolicy = QSizePolicy(QSizePolicy.Preferred, QSizePolicy.Minimum)
+        sizePolicy = QSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Minimum)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(self.horizontalGroupBox.sizePolicy().hasHeightForWidth())
@@ -45,7 +45,7 @@ class Ui_SettingsDialog(object):
         self.horizontalGroupBox.setMaximumHeight(50)
         self.horizontalLayout = QHBoxLayout(self.horizontalGroupBox)
         self.horizontalLayout.setObjectName(u"horizontalLayout")
-        self.horizontalSpacer = QSpacerItem(40, 20, QSizePolicy.Expanding, QSizePolicy.Minimum)
+        self.horizontalSpacer = QSpacerItem(40, 20, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
 
         self.horizontalLayout.addItem(self.horizontalSpacer)
 

@@ -27,22 +27,22 @@ class Ui_RowSettingsDialog(object):
         self.label_2 = QLabel(RowSettingsDialog)
         self.label_2.setObjectName(u"label_2")
 
-        self.formLayout_2.setWidget(0, QFormLayout.LabelRole, self.label_2)
+        self.formLayout_2.setWidget(0, QFormLayout.ItemRole.LabelRole, self.label_2)
 
         self.nameLineEdit = QLineEdit(RowSettingsDialog)
         self.nameLineEdit.setObjectName(u"nameLineEdit")
 
-        self.formLayout_2.setWidget(0, QFormLayout.FieldRole, self.nameLineEdit)
+        self.formLayout_2.setWidget(0, QFormLayout.ItemRole.FieldRole, self.nameLineEdit)
 
         self.label = QLabel(RowSettingsDialog)
         self.label.setObjectName(u"label")
 
-        self.formLayout_2.setWidget(1, QFormLayout.LabelRole, self.label)
+        self.formLayout_2.setWidget(1, QFormLayout.ItemRole.LabelRole, self.label)
 
         self.accuracySpinBox = QSpinBox(RowSettingsDialog)
         self.accuracySpinBox.setObjectName(u"accuracySpinBox")
 
-        self.formLayout_2.setWidget(1, QFormLayout.FieldRole, self.accuracySpinBox)
+        self.formLayout_2.setWidget(1, QFormLayout.ItemRole.FieldRole, self.accuracySpinBox)
 
         self.verticalLayout.addLayout(self.formLayout_2)
 
@@ -55,22 +55,22 @@ class Ui_RowSettingsDialog(object):
         self.label_5 = QLabel(self.groupBox)
         self.label_5.setObjectName(u"label_5")
 
-        self.formLayout_4.setWidget(0, QFormLayout.LabelRole, self.label_5)
+        self.formLayout_4.setWidget(0, QFormLayout.ItemRole.LabelRole, self.label_5)
 
         self.fromComboBox_2 = QComboBox(self.groupBox)
         self.fromComboBox_2.setObjectName(u"fromComboBox_2")
 
-        self.formLayout_4.setWidget(0, QFormLayout.FieldRole, self.fromComboBox_2)
+        self.formLayout_4.setWidget(0, QFormLayout.ItemRole.FieldRole, self.fromComboBox_2)
 
         self.label_6 = QLabel(self.groupBox)
         self.label_6.setObjectName(u"label_6")
 
-        self.formLayout_4.setWidget(1, QFormLayout.LabelRole, self.label_6)
+        self.formLayout_4.setWidget(1, QFormLayout.ItemRole.LabelRole, self.label_6)
 
         self.toComboBox_2 = QComboBox(self.groupBox)
         self.toComboBox_2.setObjectName(u"toComboBox_2")
 
-        self.formLayout_4.setWidget(1, QFormLayout.FieldRole, self.toComboBox_2)
+        self.formLayout_4.setWidget(1, QFormLayout.ItemRole.FieldRole, self.toComboBox_2)
 
         self.gridLayout.addLayout(self.formLayout_4, 0, 0, 1, 1)
 

@@ -22,17 +22,17 @@ class ParameterConfirmDialog(BaseDialog):
         self.proxy = QSortFilterProxyModel(self)  # Выставление фильтрации
         self.proxy.setSourceModel(self.model)
         self.ui.treeView.setModel(self.proxy)  # загрузка полученного списка в виджет
-        self.ui.buttonBox.button(QDialogButtonBox.Ok).setEnabled(
+        self.ui.buttonBox.button(QDialogButtonBox.StandardButton.Ok).setEnabled(
             False)  # делаем кнопку применения недоступной пока не выбран проект
-        # self.ui.treeView.header().setResizeMode(QHeaderView.ResizeToContents)  # Подгоняем колонки под контент
+        # self.ui.treeView.header().setResizeMode(QHeaderView.ResizeMode.ResizeToContents)  # Подгоняем колонки под контент
 
         self.create_connections()  # создаем привязки
         self.decide()
 
     def create_connections(self):
         """Создание привязок для обработки кнопок"""
-        self.ui.buttonBox.button(QDialogButtonBox.Ok).clicked.connect(self.select_user)
-        self.ui.buttonBox.button(QDialogButtonBox.Cancel).clicked.connect(self.cancel)
+        self.ui.buttonBox.button(QDialogButtonBox.StandardButton.Ok).clicked.connect(self.select_user)
+        self.ui.buttonBox.button(QDialogButtonBox.StandardButton.Cancel).clicked.connect(self.cancel)
         self.ui.lineEdit.textChanged.connect(self.search_line_changed)
         self.ui.treeView.doubleClicked.connect(self.select_user)
         self.ui.treeView.selectionModel().selectionChanged.connect(self.change_selected_user)
@@ -41,10 +41,10 @@ class ParameterConfirmDialog(BaseDialog):
 
     def decide(self):
         if self.ui.standard_radioButton.isChecked():
-            self.ui.buttonBox.button(QDialogButtonBox.Ok).setEnabled(True)
+            self.ui.buttonBox.button(QDialogButtonBox.StandardButton.Ok).setEnabled(True)
             self.ui.groupBox.setEnabled(False)
         elif self.ui.synonym_radioButton.isChecked():
-            self.ui.buttonBox.button(QDialogButtonBox.Ok).setEnabled(False)
+            self.ui.buttonBox.button(QDialogButtonBox.StandardButton.Ok).setEnabled(False)
             self.ui.groupBox.setEnabled(True)
 
     def source_index(self, index: QModelIndex):
@@ -92,7 +92,7 @@ class ParameterConfirmDialog(BaseDialog):
 
     def change_selected_user(self, selected: QItemSelection):
         """Обработка изменения выбранного пользователя"""
-        self.ui.buttonBox.button(QDialogButtonBox.Ok).setEnabled(
+        self.ui.buttonBox.button(QDialogButtonBox.StandardButton.Ok).setEnabled(
             bool(selected))  # Делаем кнопку Выбрать доступной, если есть выбранный элемент
 
     @classmethod

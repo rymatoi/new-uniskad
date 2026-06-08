@@ -37,8 +37,8 @@ class CreateGraphDialog(BaseDialog):
 
     def create_connections(self):
         """Создание привязок для обработки кнопок"""
-        self.ui.buttonBox.button(QDialogButtonBox.Ok).clicked.connect(self.create_graph)
-        self.ui.buttonBox.button(QDialogButtonBox.Cancel).clicked.connect(self.cancel)
+        self.ui.buttonBox.button(QDialogButtonBox.StandardButton.Ok).clicked.connect(self.create_graph)
+        self.ui.buttonBox.button(QDialogButtonBox.StandardButton.Cancel).clicked.connect(self.cancel)
         self.XComboBox.currentTextChanged.connect(self.update_name)
         self.YComboBox.currentTextChanged.connect(self.update_name)
         self.ZComboBox.currentTextChanged.connect(self.update_values)

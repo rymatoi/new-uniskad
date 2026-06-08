@@ -122,7 +122,7 @@ class FileTab(Tab):
     def __init__(self, index, parent, main_window=None):
         super().__init__(index, parent, main_window)
         self.label = QLabel('Файл открыт в стороннем приложении.')
-        self.label.setAlignment(Qt.AlignCenter)
+        self.label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.setWidget(self.label)
         self.open_file()
 
@@ -133,7 +133,7 @@ class FileTab(Tab):
         QDesktopServices.openUrl(QUrl.fromLocalFile(filepath))
 
     def download_file(self):
-        download_folder = QDir(QStandardPaths.writableLocation(QStandardPaths.DownloadLocation))
+        download_folder = QDir(QStandardPaths.writableLocation(QStandardPaths.StandardLocation.DownloadLocation))
         filepath = download_folder.filePath(self.item.data())
 
         with open(filepath, "wb") as file:

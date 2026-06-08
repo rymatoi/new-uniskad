@@ -28,7 +28,7 @@ class LoginDialog(BaseDialog):
         self.ui.messageBox.hide()  # Скрываем расширенные поля для регистрации пользователя
         self.ui.errorBox.hide()  # Скрываем расширенные поля для регистрации пользователя
         self.create_connections()  # Созадем привязки к виджетам
-        self.setWindowFlag(Qt.WindowStaysOnTopHint)
+        self.setWindowFlag(Qt.WindowType.WindowStaysOnTopHint)
 
     def create_connections(self):
         """Функция создания привязок"""

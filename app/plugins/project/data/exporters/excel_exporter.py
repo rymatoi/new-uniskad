@@ -20,12 +20,12 @@ class PlotExcelExporter:
 
     # Маппинг типов линий Qt в типы линий Excel
     LINE_STYLE_MAP = {
-        Qt.NoPen: 'none',
-        Qt.SolidLine: 'solid',
-        Qt.DashLine: 'dash',
-        Qt.DotLine: 'dot',
-        Qt.DashDotLine: 'dashDot',
-        Qt.DashDotDotLine: 'sysDashDotDot',
+        Qt.PenStyle.NoPen: 'none',
+        Qt.PenStyle.SolidLine: 'solid',
+        Qt.PenStyle.DashLine: 'dash',
+        Qt.PenStyle.DotLine: 'dot',
+        Qt.PenStyle.DashDotLine: 'dashDot',
+        Qt.PenStyle.DashDotDotLine: 'sysDashDotDot',
     }
 
     def __init__(self):

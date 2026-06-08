@@ -3,12 +3,12 @@ from collections import OrderedDict
 from PySide6.QtCore import Qt
 
 LINE_STYLES = [
-    (Qt.NoPen, 'Прозрачная'),
-    (Qt.SolidLine, 'Линия'),
-    (Qt.DashLine, 'Пунктирная линия'),
-    (Qt.DotLine, 'Линия из точек'),
-    (Qt.DashDotLine, 'Линия точка-тире'),
-    (Qt.DashDotDotLine, 'Линия точка-точка-тире'),
+    (Qt.PenStyle.NoPen, 'Прозрачная'),
+    (Qt.PenStyle.SolidLine, 'Линия'),
+    (Qt.PenStyle.DashLine, 'Пунктирная линия'),
+    (Qt.PenStyle.DotLine, 'Линия из точек'),
+    (Qt.PenStyle.DashDotLine, 'Линия точка-тире'),
+    (Qt.PenStyle.DashDotDotLine, 'Линия точка-точка-тире'),
 ]
 
 COLORS = [

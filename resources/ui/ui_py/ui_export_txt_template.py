@@ -31,17 +31,17 @@ class Ui_ExportTxtDialog(object):
         self.label_4 = QLabel(self.destinationGroupBox)
         self.label_4.setObjectName(u"label_4")
 
-        self.formLayout_2.setWidget(0, QFormLayout.LabelRole, self.label_4)
+        self.formLayout_2.setWidget(0, QFormLayout.ItemRole.LabelRole, self.label_4)
 
         self.templateName = QLineEdit(self.destinationGroupBox)
         self.templateName.setObjectName(u"templateName")
 
-        self.formLayout_2.setWidget(0, QFormLayout.FieldRole, self.templateName)
+        self.formLayout_2.setWidget(0, QFormLayout.ItemRole.FieldRole, self.templateName)
 
         self.label_3 = QLabel(self.destinationGroupBox)
         self.label_3.setObjectName(u"label_3")
 
-        self.formLayout_2.setWidget(1, QFormLayout.LabelRole, self.label_3)
+        self.formLayout_2.setWidget(1, QFormLayout.ItemRole.LabelRole, self.label_3)
 
         self.horizontalLayout_2 = QHBoxLayout()
         self.horizontalLayout_2.setObjectName(u"horizontalLayout_2")
@@ -57,7 +57,7 @@ class Ui_ExportTxtDialog(object):
         self.horizontalLayout_2.addWidget(self.selectButton)
 
 
-        self.formLayout_2.setLayout(1, QFormLayout.FieldRole, self.horizontalLayout_2)
+        self.formLayout_2.setLayout(1, QFormLayout.ItemRole.FieldRole, self.horizontalLayout_2)
 
 
         self.gridLayout.addLayout(self.formLayout_2, 0, 0, 1, 1)
@@ -129,7 +129,7 @@ class Ui_ExportTxtDialog(object):
 
         self.buttonBox = QDialogButtonBox(ExportTxtDialog)
         self.buttonBox.setObjectName(u"buttonBox")
-        self.buttonBox.setStandardButtons(QDialogButtonBox.Cancel|QDialogButtonBox.Ok)
+        self.buttonBox.setStandardButtons(QDialogButtonBox.StandardButton.Cancel|QDialogButtonBox.StandardButton.Ok)
 
         self.verticalLayout_3.addWidget(self.buttonBox)
 

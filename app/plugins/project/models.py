@@ -558,7 +558,7 @@ class TestNode(ProjectRoot):
                     selected_props_data.append(test_prop_data.table_fit(PROJECT_TABLE))
 
                     selected_props_data.append(
-                        new_prop(product_data, 'curve_line_style', int(Qt.NoPen)).table_fit(PROJECT_TABLE))
+                        new_prop(product_data, 'curve_line_style', int(Qt.PenStyle.NoPen)).table_fit(PROJECT_TABLE))
 
                     selected_props_data.append(
                         new_prop(product_data, 'curve_color', color).table_fit(PROJECT_TABLE))

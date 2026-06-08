@@ -57,7 +57,7 @@ def plot_to_mpl_figure(plot: pg.PlotItem, item) -> plt.Figure:
             continue
         opts = item.opts
         pen = fn.mkPen(opts['pen'])
-        if pen.style() == QtCore.Qt.NoPen:
+        if pen.style() == QtCore.Qt.PenStyle.NoPen:
             line_style = ''
         else:
             line_style = '-'

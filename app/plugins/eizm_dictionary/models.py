@@ -55,7 +55,7 @@ class EizmNode(EizmRootNode):
     @staticmethod
     def add(up_node_id, parent):
         dialog = CreateEizmDialog()
-        if dialog.exec_() == QDialog.Accepted:
+        if dialog.exec_() == QDialog.DialogCode.Accepted:
             eizm = dialog.get_result()
             node = EizmNode(eizm)
             return node

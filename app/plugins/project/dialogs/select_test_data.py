@@ -68,7 +68,7 @@ class TestDataSelectionDialog(BaseDialog):
         self.ui.treeView.setModel(self.proxy)  # загрузка полученного списка в виджет
         # self.ui.selectButton.setEnabled(
         #    False)  # делаем кнопку применения недоступной пока не выбран проект
-        # self.ui.treeView.header().setResizeMode(QHeaderView.ResizeToContents)  # Подгоняем колонки под контент
+        # self.ui.treeView.header().setResizeMode(QHeaderView.ResizeMode.ResizeToContents)  # Подгоняем колонки под контент
         self.create_connections()  # создаем привязки
 
     def create_connections(self):
@@ -90,9 +90,9 @@ class TestDataSelectionDialog(BaseDialog):
 
     def select_all(self):  # TODO проблема
         if not len(self.model.checked_list) == self.model.rowCount():
-            self.model.checkMultipleItems(self.model.get_root_elements(), Qt.Checked)
+            self.model.checkMultipleItems(self.model.get_root_elements(), Qt.CheckState.Checked)
         else:
-            self.model.checkMultipleItems(self.model.get_root_elements(), Qt.Unchecked)
+            self.model.checkMultipleItems(self.model.get_root_elements(), Qt.CheckState.Unchecked)
 
     def search_line_changed(self, text):
         """Изменение содержимого поисковой строки"""

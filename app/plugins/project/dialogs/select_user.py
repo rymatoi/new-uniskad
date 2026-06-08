@@ -24,7 +24,7 @@ class UserSelectionDialog(BaseDialog):
         self.ui.treeView.setModel(self.proxy)  # загрузка полученного списка в виджет
         self.ui.selectButton.setEnabled(
             False)  # делаем кнопку применения недоступной пока не выбран проект
-        # self.ui.treeView.header().setResizeMode(QHeaderView.ResizeToContents)  # Подгоняем колонки под контент
+        # self.ui.treeView.header().setResizeMode(QHeaderView.ResizeMode.ResizeToContents)  # Подгоняем колонки под контент
         self.create_connections()  # создаем привязки
 
     def create_connections(self):

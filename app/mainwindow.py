@@ -108,13 +108,13 @@ class MainWindow(QtWidgets.QMainWindow):
         }
 
         self.dock_widgets = {
-            self.ADMIN_ROLES: Dock_('Роли', self.ADMIN_ROLES_TREE, Qt.LeftDockWidgetArea),
-            self.ADMIN_USERS: Dock_('Пользователи', self.ADMIN_USERS_TREE, Qt.LeftDockWidgetArea, AdminUsersDockWidget),
-            self.WORK_DATA: Dock_('Изделия', self.WORK_DATA_TREE, Qt.RightDockWidgetArea),
-            self.SYNONYM_DICTIONARY: Dock_('Словарь синонимов', self.SYNONYM_DICTIONARY_TREE, Qt.RightDockWidgetArea),
+            self.ADMIN_ROLES: Dock_('Роли', self.ADMIN_ROLES_TREE, Qt.DockWidgetArea.LeftDockWidgetArea),
+            self.ADMIN_USERS: Dock_('Пользователи', self.ADMIN_USERS_TREE, Qt.DockWidgetArea.LeftDockWidgetArea, AdminUsersDockWidget),
+            self.WORK_DATA: Dock_('Изделия', self.WORK_DATA_TREE, Qt.DockWidgetArea.RightDockWidgetArea),
+            self.SYNONYM_DICTIONARY: Dock_('Словарь синонимов', self.SYNONYM_DICTIONARY_TREE, Qt.DockWidgetArea.RightDockWidgetArea),
             self.EIZM_DICTIONARY: Dock_('Словарь единиц измерения', self.EIZM_DICTIONARY_TREE,
-                                        Qt.RightDockWidgetArea),
-            self.PROJECT: Dock_('Дерево проекта', self.PROJECT_TREE, Qt.LeftDockWidgetArea, ProjectDockWidget)
+                                        Qt.DockWidgetArea.RightDockWidgetArea),
+            self.PROJECT: Dock_('Дерево проекта', self.PROJECT_TREE, Qt.DockWidgetArea.LeftDockWidgetArea, ProjectDockWidget)
         }
 
         self.progress_bar = QProgressBar()
@@ -221,7 +221,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.toolbar = toolbar
 
         self.role_button = QToolButton(self)
-        self.role_button.setPopupMode(QToolButton.MenuButtonPopup)
+        self.role_button.setPopupMode(QToolButton.ToolButtonPopupMode.MenuButtonPopup)
         self.role_button.setMenu(self._init_role_button_menu())
 
         default_user_role = self._get_default_user_role()
@@ -235,7 +235,7 @@ class MainWindow(QtWidgets.QMainWindow):
         widget = QWidget()
         widget.setLayout(self.toolbar_layout)
         toolbar.addWidget(widget)
-        self.addToolBar(Qt.TopToolBarArea, toolbar)
+        self.addToolBar(Qt.ToolBarArea.TopToolBarArea, toolbar)
 
     def init_role_buttons_toolbar(self):
         """
@@ -249,7 +249,7 @@ class MainWindow(QtWidgets.QMainWindow):
         layout.addStretch()
 
         self.role_button = QToolButton(self)
-        self.role_button.setPopupMode(QToolButton.MenuButtonPopup)
+        self.role_button.setPopupMode(QToolButton.ToolButtonPopupMode.MenuButtonPopup)
         self.role_button.setMenu(self._init_role_button_menu())
 
         default_user_role = self._get_default_user_role()
@@ -259,7 +259,7 @@ class MainWindow(QtWidgets.QMainWindow):
         widget = QWidget()
         widget.setLayout(layout)
         toolbar.addWidget(widget)
-        self.addToolBar(Qt.TopToolBarArea, toolbar)
+        self.addToolBar(Qt.ToolBarArea.TopToolBarArea, toolbar)
 
     def _init_role_button_menu(self):
         """

@@ -17,12 +17,12 @@ class CreateEizmDialog(BaseDialog):
         self.ui.setupUi(self)  # Выставляем UI файл для класса
         self.setWindowIcon(QIcon(":/uniskad.ico"))
         self.create_connections()  # Созадем привязки к виджетам
-        self.setWindowFlag(Qt.WindowStaysOnTopHint)
+        self.setWindowFlag(Qt.WindowType.WindowStaysOnTopHint)
 
     def create_connections(self):
         """Функция создания привязок"""
-        self.ui.buttonBox.button(QDialogButtonBox.Ok).clicked.connect(self.create_eizm)
-        self.ui.buttonBox.button(QDialogButtonBox.Cancel).clicked.connect(self.close)
+        self.ui.buttonBox.button(QDialogButtonBox.StandardButton.Ok).clicked.connect(self.create_eizm)
+        self.ui.buttonBox.button(QDialogButtonBox.StandardButton.Cancel).clicked.connect(self.close)
 
     def create_eizm(self):
         name = self.ui.lineEdit.text()

@@ -36,52 +36,52 @@ class Ui_CreateConfigDialog(object):
         self.label = QLabel(self.groupBox)
         self.label.setObjectName(u"label")
 
-        self.formLayout.setWidget(0, QFormLayout.LabelRole, self.label)
+        self.formLayout.setWidget(0, QFormLayout.ItemRole.LabelRole, self.label)
 
         self.hostLineEdit = QLineEdit(self.groupBox)
         self.hostLineEdit.setObjectName(u"hostLineEdit")
 
-        self.formLayout.setWidget(0, QFormLayout.FieldRole, self.hostLineEdit)
+        self.formLayout.setWidget(0, QFormLayout.ItemRole.FieldRole, self.hostLineEdit)
 
         self.label_2 = QLabel(self.groupBox)
         self.label_2.setObjectName(u"label_2")
 
-        self.formLayout.setWidget(1, QFormLayout.LabelRole, self.label_2)
+        self.formLayout.setWidget(1, QFormLayout.ItemRole.LabelRole, self.label_2)
 
         self.portLineEdit = QLineEdit(self.groupBox)
         self.portLineEdit.setObjectName(u"portLineEdit")
 
-        self.formLayout.setWidget(1, QFormLayout.FieldRole, self.portLineEdit)
+        self.formLayout.setWidget(1, QFormLayout.ItemRole.FieldRole, self.portLineEdit)
 
         self.label_3 = QLabel(self.groupBox)
         self.label_3.setObjectName(u"label_3")
 
-        self.formLayout.setWidget(2, QFormLayout.LabelRole, self.label_3)
+        self.formLayout.setWidget(2, QFormLayout.ItemRole.LabelRole, self.label_3)
 
         self.usernameLineEdit = QLineEdit(self.groupBox)
         self.usernameLineEdit.setObjectName(u"usernameLineEdit")
 
-        self.formLayout.setWidget(2, QFormLayout.FieldRole, self.usernameLineEdit)
+        self.formLayout.setWidget(2, QFormLayout.ItemRole.FieldRole, self.usernameLineEdit)
 
         self.label_4 = QLabel(self.groupBox)
         self.label_4.setObjectName(u"label_4")
 
-        self.formLayout.setWidget(3, QFormLayout.LabelRole, self.label_4)
+        self.formLayout.setWidget(3, QFormLayout.ItemRole.LabelRole, self.label_4)
 
         self.passwordLineEdit = QLineEdit(self.groupBox)
         self.passwordLineEdit.setObjectName(u"passwordLineEdit")
 
-        self.formLayout.setWidget(3, QFormLayout.FieldRole, self.passwordLineEdit)
+        self.formLayout.setWidget(3, QFormLayout.ItemRole.FieldRole, self.passwordLineEdit)
 
         self.label_5 = QLabel(self.groupBox)
         self.label_5.setObjectName(u"label_5")
 
-        self.formLayout.setWidget(4, QFormLayout.LabelRole, self.label_5)
+        self.formLayout.setWidget(4, QFormLayout.ItemRole.LabelRole, self.label_5)
 
         self.databaseLineEdit = QLineEdit(self.groupBox)
         self.databaseLineEdit.setObjectName(u"databaseLineEdit")
 
-        self.formLayout.setWidget(4, QFormLayout.FieldRole, self.databaseLineEdit)
+        self.formLayout.setWidget(4, QFormLayout.ItemRole.FieldRole, self.databaseLineEdit)
 
         self.gridLayout_2.addLayout(self.formLayout, 0, 0, 1, 1)
 
@@ -97,52 +97,52 @@ class Ui_CreateConfigDialog(object):
         self.label_6 = QLabel(self.groupBox_2)
         self.label_6.setObjectName(u"label_6")
 
-        self.formLayout_2.setWidget(0, QFormLayout.LabelRole, self.label_6)
+        self.formLayout_2.setWidget(0, QFormLayout.ItemRole.LabelRole, self.label_6)
 
         self.hostLineEdit_2 = QLineEdit(self.groupBox_2)
         self.hostLineEdit_2.setObjectName(u"hostLineEdit_2")
 
-        self.formLayout_2.setWidget(0, QFormLayout.FieldRole, self.hostLineEdit_2)
+        self.formLayout_2.setWidget(0, QFormLayout.ItemRole.FieldRole, self.hostLineEdit_2)
 
         self.label_7 = QLabel(self.groupBox_2)
         self.label_7.setObjectName(u"label_7")
 
-        self.formLayout_2.setWidget(1, QFormLayout.LabelRole, self.label_7)
+        self.formLayout_2.setWidget(1, QFormLayout.ItemRole.LabelRole, self.label_7)
 
         self.portLineEdit_2 = QLineEdit(self.groupBox_2)
         self.portLineEdit_2.setObjectName(u"portLineEdit_2")
 
-        self.formLayout_2.setWidget(1, QFormLayout.FieldRole, self.portLineEdit_2)
+        self.formLayout_2.setWidget(1, QFormLayout.ItemRole.FieldRole, self.portLineEdit_2)
 
         self.label_8 = QLabel(self.groupBox_2)
         self.label_8.setObjectName(u"label_8")
 
-        self.formLayout_2.setWidget(2, QFormLayout.LabelRole, self.label_8)
+        self.formLayout_2.setWidget(2, QFormLayout.ItemRole.LabelRole, self.label_8)
 
         self.usernameLineEdit_2 = QLineEdit(self.groupBox_2)
         self.usernameLineEdit_2.setObjectName(u"usernameLineEdit_2")
 
-        self.formLayout_2.setWidget(2, QFormLayout.FieldRole, self.usernameLineEdit_2)
+        self.formLayout_2.setWidget(2, QFormLayout.ItemRole.FieldRole, self.usernameLineEdit_2)
 
         self.label_9 = QLabel(self.groupBox_2)
         self.label_9.setObjectName(u"label_9")
 
-        self.formLayout_2.setWidget(3, QFormLayout.LabelRole, self.label_9)
+        self.formLayout_2.setWidget(3, QFormLayout.ItemRole.LabelRole, self.label_9)
 
         self.passwordLineEdit_2 = QLineEdit(self.groupBox_2)
         self.passwordLineEdit_2.setObjectName(u"passwordLineEdit_2")
 
-        self.formLayout_2.setWidget(3, QFormLayout.FieldRole, self.passwordLineEdit_2)
+        self.formLayout_2.setWidget(3, QFormLayout.ItemRole.FieldRole, self.passwordLineEdit_2)
 
         self.label_10 = QLabel(self.groupBox_2)
         self.label_10.setObjectName(u"label_10")
 
-        self.formLayout_2.setWidget(4, QFormLayout.LabelRole, self.label_10)
+        self.formLayout_2.setWidget(4, QFormLayout.ItemRole.LabelRole, self.label_10)
 
         self.databaseLineEdit_2 = QLineEdit(self.groupBox_2)
         self.databaseLineEdit_2.setObjectName(u"databaseLineEdit_2")
 
-        self.formLayout_2.setWidget(4, QFormLayout.FieldRole, self.databaseLineEdit_2)
+        self.formLayout_2.setWidget(4, QFormLayout.ItemRole.FieldRole, self.databaseLineEdit_2)
 
         self.gridLayout_3.addLayout(self.formLayout_2, 0, 0, 1, 1)
 

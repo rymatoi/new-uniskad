@@ -39,7 +39,7 @@ class HelpApp(BaseDialog):
         self.show()
 
     def create_splitter(self):
-        splitter = QSplitter(Qt.Horizontal)
+        splitter = QSplitter(Qt.Orientation.Horizontal)
         splitter.addWidget(self.tree_widget)
         splitter.addWidget(self.browser)
         return splitter

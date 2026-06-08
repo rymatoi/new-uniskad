@@ -111,11 +111,11 @@ class ModeNode(Node):
 
     def is_checked(self):
         if len(self.checked_children_count()) == 0:
-            return Qt.Unchecked
+            return Qt.CheckState.Unchecked
         if len(self.checked_children_count()) == self.childCount():
-            return Qt.Checked
+            return Qt.CheckState.Checked
         else:
-            return Qt.PartiallyChecked
+            return Qt.CheckState.PartiallyChecked
 
     def data(self, column=0):
         return self._data.rejim_name_rus
@@ -136,11 +136,11 @@ class LocationNode(Node):
 
     def is_checked(self):
         if len(self.checked_children_count()) == 0:
-            return Qt.Unchecked
+            return Qt.CheckState.Unchecked
         if len(self.checked_children_count()) == self.childCount():
-            return Qt.Checked
+            return Qt.CheckState.Checked
         else:
-            return Qt.PartiallyChecked
+            return Qt.CheckState.PartiallyChecked
 
     def data(self, column=0):
         return self._data.translation
