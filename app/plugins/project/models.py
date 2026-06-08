@@ -14,7 +14,7 @@ from app.plugins.project.dialogs.edit_epure import EditEpureDialog
 from app.plugins.project.dialogs.select_test import TestSelectionDialog
 from app.plugins.project.dialogs.select_test_data import TestDataSelectionDialog
 from app.plugins.project.dialogs.test_edit import EditProjectItemDialog
-from app.plugins.project.utils_ import get_next_default_combination
+from app.plugins.project.utils_ import get_next_default_combination, qt_enum_value
 from app.plugins.work_data.models import ProductNode, ModelNode, AssemblyNode
 from db import sp
 from db.tables import PROJECT_TABLE, PROJECT_DATA
@@ -558,7 +558,7 @@ class TestNode(ProjectRoot):
                     selected_props_data.append(test_prop_data.table_fit(PROJECT_TABLE))
 
                     selected_props_data.append(
-                        new_prop(product_data, 'curve_line_style', int(Qt.PenStyle.NoPen)).table_fit(PROJECT_TABLE))
+                        new_prop(product_data, 'curve_line_style', qt_enum_value(Qt.PenStyle.NoPen)).table_fit(PROJECT_TABLE))
 
                     selected_props_data.append(
                         new_prop(product_data, 'curve_color', color).table_fit(PROJECT_TABLE))

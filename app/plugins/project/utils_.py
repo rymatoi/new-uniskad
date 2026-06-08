@@ -30,6 +30,13 @@ COLORS = [
 
 ]
 
+
+def qt_enum_value(value):
+    """Return the integer representation of a Qt enum or integer value."""
+    enum_value = getattr(value, 'value', value)
+    return int(enum_value)
+
+
 SYMBOLS = [
     ('o', 'Круг'),  # Default symbol, round circle symbol
     ('s', 'Квадрат'),  # Square symbol

@@ -1,6 +1,7 @@
 from PySide6.QtWidgets import *
 
 from app.basic_funcs import to_float
+from app.plugins.project.utils_ import qt_enum_value
 from app.plugins.base_state.widgets import ExtendedComboBox
 from db import sp
 from dialogs.base import BaseDialog
@@ -75,7 +76,9 @@ class EditProjectItemDialog(BaseDialog):
         # TODO может быть сделать выгрузку значений по умолчанию здесь?
         self.ui.curveNameLineEdit.setText(self.styles.get('curve_name', ''))
         line_type_index = next(
-            i for i, (k, v) in enumerate(self.LINE_STYLES) if k == int(self.styles.get('curve_line_style', 1)))
+            i for i, (k, v) in enumerate(self.LINE_STYLES)
+            if qt_enum_value(k) == qt_enum_value(self.styles.get('curve_line_style', 1))
+        )
         point_type_index = next(
             i for i, (k, v) in enumerate(self.POINT_SYMBOLS) if k == self.styles.get('curve_point_symbol', 'o'))
         self.ui.colorButton.setColor(QColor(self.styles.get('curve_color', 'black')))  # Задаем цвет кривой

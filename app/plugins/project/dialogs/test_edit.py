@@ -366,7 +366,10 @@ class EditProjectItemDialog(BaseDialog):
 
         # TODO может быть сделать выгрузку значений по умолчанию здесь?
         self.ui.curveNameLineEdit.setText(self.item.curve_name if self.item.curve_name is not None else '')
-        line_type_index = next(i for i, (k, v) in enumerate(utils.LINE_STYLES) if k == int(curve.curve_line_style))
+        line_type_index = next(
+            i for i, (k, v) in enumerate(utils.LINE_STYLES)
+            if utils.qt_enum_value(k) == utils.qt_enum_value(curve.curve_line_style)
+        )
         point_type_index = next(i for i, (k, v) in enumerate(utils.SYMBOLS) if k == curve.curve_point_symbol)
         self.ui.colorButton.setColor(QColor(curve.curve_color))  # Задаем цвет кривой
         self.ui.colorButton_3.setColor(QColor(curve.curve_symbol_color))  # Задаем цвет кривой
@@ -436,7 +439,7 @@ class EditProjectItemDialog(BaseDialog):
             ('curve_color', curve.curve_color),
             ('curve_symbol_color', curve.curve_symbol_color),
             ('curve_symbol_fill_color', curve.curve_symbol_fill_color),
-            ('curve_line_style', int(curve.curve_line_style)),
+            ('curve_line_style', utils.qt_enum_value(curve.curve_line_style)),
             ('curve_point_symbol', curve.curve_point_symbol),
             ('curve_point_size', curve.curve_point_size),
             ('curve_name', curve.curve_name),

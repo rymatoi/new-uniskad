@@ -6,6 +6,7 @@ from PySide6.QtGui import QColor
 from PySide6.QtWidgets import *
 
 from app.plugins.project import utils
+from app.plugins.project.utils_ import qt_enum_value
 from db import sp
 from dialogs.base import BaseDialog
 from resources.ui.ui_py.ui_edit_line import Ui_EditLineDialog
@@ -91,7 +92,10 @@ class EditLineDialog(BaseDialog):
 
         # TODO может быть сделать выгрузку значений по умолчанию здесь?
         self.ui.curveNameLineEdit.setText(curve_name)
-        line_type_index = next(i for i, (k, v) in enumerate(utils.LINE_STYLES) if k == int(curve_line_style))
+        line_type_index = next(
+            i for i, (k, v) in enumerate(utils.LINE_STYLES)
+            if qt_enum_value(k) == qt_enum_value(curve_line_style)
+        )
         point_type_index = next(i for i, (k, v) in enumerate(utils.SYMBOLS) if k == curve_point_symbol)
         self.ui.colorButton.setColor(QColor(curve_color))  # Задаем цвет кривой
         self.ui.colorButton_3.setColor(QColor(curve_symbol_color))  # Задаем цвет кривой
@@ -145,7 +149,7 @@ class EditLineDialog(BaseDialog):
             ('curve_color', curve_color),
             ('curve_symbol_color', curve_symbol_color),
             ('curve_symbol_fill_color', curve_symbol_fill_color),
-            ('curve_line_style', int(curve_line_style)),
+            ('curve_line_style', qt_enum_value(curve_line_style)),
             ('curve_point_symbol', curve_point_symbol),
             ('curve_point_size', curve_point_size),
             ('curve_name', curve_name),
