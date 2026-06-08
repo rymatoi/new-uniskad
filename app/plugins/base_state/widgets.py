@@ -1299,12 +1299,16 @@ class DockWidget(QDockWidget):
         self.available_actions = []
         self._parent = parent
         main_layout = QVBoxLayout()
-        main_layout.setContentsMargins(4, 2, 4, 2)
-        main_layout.setSpacing(2)
+        main_layout.setContentsMargins(8, 6, 8, 6)
+        main_layout.setSpacing(6)
         self.menu_name = menu_name
 
         self.title_label = QLabel()
         self.title_label.setText(title)
+        title_font = self.title_label.font()
+        title_font.setBold(True)
+        self.title_label.setFont(title_font)
+        self.title_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
 
         self.settings_menu = []
 
@@ -1386,9 +1390,13 @@ class DockWidget(QDockWidget):
         hide_button.setText('Закрыть')
         hide_button.clicked.connect(self.hide_)
 
+        for button in (save_button, up_button, down_button, self.dock_button, settings_button, hide_button):
+            button.setAutoRaise(True)
+            button.setToolTip(button.text())
+
         header_layout = QHBoxLayout()
         header_layout.setContentsMargins(0, 0, 0, 0)
-        header_layout.setSpacing(2)
+        header_layout.setSpacing(4)
         header_layout.addWidget(self.title_label)
         header_layout.addStretch()
         header_layout.addWidget(save_button)
@@ -1400,7 +1408,7 @@ class DockWidget(QDockWidget):
 
         controls_layout = QHBoxLayout()
         controls_layout.setContentsMargins(0, 0, 0, 0)
-        controls_layout.setSpacing(2)
+        controls_layout.setSpacing(4)
         controls_layout.addWidget(self.search_line, 1)
         controls_layout.addWidget(self.search_prev_button)
         controls_layout.addWidget(self.search_next_button)
@@ -1410,11 +1418,8 @@ class DockWidget(QDockWidget):
         main_layout.addLayout(controls_layout)
 
         widget = QWidget()
+        widget.setObjectName('dockTitleBar')
         widget.setLayout(main_layout)
-
-        objectName = widget.objectName() if widget.objectName() != "" else str(id(widget))
-        widget.setObjectName(objectName)
-        widget.setStyleSheet("#%s {%s}" % (objectName, 'border: 1px solid grey;'))
 
         self.setTitleBarWidget(widget)
         self.topLevelChanged.connect(lambda: self.dock_button.setHidden(not self.isFloating()))
