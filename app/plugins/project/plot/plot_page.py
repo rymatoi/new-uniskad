@@ -10,8 +10,8 @@ class VLine(QFrame):
     # a simple VLine, like the one you get from designer
     def __init__(self):
         super(VLine, self).__init__()
-        self.setFrameShadow(self.Sunken)
-        self.setFrameShape(self.VLine)
+        self.setFrameShadow(QFrame.Shadow.Sunken)
+        self.setFrameShape(QFrame.Shape.VLine)
 
 
 class PlotPage(QtWidgets.QWidget):

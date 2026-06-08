@@ -44,8 +44,8 @@ class Ui_LinkRoleDialog(object):
 
         self.buttonBox = QDialogButtonBox(LinkRoleDialog)
         self.buttonBox.setObjectName(u"buttonBox")
-        self.buttonBox.setOrientation(Qt.Horizontal)
-        self.buttonBox.setStandardButtons(QDialogButtonBox.Cancel | QDialogButtonBox.Ok)
+        self.buttonBox.setOrientation(Qt.Orientation.Horizontal)
+        self.buttonBox.setStandardButtons(QDialogButtonBox.StandardButton.Cancel | QDialogButtonBox.StandardButton.Ok)
 
         self.verticalLayout.addWidget(self.buttonBox)
 

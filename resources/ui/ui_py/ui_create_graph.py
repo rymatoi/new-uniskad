@@ -30,7 +30,7 @@ class Ui_CreateGraphDialog(object):
         self.verticalLayout_2.setObjectName(u"verticalLayout_2")
         self.label_4 = QLabel(CreateGraphDialog)
         self.label_4.setObjectName(u"label_4")
-        self.label_4.setAlignment(Qt.AlignLeading | Qt.AlignLeft | Qt.AlignVCenter)
+        self.label_4.setAlignment(Qt.AlignmentFlag.AlignLeading | Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         self.label_4.setWordWrap(True)
 
         self.verticalLayout_2.addWidget(self.label_4)
@@ -42,12 +42,12 @@ class Ui_CreateGraphDialog(object):
         self.label_3 = QLabel(CreateGraphDialog)
         self.label_3.setObjectName(u"label_3")
 
-        self.formLayout.setWidget(0, QFormLayout.LabelRole, self.label_3)
+        self.formLayout.setWidget(0, QFormLayout.ItemRole.LabelRole, self.label_3)
 
         self.nameLineEdit = QLineEdit(CreateGraphDialog)
         self.nameLineEdit.setObjectName(u"nameLineEdit")
 
-        self.formLayout.setWidget(0, QFormLayout.FieldRole, self.nameLineEdit)
+        self.formLayout.setWidget(0, QFormLayout.ItemRole.FieldRole, self.nameLineEdit)
 
         self.verticalLayout.addLayout(self.formLayout)
 
@@ -56,22 +56,22 @@ class Ui_CreateGraphDialog(object):
         self.label_2 = QLabel(CreateGraphDialog)
         self.label_2.setObjectName(u"label_2")
 
-        self.formLayout_2.setWidget(1, QFormLayout.LabelRole, self.label_2)
+        self.formLayout_2.setWidget(1, QFormLayout.ItemRole.LabelRole, self.label_2)
 
         self.label = QLabel(CreateGraphDialog)
         self.label.setObjectName(u"label")
 
-        self.formLayout_2.setWidget(0, QFormLayout.LabelRole, self.label)
+        self.formLayout_2.setWidget(0, QFormLayout.ItemRole.LabelRole, self.label)
 
         self.XComboBox = QComboBox(CreateGraphDialog)
         self.XComboBox.setObjectName(u"XComboBox")
 
-        self.formLayout_2.setWidget(0, QFormLayout.FieldRole, self.XComboBox)
+        self.formLayout_2.setWidget(0, QFormLayout.ItemRole.FieldRole, self.XComboBox)
 
         self.YComboBox = QComboBox(CreateGraphDialog)
         self.YComboBox.setObjectName(u"YComboBox")
 
-        self.formLayout_2.setWidget(1, QFormLayout.FieldRole, self.YComboBox)
+        self.formLayout_2.setWidget(1, QFormLayout.ItemRole.FieldRole, self.YComboBox)
 
         self.verticalLayout.addLayout(self.formLayout_2)
 
@@ -83,7 +83,7 @@ class Ui_CreateGraphDialog(object):
         self.verticalLayout_3.setObjectName(u"verticalLayout_3")
         self.label_5 = QLabel(CreateGraphDialog)
         self.label_5.setObjectName(u"label_5")
-        self.label_5.setAlignment(Qt.AlignLeading | Qt.AlignLeft | Qt.AlignVCenter)
+        self.label_5.setAlignment(Qt.AlignmentFlag.AlignLeading | Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         self.label_5.setWordWrap(True)
 
         self.verticalLayout_3.addWidget(self.label_5)
@@ -109,7 +109,7 @@ class Ui_CreateGraphDialog(object):
 
         self.verticalLayout_3.addWidget(self.productRadioButton)
 
-        self.verticalSpacer = QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding)
+        self.verticalSpacer = QSpacerItem(20, 40, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding)
 
         self.verticalLayout_3.addItem(self.verticalSpacer)
 
@@ -117,7 +117,7 @@ class Ui_CreateGraphDialog(object):
 
         self.horizontalLayout_2.addLayout(self.verticalLayout_4)
 
-        self.horizontalSpacer = QSpacerItem(40, 20, QSizePolicy.Expanding, QSizePolicy.Minimum)
+        self.horizontalSpacer = QSpacerItem(40, 20, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
 
         self.horizontalLayout_2.addItem(self.horizontalSpacer)
 
@@ -136,12 +136,12 @@ class Ui_CreateGraphDialog(object):
         self.label_10 = QLabel(CreateGraphDialog)
         self.label_10.setObjectName(u"label_10")
 
-        self.formLayout_5.setWidget(0, QFormLayout.LabelRole, self.label_10)
+        self.formLayout_5.setWidget(0, QFormLayout.ItemRole.LabelRole, self.label_10)
 
         self.comboBox = QComboBox(CreateGraphDialog)
         self.comboBox.setObjectName(u"comboBox")
 
-        self.formLayout_5.setWidget(0, QFormLayout.FieldRole, self.comboBox)
+        self.formLayout_5.setWidget(0, QFormLayout.ItemRole.FieldRole, self.comboBox)
 
         self.verticalLayout_6.addLayout(self.formLayout_5)
 
@@ -152,22 +152,22 @@ class Ui_CreateGraphDialog(object):
         self.label_7 = QLabel(CreateGraphDialog)
         self.label_7.setObjectName(u"label_7")
 
-        self.formLayout_3.setWidget(0, QFormLayout.LabelRole, self.label_7)
+        self.formLayout_3.setWidget(0, QFormLayout.ItemRole.LabelRole, self.label_7)
 
         self.fromDoubleSpinBox = QDoubleSpinBox(CreateGraphDialog)
         self.fromDoubleSpinBox.setObjectName(u"fromDoubleSpinBox")
 
-        self.formLayout_3.setWidget(0, QFormLayout.FieldRole, self.fromDoubleSpinBox)
+        self.formLayout_3.setWidget(0, QFormLayout.ItemRole.FieldRole, self.fromDoubleSpinBox)
 
         self.label_8 = QLabel(CreateGraphDialog)
         self.label_8.setObjectName(u"label_8")
 
-        self.formLayout_3.setWidget(1, QFormLayout.LabelRole, self.label_8)
+        self.formLayout_3.setWidget(1, QFormLayout.ItemRole.LabelRole, self.label_8)
 
         self.toDoubleSpinBox = QDoubleSpinBox(CreateGraphDialog)
         self.toDoubleSpinBox.setObjectName(u"toDoubleSpinBox")
 
-        self.formLayout_3.setWidget(1, QFormLayout.FieldRole, self.toDoubleSpinBox)
+        self.formLayout_3.setWidget(1, QFormLayout.ItemRole.FieldRole, self.toDoubleSpinBox)
 
         self.verticalLayout_5.addLayout(self.formLayout_3)
 
@@ -210,14 +210,14 @@ class Ui_CreateGraphDialog(object):
 
         self.horizontalLayout_3 = QHBoxLayout()
         self.horizontalLayout_3.setObjectName(u"horizontalLayout_3")
-        self.horizontalSpacer_2 = QSpacerItem(40, 20, QSizePolicy.Expanding, QSizePolicy.Minimum)
+        self.horizontalSpacer_2 = QSpacerItem(40, 20, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
 
         self.horizontalLayout_3.addItem(self.horizontalSpacer_2)
 
         self.buttonBox = QDialogButtonBox(CreateGraphDialog)
         self.buttonBox.setObjectName(u"buttonBox")
-        self.buttonBox.setOrientation(Qt.Horizontal)
-        self.buttonBox.setStandardButtons(QDialogButtonBox.Cancel | QDialogButtonBox.Ok)
+        self.buttonBox.setOrientation(Qt.Orientation.Horizontal)
+        self.buttonBox.setStandardButtons(QDialogButtonBox.StandardButton.Cancel | QDialogButtonBox.StandardButton.Ok)
 
         self.horizontalLayout_3.addWidget(self.buttonBox)
 

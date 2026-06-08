@@ -349,7 +349,7 @@ class ProjectPlotPage(PlotPage):
             painter.begin(self)
             rect = painter.viewport()
             size = pixmap.size()
-            size.scale(rect.size(), Qt.KeepAspectRatio)
+            size.scale(rect.size(), Qt.AspectRatioMode.KeepAspectRatio)
             painter.setViewport(rect.x(), rect.y(), size.width(), size.height())
             painter.setWindow(pixmap.rect())
             painter.drawPixmap(0, 0, pixmap)

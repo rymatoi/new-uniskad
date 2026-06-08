@@ -19,7 +19,7 @@ class Ruler:
         self._line = pg.InfiniteLine(
             angle=90,
             movable=True,
-            pen=pg.mkPen((0, 0, 0), width=1, style=Qt.SolidLine),
+            pen=pg.mkPen((0, 0, 0), width=1, style=Qt.PenStyle.SolidLine),
         )
 
         self._label = pg.InfLineLabel(

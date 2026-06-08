@@ -33,7 +33,7 @@ class CreateConfigDialog(BaseDialog):
         self.ui.setupUi(self)  # Выставляем UI файл для класса
         self.setWindowIcon(QIcon(":/uniskad.ico"))
         self.create_connections()  # Созадем привязки к виджетам
-        self.setWindowFlag(Qt.WindowStaysOnTopHint)
+        self.setWindowFlag(Qt.WindowType.WindowStaysOnTopHint)
 
     def create_connections(self):
         """Функция создания привязок"""

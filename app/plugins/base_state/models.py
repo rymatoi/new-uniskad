@@ -522,7 +522,7 @@ class TreeModel(QAbstractItemModel):
         return QModelIndex()
 
     def headerData(self, section: int, orientation: PySide6.QtCore.Qt.Orientation, role: int = ...):
-        if orientation == Qt.Horizontal and role == Qt.ItemDataRole.DisplayRole:
+        if orientation == Qt.Orientation.Horizontal and role == Qt.ItemDataRole.DisplayRole:
             return self.headers[section]
 
     def data(self, index: QModelIndex, role: int = ...):
@@ -564,7 +564,7 @@ class TreeModel(QAbstractItemModel):
 
                 # Create a new pixmap for the modified icon
                 pixmap_modified = QPixmap(pixmap.size())
-                pixmap_modified.fill(Qt.transparent)
+                pixmap_modified.fill(Qt.GlobalColor.transparent)
 
                 # Draw the modified pixmap
                 painter = QPainter(pixmap_modified)
@@ -576,7 +576,7 @@ class TreeModel(QAbstractItemModel):
                 # Draw a red horizontal line on the modified pixmap
                 pixmap_modified_rect = pixmap_modified.rect().adjusted(0, 0, -1, -1)
                 painter = QPainter(pixmap_modified)
-                pen = QPen(Qt.red, 2)
+                pen = QPen(Qt.GlobalColor.red, 2)
                 painter.setPen(pen)
                 painter.drawLine(QPointF(pixmap_modified_rect.left(), pixmap_modified_rect.center().y()),
                                  QPointF(pixmap_modified_rect.right(), pixmap_modified_rect.center().y()))
@@ -742,7 +742,7 @@ class TreeModel(QAbstractItemModel):
 
     def _check(self, index, state):
         item = self.nodeFromIndex(index)
-        if state == Qt.Checked:
+        if state == Qt.CheckState.Checked:
             if item not in self.checked_list:
                 self.checked_list.append(item)
         else:
@@ -772,11 +772,11 @@ class TreeModel(QAbstractItemModel):
     def flags(self, index: PySide6.QtCore.QModelIndex) -> PySide6.QtCore.Qt.ItemFlags:
         defaultFlags = super().flags(index)
         if self.CHECKABLE:
-            defaultFlags |= Qt.ItemIsUserCheckable
+            defaultFlags |= Qt.ItemFlag.ItemIsUserCheckable
         if index.isValid():
-            return Qt.ItemIsDragEnabled | Qt.ItemIsDropEnabled | Qt.ItemIsSelectable | Qt.ItemIsEnabled | defaultFlags
+            return Qt.ItemFlag.ItemIsDragEnabled | Qt.ItemFlag.ItemIsDropEnabled | Qt.ItemFlag.ItemIsSelectable | Qt.ItemFlag.ItemIsEnabled | defaultFlags
         else:
-            return Qt.ItemIsDropEnabled | defaultFlags
+            return Qt.ItemFlag.ItemIsDropEnabled | defaultFlags
 
     def removeRows(self, row: int, count: int, parent: PySide6.QtCore.QModelIndex = ...) -> bool:
         parent_ = self.nodeFromIndex(parent)

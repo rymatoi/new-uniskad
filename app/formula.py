@@ -68,9 +68,9 @@ class FormulaLineEdit(QtWidgets.QLineEdit):
 
         self.completer.setWidget(self)
         self.completer.setModel(self.model)
-        self.completer.setCaseSensitivity(Qt.CaseInsensitive)
-        self.completer.setCompletionMode(QCompleter.PopupCompletion)
-        self.completer.setFilterMode(Qt.MatchContains)
+        self.completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
+        self.completer.setCompletionMode(QCompleter.CompletionMode.PopupCompletion)
+        self.completer.setFilterMode(Qt.MatchFlag.MatchContains)
 
         self.textChanged.connect(self._handle_text_changed)
         self.textEdited.connect(self._handle_text_edited)

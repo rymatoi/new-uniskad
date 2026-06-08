@@ -27,22 +27,22 @@ class Ui_VersionControlDialog(object):
         self.label = QLabel(VersionControlDialog)
         self.label.setObjectName(u"label")
 
-        self.formLayout.setWidget(0, QFormLayout.LabelRole, self.label)
+        self.formLayout.setWidget(0, QFormLayout.ItemRole.LabelRole, self.label)
 
         self.label_2 = QLabel(VersionControlDialog)
         self.label_2.setObjectName(u"label_2")
 
-        self.formLayout.setWidget(1, QFormLayout.LabelRole, self.label_2)
+        self.formLayout.setWidget(1, QFormLayout.ItemRole.LabelRole, self.label_2)
 
         self.descriptionEdit = QTextEdit(VersionControlDialog)
         self.descriptionEdit.setObjectName(u"descriptionEdit")
 
-        self.formLayout.setWidget(1, QFormLayout.FieldRole, self.descriptionEdit)
+        self.formLayout.setWidget(1, QFormLayout.ItemRole.FieldRole, self.descriptionEdit)
 
         self.versionComboBox = QComboBox(VersionControlDialog)
         self.versionComboBox.setObjectName(u"versionComboBox")
 
-        self.formLayout.setWidget(0, QFormLayout.FieldRole, self.versionComboBox)
+        self.formLayout.setWidget(0, QFormLayout.ItemRole.FieldRole, self.versionComboBox)
 
         self.horizontalLayout.addLayout(self.formLayout)
 

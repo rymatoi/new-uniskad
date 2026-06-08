@@ -48,7 +48,7 @@ class Ui_AddConditionsDialog(object):
 
         self.horizontalLayout_2.addLayout(self.verticalLayout_3)
 
-        self.horizontalSpacer = QSpacerItem(40, 20, QSizePolicy.Expanding, QSizePolicy.Minimum)
+        self.horizontalSpacer = QSpacerItem(40, 20, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
 
         self.horizontalLayout_2.addItem(self.horizontalSpacer)
 

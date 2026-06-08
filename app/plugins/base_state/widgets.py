@@ -92,10 +92,10 @@ class TreeView(QTreeView):
         self.dock_widget = None
         self._pending_save = False
 
-        self.setSelectionMode(QTreeView.ExtendedSelection)  # Позволяет выделять несколько элементов
-        self.setSelectionBehavior(QTreeView.SelectItems)  # Выделение элементов, а не строк
-        # self.setSelectionMode(self.ExtendedSelection)  # разрешаем множественное выделение элементов
-        self.setDragDropMode(QAbstractItemView.DragDrop)  # разрешили drag'n'drop
+        self.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)  # Позволяет выделять несколько элементов
+        self.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectItems)  # Выделение элементов, а не строк
+        # self.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)  # разрешаем множественное выделение элементов
+        self.setDragDropMode(QAbstractItemView.DragDropMode.DragDrop)  # разрешили drag'n'drop
         self.setDragEnabled(True)  # включаем Drag
         self.setAcceptDrops(True)  # включаем Drop
         self.setDropIndicatorShown(True)  # включаем индикатор, указывающий допустимость перемещения элемента
@@ -131,7 +131,7 @@ class TreeView(QTreeView):
         self._is_sorted = False
         self._sort_order = None
 
-        self.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.__create_connections()
         icon_size = QSize(16, 16)
         self.setIconSize(icon_size)
@@ -288,7 +288,7 @@ class TreeView(QTreeView):
 
         if self.has_active_sort():
             order = self.current_sort_order()
-            if order == Qt.DescendingOrder:
+            if order == Qt.SortOrder.DescendingOrder:
                 state['sort'] = 'desc'
             else:
                 state['sort'] = 'asc'
@@ -318,9 +318,9 @@ class TreeView(QTreeView):
 
         sort_order = state.get('sort')
         if sort_order == 'asc':
-            self.sort_items(Qt.AscendingOrder)
+            self.sort_items(Qt.SortOrder.AscendingOrder)
         elif sort_order == 'desc':
-            self.sort_items(Qt.DescendingOrder)
+            self.sort_items(Qt.SortOrder.DescendingOrder)
 
         index_map = self._build_index_map()
 
@@ -337,7 +337,7 @@ class TreeView(QTreeView):
             for identifier in selected:
                 index = index_map.get(str(identifier))
                 if index is not None:
-                    selection_model.select(index, QItemSelectionModel.Select | QItemSelectionModel.Rows)
+                    selection_model.select(index, QItemSelectionModel.SelectionFlag.Select | QItemSelectionModel.SelectionFlag.Rows)
 
         current = state.get('current')
         if current:
@@ -468,19 +468,19 @@ class TreeView(QTreeView):
 
     def _drop_target_info(self, target_index, drop_position):
         model = self.model()
-        if drop_position == QAbstractItemView.OnViewport or not target_index.isValid():
+        if drop_position == QAbstractItemView.DropIndicatorPosition.OnViewport or not target_index.isValid():
             parent_index = QModelIndex()
             row = model.rowCount(parent_index)
             return parent_index, row
-        if drop_position == QAbstractItemView.OnItem:
+        if drop_position == QAbstractItemView.DropIndicatorPosition.OnItem:
             parent_index = target_index
             row = model.rowCount(target_index)
             return parent_index, row
-        if drop_position == QAbstractItemView.AboveItem:
+        if drop_position == QAbstractItemView.DropIndicatorPosition.AboveItem:
             parent_index = target_index.parent()
             row = target_index.row()
             return parent_index, row
-        if drop_position == QAbstractItemView.BelowItem:
+        if drop_position == QAbstractItemView.DropIndicatorPosition.BelowItem:
             parent_index = target_index.parent()
             row = target_index.row() + 1
             return parent_index, row
@@ -526,7 +526,7 @@ class TreeView(QTreeView):
             if not persistent.isValid():
                 continue
             index = QModelIndex(persistent)
-            selection_model.select(index, QtCore.QItemSelectionModel.Select | QtCore.QItemSelectionModel.Rows)
+            selection_model.select(index, QtCore.QItemSelectionModel.SelectionFlag.Select | QtCore.QItemSelectionModel.SelectionFlag.Rows)
             last_index = index
         if last_index:
             self.setCurrentIndex(last_index)
@@ -571,11 +571,11 @@ class TreeView(QTreeView):
             event.ignore()
             return
 
-        event.setDropAction(Qt.MoveAction)
+        event.setDropAction(Qt.DropAction.MoveAction)
         event.accept()
 
         self._select_persistent_indexes(new_indexes)
-        if parent_index.isValid() and drop_position == QAbstractItemView.OnItem:
+        if parent_index.isValid() and drop_position == QAbstractItemView.DropIndicatorPosition.OnItem:
             self.expand(parent_index)
         self.mark_pending_save()
 
@@ -700,7 +700,7 @@ class TreeView(QTreeView):
             if selection_model:
                 selection_model.setCurrentIndex(
                     index,
-                    QtCore.QItemSelectionModel.ClearAndSelect | QtCore.QItemSelectionModel.Rows
+                    QtCore.QItemSelectionModel.SelectionFlag.ClearAndSelect | QtCore.QItemSelectionModel.SelectionFlag.Rows
                 )
             self.scrollTo(index)
             self._search_current_index = idx
@@ -803,7 +803,7 @@ class TreeView(QTreeView):
                 self.expand(persistent)
         self._search_expanded_state = None
 
-    def sort_items(self, order=Qt.AscendingOrder):
+    def sort_items(self, order=Qt.SortOrder.AscendingOrder):
         model = self.model()
         if model is None:
             return
@@ -812,7 +812,7 @@ class TreeView(QTreeView):
         self._is_sorted = True
         self._sort_order = order
         model.layoutAboutToBeChanged.emit()
-        self._sort_node(model._root, order == Qt.AscendingOrder)
+        self._sort_node(model._root, order == Qt.SortOrder.AscendingOrder)
         model.layoutChanged.emit()
         self.refresh()
 
@@ -1207,7 +1207,7 @@ class TreeView(QTreeView):
         if children:
             self._parent.ui.centralWidget.tabifyDockWidget(children[0], tab)
         else:
-            self._parent.ui.centralWidget.addDockWidget(Qt.TopDockWidgetArea, tab)
+            self._parent.ui.centralWidget.addDockWidget(Qt.DockWidgetArea.TopDockWidgetArea, tab)
         tab.show()
         tab.raise_()
 
@@ -1323,17 +1323,17 @@ class DockWidget(QDockWidget):
         self.search_line.setPlaceholderText('Поиск...')
         self.search_line.setClearButtonEnabled(True)
         self.search_line.setToolTip('Поиск по дереву')
-        self.search_line.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        self.search_line.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
 
         self.search_prev_button = QToolButton()
-        self.search_prev_button.setIcon(self.style().standardIcon(QStyle.SP_ArrowBack))
+        self.search_prev_button.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_ArrowBack))
         self.search_prev_button.setAutoRaise(True)
         self.search_prev_button.setToolTip('Предыдущее совпадение')
         self.search_prev_button.clicked.connect(self._on_search_prev)
         self.search_prev_button.setEnabled(False)
 
         self.search_next_button = QToolButton()
-        self.search_next_button.setIcon(self.style().standardIcon(QStyle.SP_ArrowForward))
+        self.search_next_button.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_ArrowForward))
         self.search_next_button.setAutoRaise(True)
         self.search_next_button.setToolTip('Следующее совпадение')
         self.search_next_button.clicked.connect(self._on_search_next)
@@ -1346,7 +1346,7 @@ class DockWidget(QDockWidget):
         self.search_line.returnPressed.connect(self._run_search)
         self._search_timer.timeout.connect(self._run_search)
 
-        self._search_shortcut = QShortcut(QKeySequence.Find, self)
+        self._search_shortcut = QShortcut(QKeySequence.StandardKey.Find, self)
         self._search_shortcut.activated.connect(self._focus_search)
 
         self.dock_button = QToolButton()
@@ -1358,7 +1358,7 @@ class DockWidget(QDockWidget):
         self.sort_button = QToolButton()
         self.sort_button.setIcon(QIcon(':/sorting.png'))
         self.sort_button.setToolTip('Сортировка')
-        self.sort_button.setPopupMode(QToolButton.InstantPopup)
+        self.sort_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         self.sort_button.setAutoRaise(True)
 
         self.sort_menu = QMenu(self)
@@ -1367,8 +1367,8 @@ class DockWidget(QDockWidget):
         self.sort_menu.addSeparator()
         self.sort_reset_action = self.sort_menu.addAction('Без сортировки')
         self.sort_button.setMenu(self.sort_menu)
-        self.sort_by_asc_action.triggered.connect(lambda: self._sort_tree(Qt.AscendingOrder))
-        self.sort_by_desc_action.triggered.connect(lambda: self._sort_tree(Qt.DescendingOrder))
+        self.sort_by_asc_action.triggered.connect(lambda: self._sort_tree(Qt.SortOrder.AscendingOrder))
+        self.sort_by_desc_action.triggered.connect(lambda: self._sort_tree(Qt.SortOrder.DescendingOrder))
         self.sort_reset_action.triggered.connect(self._reset_sort)
         self.sort_reset_action.setEnabled(False)
 
@@ -1654,18 +1654,18 @@ class ExtendedComboBox(QComboBox):
     def __init__(self, parent=None):
         super(ExtendedComboBox, self).__init__(parent)
 
-        self.setFocusPolicy(Qt.StrongFocus)
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.setEditable(True)
 
         # add a filter model to filter matching items
         self.pFilterModel = QSortFilterProxyModel(self)
-        self.pFilterModel.setFilterCaseSensitivity(Qt.CaseInsensitive)
+        self.pFilterModel.setFilterCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
         self.pFilterModel.setSourceModel(self.model())
 
         # add a completer, which uses the filter model
         self.completer = QCompleter(self.pFilterModel, self)
         # always show all (filtered) completions
-        self.completer.setCompletionMode(QCompleter.UnfilteredPopupCompletion)
+        self.completer.setCompletionMode(QCompleter.CompletionMode.UnfilteredPopupCompletion)
         self.setCompleter(self.completer)
 
         # connect signals
@@ -1777,7 +1777,7 @@ class TableItem(QTableWidgetItem):
                     return QColor('#d7d7d7')
                 return QColor('#fff4ce')
             if self.get('broken', bool, False):
-                return QBrush(Qt.lightGray)
+                return QBrush(Qt.GlobalColor.lightGray)
             else:
                 if bg_color := self.get('font_bgcolor', str, None):
                     return QColor(bg_color)
@@ -2269,7 +2269,7 @@ class TablePage1(QtWidgets.QWidget):
         icon_font = self.formula_icon.font()
         icon_font.setBold(True)
         self.formula_icon.setFont(icon_font)
-        self.formula_icon.setAlignment(Qt.AlignCenter)
+        self.formula_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.formula_icon.setFixedWidth(26)
         self.formula_icon.setStyleSheet('color: #555555;')
 
@@ -2281,20 +2281,20 @@ class TablePage1(QtWidgets.QWidget):
         self.formula_result_label = QLabel('Значение: —', panel)
         self.formula_result_label.setObjectName('formulaResultLabel')
         self.formula_result_label.setStyleSheet('color: #666666;')
-        self.formula_result_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        self.formula_result_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        self.formula_result_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        self.formula_result_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
 
         self.formula_help_button = QToolButton(panel)
         self.formula_help_button.setObjectName('formulaHelpButton')
         self.formula_help_button.setAutoRaise(True)
-        self.formula_help_button.setIcon(panel.style().standardIcon(QStyle.SP_MessageBoxQuestion))
+        self.formula_help_button.setIcon(panel.style().standardIcon(QStyle.StandardPixmap.SP_MessageBoxQuestion))
         self.formula_help_button.setToolTip('Показать инструкцию по формулам')
         self.formula_help_button.clicked.connect(self.show_formula_help)
 
         layout.addWidget(self.formula_icon)
         layout.addWidget(self.formula_edit, 1)
         layout.addWidget(self.formula_result_label)
-        layout.addWidget(self.formula_help_button, 0, Qt.AlignRight)
+        layout.addWidget(self.formula_help_button, 0, Qt.AlignmentFlag.AlignRight)
 
         return panel
 
@@ -2349,10 +2349,10 @@ class TablePage1(QtWidgets.QWidget):
         text_browser = QTextBrowser(help_dialog)
         text_browser.setHtml(help_text)
         text_browser.setOpenExternalLinks(True)
-        text_browser.setTextInteractionFlags(Qt.TextBrowserInteraction)
+        text_browser.setTextInteractionFlags(Qt.TextInteractionFlag.TextBrowserInteraction)
         layout.addWidget(text_browser)
 
-        button_box = QDialogButtonBox(QDialogButtonBox.Close, Qt.Horizontal, help_dialog)
+        button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Close, Qt.Orientation.Horizontal, help_dialog)
         button_box.rejected.connect(help_dialog.reject)
         layout.addWidget(button_box)
 
@@ -2447,15 +2447,15 @@ class TablePage1(QtWidgets.QWidget):
         self._formula_delegate = delegate
         self._formula_functions = delegate.funcs
         self.table.setItemDelegate(delegate)
-        self.table.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.table.customContextMenuRequested.connect(self.show_cell_menu)
 
         row_headers = self.table.verticalHeader()
-        row_headers.setContextMenuPolicy(Qt.CustomContextMenu)
+        row_headers.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         row_headers.customContextMenuRequested.connect(self.show_row_menu)
 
         column_headers = self.table.horizontalHeader()
-        column_headers.setContextMenuPolicy(Qt.CustomContextMenu)
+        column_headers.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         column_headers.customContextMenuRequested.connect(self.show_column_menu)
 
         if self.table.selectionModel() is not None:
@@ -2639,7 +2639,7 @@ class TableWidget(QTableWidget):
 
     def __init__(self, parent, main_window):
         super().__init__()
-        self.setLocale(QLocale(QLocale.English, QLocale.UnitedKingdom))
+        self.setLocale(QLocale(QLocale.Language.English, QLocale.Territory.UnitedKingdom))
         self.columns = {}
         self.ord_columns = []
         self.rows = {}
@@ -2665,12 +2665,12 @@ class TableWidget(QTableWidget):
         pass
 
     def keyPressEvent(self, event):
-        if event.key() == Qt.Key_F:
+        if event.key() == Qt.Key.Key_F:
             search_string, ok = QInputDialog.getText(self, "Поиск", "Введите строку для поиска:")
             if ok:
                 self.search_string = search_string
                 self.filter_table()
-        elif event == QKeySequence.Copy:  # Проверяем, нажата ли комбинация Ctrl+C
+        elif event == QKeySequence.StandardKey.Copy:  # Проверяем, нажата ли комбинация Ctrl+C
             self.copy_to_clipboard()
         else:
             super().keyPressEvent(event)

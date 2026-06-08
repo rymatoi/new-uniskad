@@ -70,7 +70,7 @@ class ProjectSelectionDialog(BaseDialog):
         self.ui.passProjectButton.setEnabled(False)
         self.ui.removeButton.setEnabled(
             False)  # делаем кнопку применения недоступной пока не выбран проект
-        # self.ui.treeView.header().setResizeMode(QHeaderView.ResizeToContents)  # Подгоняем колонки под контент
+        # self.ui.treeView.header().setResizeMode(QHeaderView.ResizeMode.ResizeToContents)  # Подгоняем колонки под контент
         self.setWindowTitle('Мои проекты')
         self.search_mode = 'name'
         self.create_connections()  # создаем привязки
@@ -90,7 +90,7 @@ class ProjectSelectionDialog(BaseDialog):
     def create_sort_button(self):
         self.sort_button = QToolButton(self)
         self.sort_button.setText("Сортировать")
-        self.sort_button.setPopupMode(QToolButton.MenuButtonPopup)
+        self.sort_button.setPopupMode(QToolButton.ToolButtonPopupMode.MenuButtonPopup)
         self.sort_menu = QMenu(self.sort_button)
 
         self.sort_name_az_action = QAction("По имени А-Я", self)
@@ -220,7 +220,7 @@ class ProjectSelectionDialog(BaseDialog):
         # Добавить элементы с данными в таблицу
         def add_item(project, parent=None):
             item = QTreeWidgetItem([project.prop_value, project.creation_date.strftime('%Y-%m-%d')])
-            item.setFlags(item.flags() | Qt.ItemIsEditable)
+            item.setFlags(item.flags() | Qt.ItemFlag.ItemIsEditable)
             item.setData(0, Qt.ItemDataRole.UserRole, project)
             item.setData(0, Qt.ItemDataRole.DecorationRole, QIcon(self.icons[project.project_type]))
             if parent:
@@ -245,7 +245,7 @@ class ProjectSelectionDialog(BaseDialog):
         self.update_tree(self.projects)
 
     def find_or_create_folder(self, tree, creator):
-        folder_items = tree.findItems(self.users[creator], Qt.MatchExactly)
+        folder_items = tree.findItems(self.users[creator], Qt.MatchFlag.MatchExactly)
         if folder_items:
             return folder_items[0]
         folder_item = QTreeWidgetItem([self.users[creator], ''])

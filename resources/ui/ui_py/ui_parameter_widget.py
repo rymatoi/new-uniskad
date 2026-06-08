@@ -27,17 +27,17 @@ class Ui_ParameterWidget(object):
         self.label_2 = QLabel(ParameterWidget)
         self.label_2.setObjectName(u"label_2")
 
-        self.formLayout.setWidget(0, QFormLayout.LabelRole, self.label_2)
+        self.formLayout.setWidget(0, QFormLayout.ItemRole.LabelRole, self.label_2)
 
         self.checkBox = QCheckBox(ParameterWidget)
         self.checkBox.setObjectName(u"checkBox")
 
-        self.formLayout.setWidget(0, QFormLayout.FieldRole, self.checkBox)
+        self.formLayout.setWidget(0, QFormLayout.ItemRole.FieldRole, self.checkBox)
 
 
         self.verticalLayout_2.addLayout(self.formLayout)
 
-        self.verticalSpacer_2 = QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding)
+        self.verticalSpacer_2 = QSpacerItem(20, 40, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding)
 
         self.verticalLayout_2.addItem(self.verticalSpacer_2)
 
@@ -65,7 +65,7 @@ class Ui_ParameterWidget(object):
 
         self.verticalLayout.addWidget(self.removeButton)
 
-        self.verticalSpacer = QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding)
+        self.verticalSpacer = QSpacerItem(20, 40, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding)
 
         self.verticalLayout.addItem(self.verticalSpacer)
 

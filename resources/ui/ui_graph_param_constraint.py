@@ -27,22 +27,22 @@ class Ui_GraphParamConstraintDialog(object):
         self.label = QLabel(GraphParamConstraintDialog)
         self.label.setObjectName(u"label")
 
-        self.formLayout.setWidget(0, QFormLayout.LabelRole, self.label)
+        self.formLayout.setWidget(0, QFormLayout.ItemRole.LabelRole, self.label)
 
         self.fromComboBox = QComboBox(GraphParamConstraintDialog)
         self.fromComboBox.setObjectName(u"fromComboBox")
 
-        self.formLayout.setWidget(0, QFormLayout.FieldRole, self.fromComboBox)
+        self.formLayout.setWidget(0, QFormLayout.ItemRole.FieldRole, self.fromComboBox)
 
         self.label_2 = QLabel(GraphParamConstraintDialog)
         self.label_2.setObjectName(u"label_2")
 
-        self.formLayout.setWidget(1, QFormLayout.LabelRole, self.label_2)
+        self.formLayout.setWidget(1, QFormLayout.ItemRole.LabelRole, self.label_2)
 
         self.toComboBox = QComboBox(GraphParamConstraintDialog)
         self.toComboBox.setObjectName(u"toComboBox")
 
-        self.formLayout.setWidget(1, QFormLayout.FieldRole, self.toComboBox)
+        self.formLayout.setWidget(1, QFormLayout.ItemRole.FieldRole, self.toComboBox)
 
         self.verticalLayout.addLayout(self.formLayout)
 

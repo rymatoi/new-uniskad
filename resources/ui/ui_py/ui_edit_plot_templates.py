@@ -51,7 +51,7 @@ class Ui_EditPlotTemplatesDialog(object):
 
         self.verticalLayout.addWidget(self.deletePushButton)
 
-        self.verticalSpacer = QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding)
+        self.verticalSpacer = QSpacerItem(20, 40, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding)
 
         self.verticalLayout.addItem(self.verticalSpacer)
 

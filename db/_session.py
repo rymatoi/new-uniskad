@@ -133,7 +133,7 @@ class Session:
         if self._progress_emitter is None:
             self._progress_emitter = _ProgressEmitter()
         self._progress_emitter.moveToThread(mw.thread())
-        self._progress_emitter.progress.connect(mw.set_progress_bar_status, Qt.QueuedConnection)
+        self._progress_emitter.progress.connect(mw.set_progress_bar_status, Qt.ConnectionType.QueuedConnection)
         if self._last_progress_message:
             self._progress_emitter.progress.emit(self._last_progress_message)
         logger.debug("Main window initialized for session progress updates")

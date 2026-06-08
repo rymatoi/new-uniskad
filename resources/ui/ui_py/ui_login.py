@@ -20,7 +20,7 @@ class Ui_UniLoginDialog(object):
         if not UniLoginDialog.objectName():
             UniLoginDialog.setObjectName(u"UniLoginDialog")
         UniLoginDialog.resize(340, 259)
-        sizePolicy = QSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        sizePolicy = QSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         sizePolicy.setHorizontalStretch(1)
         sizePolicy.setVerticalStretch(1)
         sizePolicy.setHeightForWidth(UniLoginDialog.sizePolicy().hasHeightForWidth())
@@ -28,17 +28,17 @@ class Ui_UniLoginDialog(object):
         UniLoginDialog.setMinimumSize(QSize(200, 0))
         self.verticalLayout_2 = QVBoxLayout(UniLoginDialog)
         self.verticalLayout_2.setObjectName(u"verticalLayout_2")
-        self.verticalLayout_2.setSizeConstraint(QLayout.SetFixedSize)
+        self.verticalLayout_2.setSizeConstraint(QLayout.SizeConstraint.SetFixedSize)
         self.groupBox = QGroupBox(UniLoginDialog)
         self.groupBox.setObjectName(u"groupBox")
-        sizePolicy1 = QSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        sizePolicy1 = QSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         sizePolicy1.setHorizontalStretch(0)
         sizePolicy1.setVerticalStretch(0)
         sizePolicy1.setHeightForWidth(self.groupBox.sizePolicy().hasHeightForWidth())
         self.groupBox.setSizePolicy(sizePolicy1)
         self.verticalLayout_5 = QVBoxLayout(self.groupBox)
         self.verticalLayout_5.setObjectName(u"verticalLayout_5")
-        self.verticalLayout_5.setSizeConstraint(QLayout.SetDefaultConstraint)
+        self.verticalLayout_5.setSizeConstraint(QLayout.SizeConstraint.SetDefaultConstraint)
         self.loginLayout = QVBoxLayout()
         self.loginLayout.setObjectName(u"loginLayout")
         self.username = QLineEdit(self.groupBox)
@@ -49,8 +49,8 @@ class Ui_UniLoginDialog(object):
 
         self.password = PasswordEdit(self.groupBox)
         self.password.setObjectName(u"password")
-        self.password.setFocusPolicy(Qt.WheelFocus)
-        self.password.setEchoMode(QLineEdit.Password)
+        self.password.setFocusPolicy(Qt.FocusPolicy.WheelFocus)
+        self.password.setEchoMode(QLineEdit.EchoMode.Password)
 
         self.loginLayout.addWidget(self.password)
 
@@ -70,7 +70,7 @@ class Ui_UniLoginDialog(object):
 
         self.errorBox = QLabel(UniLoginDialog)
         self.errorBox.setObjectName(u"errorBox")
-        sizePolicy2 = QSizePolicy(QSizePolicy.Expanding, QSizePolicy.MinimumExpanding)
+        sizePolicy2 = QSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.MinimumExpanding)
         sizePolicy2.setHorizontalStretch(0)
         sizePolicy2.setVerticalStretch(0)
         sizePolicy2.setHeightForWidth(self.errorBox.sizePolicy().hasHeightForWidth())
@@ -93,7 +93,7 @@ class Ui_UniLoginDialog(object):
                                       "border-radius: 5px;\n"
                                       "padding: 8px;\n"
                                       "")
-        self.messageBox.setAlignment(Qt.AlignCenter)
+        self.messageBox.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.messageBox.setWordWrap(True)
 
         self.verticalLayout_2.addWidget(self.messageBox)

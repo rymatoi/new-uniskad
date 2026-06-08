@@ -26,16 +26,16 @@ class LinkEizmDialog(BaseDialog):
         self.proxy = QSortFilterProxyModel(self)  # Выставление фильтрации
         self.proxy.setSourceModel(self.model)
         self.ui.treeView.setModel(self.proxy)  # загрузка полученного списка в виджет
-        self.ui.buttonBox.button(QDialogButtonBox.Ok).setEnabled(
+        self.ui.buttonBox.button(QDialogButtonBox.StandardButton.Ok).setEnabled(
             False)  # делаем кнопку применения недоступной пока не выбран проект
-        # self.ui.treeView.header().setResizeMode(QHeaderView.ResizeToContents)  # Подгоняем колонки под контент
+        # self.ui.treeView.header().setResizeMode(QHeaderView.ResizeMode.ResizeToContents)  # Подгоняем колонки под контент
         self.setWindowIcon(QIcon(":/uniskad.ico"))
         self.create_connections()  # создаем привязки
 
     def create_connections(self):
         """Создание привязок для обработки кнопок"""
-        self.ui.buttonBox.button(QDialogButtonBox.Ok).clicked.connect(self.select_item)
-        self.ui.buttonBox.button(QDialogButtonBox.Cancel).clicked.connect(self.cancel)
+        self.ui.buttonBox.button(QDialogButtonBox.StandardButton.Ok).clicked.connect(self.select_item)
+        self.ui.buttonBox.button(QDialogButtonBox.StandardButton.Cancel).clicked.connect(self.cancel)
         self.ui.lineEdit.textChanged.connect(self.search_line_changed)
         self.ui.treeView.doubleClicked.connect(self.select_item)
         self.ui.treeView.selectionModel().selectionChanged.connect(self.change_selected_item)
@@ -66,7 +66,7 @@ class LinkEizmDialog(BaseDialog):
     def change_selected_item(self, selected: QItemSelection):
         """Обработка изменения выбранного пользователя"""
         if bool(selected) or len(self.model.checked_list):
-            self.ui.buttonBox.button(QDialogButtonBox.Ok).setEnabled(
+            self.ui.buttonBox.button(QDialogButtonBox.StandardButton.Ok).setEnabled(
                 bool(selected))  # Делаем кнопку Выбрать доступной, если есть выбранный элемент
 
     @classmethod

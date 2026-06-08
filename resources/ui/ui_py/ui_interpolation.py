@@ -22,39 +22,39 @@ class Ui_InterpolationDialog(object):
         self.gridLayout.setObjectName(u"gridLayout")
         self.formLayout = QFormLayout()
         self.formLayout.setObjectName(u"formLayout")
-        self.formLayout.setFieldGrowthPolicy(QFormLayout.ExpandingFieldsGrow)
+        self.formLayout.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
         self.label = QLabel(InterpolationDialog)
         self.label.setObjectName(u"label")
 
-        self.formLayout.setWidget(0, QFormLayout.LabelRole, self.label)
+        self.formLayout.setWidget(0, QFormLayout.ItemRole.LabelRole, self.label)
 
         self.nameLineEdit = QLineEdit(InterpolationDialog)
         self.nameLineEdit.setObjectName(u"nameLineEdit")
 
-        self.formLayout.setWidget(0, QFormLayout.FieldRole, self.nameLineEdit)
+        self.formLayout.setWidget(0, QFormLayout.ItemRole.FieldRole, self.nameLineEdit)
 
         self.polyTypeLabel = QLabel(InterpolationDialog)
         self.polyTypeLabel.setObjectName(u"polyTypeLabel")
 
-        self.formLayout.setWidget(1, QFormLayout.LabelRole, self.polyTypeLabel)
+        self.formLayout.setWidget(1, QFormLayout.ItemRole.LabelRole, self.polyTypeLabel)
 
         self.polyTypeComboBox = QComboBox(InterpolationDialog)
         self.polyTypeComboBox.setObjectName(u"polyTypeComboBox")
-        sizePolicy = QSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        sizePolicy = QSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(self.polyTypeComboBox.sizePolicy().hasHeightForWidth())
         self.polyTypeComboBox.setSizePolicy(sizePolicy)
 
-        self.formLayout.setWidget(1, QFormLayout.FieldRole, self.polyTypeComboBox)
+        self.formLayout.setWidget(1, QFormLayout.ItemRole.FieldRole, self.polyTypeComboBox)
 
 
         self.gridLayout.addLayout(self.formLayout, 0, 0, 1, 1)
 
         self.buttonBox = QDialogButtonBox(InterpolationDialog)
         self.buttonBox.setObjectName(u"buttonBox")
-        self.buttonBox.setOrientation(Qt.Horizontal)
-        self.buttonBox.setStandardButtons(QDialogButtonBox.Cancel|QDialogButtonBox.Ok)
+        self.buttonBox.setOrientation(Qt.Orientation.Horizontal)
+        self.buttonBox.setStandardButtons(QDialogButtonBox.StandardButton.Cancel|QDialogButtonBox.StandardButton.Ok)
 
         self.gridLayout.addWidget(self.buttonBox, 1, 0, 1, 1)
 

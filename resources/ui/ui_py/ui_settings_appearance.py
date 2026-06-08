@@ -44,7 +44,7 @@ class Ui_SettingsAppearance(object):
 
         self.gridLayout.addLayout(self.horizontalLayout, 0, 0, 1, 1)
 
-        self.verticalSpacer = QSpacerItem(20, 251, QSizePolicy.Minimum, QSizePolicy.Expanding)
+        self.verticalSpacer = QSpacerItem(20, 251, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding)
 
         self.gridLayout.addItem(self.verticalSpacer, 1, 0, 1, 1)
 

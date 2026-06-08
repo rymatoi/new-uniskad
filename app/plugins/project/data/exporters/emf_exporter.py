@@ -28,12 +28,12 @@ class PlotEMFExporter:
             'x': 'X',  # Крест
         }
         self.line_style_map = {
-            Qt.NoPen: 'none',
-            Qt.SolidLine: '-',
-            Qt.DashLine: '--',
-            Qt.DotLine: ':',
-            Qt.DashDotLine: '-.',
-            Qt.DashDotDotLine: (0, (3, 5, 1, 5, 1, 5)),
+            Qt.PenStyle.NoPen: 'none',
+            Qt.PenStyle.SolidLine: '-',
+            Qt.PenStyle.DashLine: '--',
+            Qt.PenStyle.DotLine: ':',
+            Qt.PenStyle.DashDotLine: '-.',
+            Qt.PenStyle.DashDotDotLine: (0, (3, 5, 1, 5, 1, 5)),
         }
 
     def _clean_axes(self, ax):

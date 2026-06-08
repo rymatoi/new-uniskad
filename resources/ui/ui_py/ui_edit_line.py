@@ -33,22 +33,22 @@ class Ui_EditLineDialog(object):
         self.horizontalLayout.setObjectName(u"horizontalLayout")
         self.form = QFormLayout()
         self.form.setObjectName(u"form")
-        self.form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
+        self.form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
         self.form.setVerticalSpacing(6)
         self.label = QLabel(self.groupBox)
         self.label.setObjectName(u"label")
 
-        self.form.setWidget(0, QFormLayout.LabelRole, self.label)
+        self.form.setWidget(0, QFormLayout.ItemRole.LabelRole, self.label)
 
         self.curveNameLineEdit = QLineEdit(self.groupBox)
         self.curveNameLineEdit.setObjectName(u"curveNameLineEdit")
 
-        self.form.setWidget(0, QFormLayout.FieldRole, self.curveNameLineEdit)
+        self.form.setWidget(0, QFormLayout.ItemRole.FieldRole, self.curveNameLineEdit)
 
         self.colorLabel = QLabel(self.groupBox)
         self.colorLabel.setObjectName(u"colorLabel")
 
-        self.form.setWidget(1, QFormLayout.LabelRole, self.colorLabel)
+        self.form.setWidget(1, QFormLayout.ItemRole.LabelRole, self.colorLabel)
 
         self.colorButton = ColorButton(self.groupBox)
         self.colorButton.setObjectName(u"colorButton")
@@ -56,55 +56,55 @@ class Ui_EditLineDialog(object):
         self.colorButton.setStyleSheet(u"background-color: transparent;")
         self.colorButton.setAutoDefault(False)
 
-        self.form.setWidget(1, QFormLayout.FieldRole, self.colorButton)
+        self.form.setWidget(1, QFormLayout.ItemRole.FieldRole, self.colorButton)
 
         self.lineTypeLabel = QLabel(self.groupBox)
         self.lineTypeLabel.setObjectName(u"lineTypeLabel")
 
-        self.form.setWidget(2, QFormLayout.LabelRole, self.lineTypeLabel)
+        self.form.setWidget(2, QFormLayout.ItemRole.LabelRole, self.lineTypeLabel)
 
         self.lineType = QComboBox(self.groupBox)
         self.lineType.setObjectName(u"lineType")
         self.lineType.setMinimumSize(QSize(200, 0))
 
-        self.form.setWidget(2, QFormLayout.FieldRole, self.lineType)
+        self.form.setWidget(2, QFormLayout.ItemRole.FieldRole, self.lineType)
 
         self.thicknessLabel = QLabel(self.groupBox)
         self.thicknessLabel.setObjectName(u"thicknessLabel")
 
-        self.form.setWidget(3, QFormLayout.LabelRole, self.thicknessLabel)
+        self.form.setWidget(3, QFormLayout.ItemRole.LabelRole, self.thicknessLabel)
 
         self.thickness = QSpinBox(self.groupBox)
         self.thickness.setObjectName(u"thickness")
         self.thickness.setValue(1)
 
-        self.form.setWidget(3, QFormLayout.FieldRole, self.thickness)
+        self.form.setWidget(3, QFormLayout.ItemRole.FieldRole, self.thickness)
 
         self.pointTypeLabel = QLabel(self.groupBox)
         self.pointTypeLabel.setObjectName(u"pointTypeLabel")
 
-        self.form.setWidget(4, QFormLayout.LabelRole, self.pointTypeLabel)
+        self.form.setWidget(4, QFormLayout.ItemRole.LabelRole, self.pointTypeLabel)
 
         self.pointType = QComboBox(self.groupBox)
         self.pointType.setObjectName(u"pointType")
 
-        self.form.setWidget(4, QFormLayout.FieldRole, self.pointType)
+        self.form.setWidget(4, QFormLayout.ItemRole.FieldRole, self.pointType)
 
         self.pointSizeLabel = QLabel(self.groupBox)
         self.pointSizeLabel.setObjectName(u"pointSizeLabel")
 
-        self.form.setWidget(5, QFormLayout.LabelRole, self.pointSizeLabel)
+        self.form.setWidget(5, QFormLayout.ItemRole.LabelRole, self.pointSizeLabel)
 
         self.pointSizeSpinBox = QSpinBox(self.groupBox)
         self.pointSizeSpinBox.setObjectName(u"pointSizeSpinBox")
         self.pointSizeSpinBox.setValue(10)
 
-        self.form.setWidget(5, QFormLayout.FieldRole, self.pointSizeSpinBox)
+        self.form.setWidget(5, QFormLayout.ItemRole.FieldRole, self.pointSizeSpinBox)
 
         self.label_3 = QLabel(self.groupBox)
         self.label_3.setObjectName(u"label_3")
 
-        self.form.setWidget(6, QFormLayout.LabelRole, self.label_3)
+        self.form.setWidget(6, QFormLayout.ItemRole.LabelRole, self.label_3)
 
         self.colorButton_3 = ColorButton(self.groupBox)
         self.colorButton_3.setObjectName(u"colorButton_3")
@@ -112,12 +112,12 @@ class Ui_EditLineDialog(object):
         self.colorButton_3.setStyleSheet(u"background-color: transparent;")
         self.colorButton_3.setAutoDefault(False)
 
-        self.form.setWidget(6, QFormLayout.FieldRole, self.colorButton_3)
+        self.form.setWidget(6, QFormLayout.ItemRole.FieldRole, self.colorButton_3)
 
         self.label_4 = QLabel(self.groupBox)
         self.label_4.setObjectName(u"label_4")
 
-        self.form.setWidget(7, QFormLayout.LabelRole, self.label_4)
+        self.form.setWidget(7, QFormLayout.ItemRole.LabelRole, self.label_4)
 
         self.colorButton_2 = ColorButton(self.groupBox)
         self.colorButton_2.setObjectName(u"colorButton_2")
@@ -125,7 +125,7 @@ class Ui_EditLineDialog(object):
         self.colorButton_2.setStyleSheet(u"background-color: transparent;")
         self.colorButton_2.setAutoDefault(False)
 
-        self.form.setWidget(7, QFormLayout.FieldRole, self.colorButton_2)
+        self.form.setWidget(7, QFormLayout.ItemRole.FieldRole, self.colorButton_2)
 
 
         self.horizontalLayout.addLayout(self.form)
@@ -144,8 +144,8 @@ class Ui_EditLineDialog(object):
 
         self.buttonBox = QDialogButtonBox(EditLineDialog)
         self.buttonBox.setObjectName(u"buttonBox")
-        self.buttonBox.setOrientation(Qt.Horizontal)
-        self.buttonBox.setStandardButtons(QDialogButtonBox.Cancel|QDialogButtonBox.Ok)
+        self.buttonBox.setOrientation(Qt.Orientation.Horizontal)
+        self.buttonBox.setStandardButtons(QDialogButtonBox.StandardButton.Cancel|QDialogButtonBox.StandardButton.Ok)
 
         self.verticalLayout.addWidget(self.buttonBox)
 

@@ -246,7 +246,7 @@ class PlotInteractionMixin:
         и увеличенным размером.
         """
         # Проверяем, что это левый клик мыши
-        if evt[0].button() != Qt.LeftButton:
+        if evt[0].button() != Qt.MouseButton.LeftButton:
             return
 
         pos = evt[0].scenePos()

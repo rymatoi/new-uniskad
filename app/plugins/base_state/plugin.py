@@ -27,22 +27,22 @@ class BasePlugin(QObject):
         """Выполнить действия при деактивации плагина."""
         if session.has_changes:
             warning = QMessageBox(
-                QMessageBox.Warning,
+                QMessageBox.Icon.Warning,
                 "Хотите сохранить внесенные изменения?",
                 "Хотите сохранить внесенные изменения? Если изменения не сохранить, они будут утрачены",
-                QMessageBox.Yes | QMessageBox.No | QMessageBox.Cancel,
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No | QMessageBox.StandardButton.Cancel,
                 self._parent
             )
-            warning.setWindowModality(Qt.WindowModal)
-            warning.button(QMessageBox.Yes).setText("Сохранить")
-            warning.button(QMessageBox.No).setText("Не сохранять")
-            warning.button(QMessageBox.Cancel).setText("Отмена")
+            warning.setWindowModality(Qt.WindowModality.WindowModal)
+            warning.button(QMessageBox.StandardButton.Yes).setText("Сохранить")
+            warning.button(QMessageBox.StandardButton.No).setText("Не сохранять")
+            warning.button(QMessageBox.StandardButton.Cancel).setText("Отмена")
 
             result = warning.exec_()
-            if result == QMessageBox.Yes:
+            if result == QMessageBox.StandardButton.Yes:
                 pass
                 #
-            elif result == QMessageBox.No:
+            elif result == QMessageBox.StandardButton.No:
                 return True
             else:
                 return False
