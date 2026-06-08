@@ -1,17 +1,34 @@
 from PySide6.QtCore import QTimer
-from PySide6.QtGui import QKeyEvent, QMouseEvent
+from PySide6.QtGui import QFont, QKeyEvent, QMouseEvent
 from PySide6.QtWidgets import QApplication, QMainWindow, QDialog
 
 
 class Application(QApplication):
     def __init__(self, *argv):
         super().__init__(*argv)
+        self._default_font = QFont(self.font())
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.close_main_window)
         self.timer_disabled = False
         self._main_window_initialized = False
         self.time = 5
         self.disable_timer()
+
+    def default_font(self):
+        """Возвращает исходный системный шрифт приложения."""
+
+        return QFont(self._default_font)
+
+    def apply_interface_font(self, use_custom_font, font_name=None, font_size=None):
+        """Задаёт базовый шрифт для всех элементов без собственного шрифта."""
+
+        font = self.default_font()
+        if use_custom_font:
+            if font_name:
+                font.setFamily(str(font_name))
+            if font_size and int(font_size) > 0:
+                font.setPointSize(int(font_size))
+        self.setFont(font)
 
     def initialize_main_window(self):
         self._main_window_initialized = True

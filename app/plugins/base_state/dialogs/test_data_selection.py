@@ -69,8 +69,6 @@ class TestDataSelectionDialog(BaseDialog):
         self.proxy = QSortFilterProxyModel(self)  # Выставление фильтрации
         self.proxy.setSourceModel(self.model)
         self.ui.treeView.setModel(self.proxy)  # загрузка полученного списка в виджет
-        self.model.font_name = self.mw.user_settings.get('font_name')
-        self.model.font_size = self.mw.user_settings.get('font_size')
         # self.ui.selectButton.setEnabled(
         #    False)  # делаем кнопку применения недоступной пока не выбран проект
         # self.ui.treeView.header().setResizeMode(QHeaderView.ResizeMode.ResizeToContents)  # Подгоняем колонки под контент
