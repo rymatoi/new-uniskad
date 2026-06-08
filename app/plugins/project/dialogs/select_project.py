@@ -152,8 +152,11 @@ class ProjectSelectionDialog(BaseDialog):
         self.force_rename(item, result)
 
     def force_rename(self, item, value):
-        self.ui.othersProjectsTreeWidget.itemChanged.disconnect(self.on_item_changed)
-        self.ui.ownProjectsTreeWidget.itemChanged.disconnect(self.on_item_changed)
+        for tree in (self.ui.othersProjectsTreeWidget, self.ui.ownProjectsTreeWidget):
+            try:
+                tree.itemChanged.disconnect(self.on_item_changed)
+            except (TypeError, RuntimeError):
+                pass
         item.setData(0, Qt.ItemDataRole.UserRole, value)
         self.ui.othersProjectsTreeWidget.itemChanged.connect(self.on_item_changed)
         self.ui.ownProjectsTreeWidget.itemChanged.connect(self.on_item_changed)
@@ -253,8 +256,11 @@ class ProjectSelectionDialog(BaseDialog):
         return folder_item
 
     def search_projects(self):
-        self.ui.othersProjectsTreeWidget.itemChanged.disconnect(self.on_item_changed)
-        self.ui.ownProjectsTreeWidget.itemChanged.disconnect(self.on_item_changed)
+        for tree in (self.ui.othersProjectsTreeWidget, self.ui.ownProjectsTreeWidget):
+            try:
+                tree.itemChanged.disconnect(self.on_item_changed)
+            except (TypeError, RuntimeError):
+                pass
         search_term = self.search_box.text().lower()
         is_search_empty = not search_term.strip()
 
@@ -312,11 +318,11 @@ class ProjectSelectionDialog(BaseDialog):
                 return True
         return False
 
-    def exec_(self) -> int:
+    def exec(self) -> int:
         if self.auto_open():
             return True
         else:
-            return super().exec_()
+            return super().exec()
 
     def auto_open(self):
         def search_tree(tree, auto_open_id):
@@ -404,7 +410,7 @@ class ProjectSelectionDialog(BaseDialog):
         if not root_item:
             return
         dialog = UserSelectionDialog()
-        if dialog.exec_():
+        if dialog.exec():
             user = dialog.get_result()
             project_items, data_items, graph_id_list = self.collect_selected_project_data()
             id_mapping = sp.pass_project_to_another_user(data_items, graph_id_list, 1, user._data.id)

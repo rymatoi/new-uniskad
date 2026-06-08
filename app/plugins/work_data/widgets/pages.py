@@ -77,14 +77,14 @@ class WorkDataTablePage1(TablePage1):
         item = self.table.itemFromIndex(index)
         row = item.key[0]
         dialog = RowSettingsDialog(row, item, parent=self)
-        if dialog.exec_():  # Если произошло изменение данных
+        if dialog.exec():  # Если произошло изменение данных
             result = dialog.get_result()
 
     def column_settings(self, index):
         item = self.table.itemFromIndex(index)
         column = item.key[1]
         dialog = ColumnSettingsDialog(column, item, parent=self)
-        if dialog.exec_():  # Если произошло изменение данных
+        if dialog.exec():  # Если произошло изменение данных
             result = dialog.get_result()
 
     def update_row_prop(self, name, prop_name, prop_value):

@@ -21,7 +21,7 @@ class WorkDataTreeView(TreeView):
     def version_control(self, index):
         item = index.internalPointer()
         dialog = VersionControlDialog(item)
-        if dialog.exec_():
+        if dialog.exec():
             res = dialog.get_result()
             item.final_version = res
 

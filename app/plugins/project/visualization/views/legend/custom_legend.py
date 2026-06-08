@@ -86,7 +86,7 @@ class CustomLegend(pg.LegendItem):
     def on_context_menu(self, pos):
         pass
         # menu = self.menu(pos)
-        # menu.exec_(QCursor.pos())
+        # menu.exec(QCursor.pos())
 
     def menu(self, pos):
         menu = QMenu(self.getViewWidget())
@@ -115,7 +115,7 @@ class CustomLegend(pg.LegendItem):
             parent=self._parent
         )
 
-        if dialog.exec_() == QDialog.DialogCode.Accepted:
+        if dialog.exec() == QDialog.DialogCode.Accepted:
             result = dialog.get_result()
             if not result:
                 return

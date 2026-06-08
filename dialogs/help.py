@@ -88,4 +88,4 @@ class HelpApp(BaseDialog):
 if __name__ == "__main__":
     app = QApplication([])
     window = HelpApp('resources/docs')
-    app.exec_()
+    app.exec()

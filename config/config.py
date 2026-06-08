@@ -37,7 +37,7 @@ class Config:
 
     def create(self):
         create_config_dialog = CreateConfigDialog()
-        if create_config_dialog.exec_() == QDialog.DialogCode.Accepted:
+        if create_config_dialog.exec() == QDialog.DialogCode.Accepted:
             config_data = create_config_dialog.get_result()
             self.settings.save('host', config_data.rhost, 'remote_database')
             self.settings.save('port', config_data.rport, 'remote_database')

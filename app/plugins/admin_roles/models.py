@@ -53,7 +53,7 @@ class RoleNode(RoleRootNode):
     @staticmethod
     def add(up_node_id, parent):
         dialog = CreateRoleDialog()
-        if dialog.exec_():
+        if dialog.exec():
             rolename, description = dialog.get_result()
             result = sp.new_upd_uniskadrole((PROG_ID, None, up_node_id, rolename, description, False, False))
             if result:

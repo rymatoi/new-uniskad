@@ -37,7 +37,7 @@ def set_locale():
     """ Due to different locale (decimal point is ,) in some countries
         So for decimal point being . for all users it must be Specified here the beginning
     """
-    want_locale = QLocale(QLocale.Language.English, QLocale.Territory.Europe)
+    want_locale = QLocale(QLocale.Language.English, QLocale.Country.Europe)
     QLocale.setDefault(want_locale)
 
 
@@ -49,8 +49,8 @@ def create_login_dialog():
 if __name__ == '__main__':
     #set_locale()
     login = create_login_dialog()
-    if login.exec_() == QDialog.DialogCode.Accepted:
+    if login.exec() == QDialog.DialogCode.Accepted:
         window = MainWindow()
         logger.info('Программа запущена.')
         window.showMaximized()
-        sys.exit(config.app.exec_())
+        sys.exit(config.app.exec())
