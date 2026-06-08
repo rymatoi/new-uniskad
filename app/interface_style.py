@@ -4,55 +4,94 @@ from PySide6.QtWidgets import QProxyStyle, QStyle
 
 
 CONTAINER_STYLE_SHEET = """
-/* Keep neighbouring work areas legible without imposing a light or dark theme. */
+/*
+ * Separate major work areas with calm background-coloured gutters rather than
+ * high-contrast rules.  The palette roles keep this equally restrained in
+ * light and dark system themes.
+ */
 QMainWindow::separator {
-    background: palette(mid);
-    width: 2px;
-    height: 2px;
+    background: palette(window);
+    width: 6px;
+    height: 6px;
+}
+
+QMainWindow::separator:hover {
+    background: palette(midlight);
 }
 
 QSplitter::handle {
-    background: palette(mid);
+    background: palette(window);
+}
+
+QSplitter::handle:hover {
+    background: palette(midlight);
 }
 
 QSplitter::handle:horizontal {
-    width: 2px;
+    width: 6px;
 }
 
 QSplitter::handle:vertical {
-    height: 2px;
+    height: 6px;
 }
 
-QDockWidget, QMdiSubWindow {
-    border: 1px solid palette(mid);
+/* Containers stay distinct without boxing every part of the workspace. */
+QDockWidget {
+    border: none;
+}
+
+QMdiSubWindow {
+    border: 1px solid palette(midlight);
 }
 
 QDockWidget::title {
-    background: palette(alternate-base);
-    border-bottom: 1px solid palette(mid);
-    padding: 6px 8px;
+    background: palette(window);
+    border-bottom: 1px solid palette(midlight);
+    padding: 7px 9px;
 }
 
 QDockWidget > QWidget#dockTitleBar {
-    background: palette(alternate-base);
-    border-bottom: 1px solid palette(mid);
+    background: palette(window);
+    border-bottom: 1px solid palette(midlight);
 }
 
 QTabWidget::pane {
-    border: 1px solid palette(mid);
+    border: 1px solid palette(midlight);
+}
+
+QTabBar::tab {
+    padding: 7px 12px;
 }
 
 QGroupBox {
-    border: 1px solid palette(mid);
-    border-radius: 3px;
-    margin-top: 0.7em;
-    padding-top: 0.5em;
+    border: 1px solid palette(midlight);
+    border-radius: 2px;
+    margin-top: 0.8em;
+    padding-top: 0.6em;
 }
 
 QGroupBox::title {
     subcontrol-origin: margin;
     left: 8px;
     padding: 0 4px;
+}
+
+/* Quiet, precise chrome gives dense data screens a stricter hierarchy. */
+QToolBar {
+    border: none;
+    border-bottom: 1px solid palette(midlight);
+    spacing: 4px;
+}
+
+QHeaderView::section {
+    border: none;
+    border-right: 1px solid palette(midlight);
+    border-bottom: 1px solid palette(midlight);
+    padding: 5px 7px;
+}
+
+QStatusBar {
+    border-top: 1px solid palette(midlight);
 }
 """
 
