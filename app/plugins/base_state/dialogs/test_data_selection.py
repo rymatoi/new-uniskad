@@ -99,7 +99,7 @@ class TestDataSelectionDialog(BaseDialog):
 
         self.accept()
 
-    def select_all(self):  # TODO проблема
+    def select_all(self):
         if not len(self.model.checked_list) == self.model.rowCount():
             self.model.checkMultipleItems(self.model.get_root_elements(), Qt.CheckState.Checked)
         else:

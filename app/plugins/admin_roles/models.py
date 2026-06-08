@@ -83,11 +83,15 @@ class ActionNode(Node):
         return 'action'
 
     def check(self, state):
-        self.checked = state
-        sp.grant_remove_role_menu_link(self._data.id_role, self._data.id, True if state else False)
+        super().check(state)
+        sp.grant_remove_role_menu_link(
+            self._data.id_role,
+            self._data.id,
+            self.checked == Qt.CheckState.Checked,
+        )
 
     def is_checked(self):
-        return self.checked
+        return super().is_checked()
 
     def data(self, column=0):
         return self._data.translation
@@ -107,7 +111,7 @@ class ModeNode(Node):
         return 'mode'
 
     def check(self, state):
-        self.checked = state
+        super().check(state)
 
     def is_checked(self):
         if len(self.checked_children_count()) == 0:
@@ -132,7 +136,7 @@ class LocationNode(Node):
         return 'location'
 
     def check(self, state):
-        self.checked = state
+        super().check(state)
 
     def is_checked(self):
         if len(self.checked_children_count()) == 0:
