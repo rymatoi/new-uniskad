@@ -45,7 +45,7 @@ class ProjectTreeView(TreeView):
     def import_test(self, index):
         dialog = ProjectSelectionDialog(main_window=self.main_window)
         item = index.internalPointer()
-        if dialog.exec_():
+        if dialog.exec():
             project = dialog.get_result()
             product_folder = None
             for child in project.children:
@@ -54,7 +54,7 @@ class ProjectTreeView(TreeView):
             if product_folder:
                 test_select_dialog = ProjectTestSelectionDialog(product_folder._data.project_id,
                                                                 main_window=self.main_window)
-                if test_select_dialog.exec_():
+                if test_select_dialog.exec():
                     selected = test_select_dialog.get_result()
                     current_item = selected[0]
                     while current_item.parent() in selected:
@@ -115,7 +115,7 @@ class ProjectTreeView(TreeView):
         item = index.internalPointer()
         graph_templates = sp.get_user_plot_templates()
         dialog = EditPlotTemplatesDialog(item, graph_templates)
-        if dialog.exec_():  # Если произошло изменение данных
+        if dialog.exec():  # Если произошло изменение данных
             graph_items = dialog.get_result()
             for g in graph_items:
                 g.type_ = 'graph'

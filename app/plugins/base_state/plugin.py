@@ -38,7 +38,7 @@ class BasePlugin(QObject):
             warning.button(QMessageBox.StandardButton.No).setText("Не сохранять")
             warning.button(QMessageBox.StandardButton.Cancel).setText("Отмена")
 
-            result = warning.exec_()
+            result = warning.exec()
             if result == QMessageBox.StandardButton.Yes:
                 pass
                 #

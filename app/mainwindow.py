@@ -378,7 +378,7 @@ class MainWindow(QtWidgets.QMainWindow):
             return
         window = HelpApp('resources/docs', self)
         self.help_shown = True
-        if window.exec_():
+        if window.exec():
             pass
         self.help_shown = False
 
@@ -461,7 +461,7 @@ class MainWindow(QtWidgets.QMainWindow):
         event_loop = QEventLoop()
         worker.finished.connect(event_loop.quit)
         worker.start()
-        event_loop.exec_()
+        event_loop.exec()
 
         # self.status_label.clear()
         self.progress_bar.setVisible(False)
@@ -769,7 +769,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def show_settings(self):
         settings = SettingsDialog(self)
         settings.settings_applied.connect(self.apply_runtime_settings)
-        settings.exec_()
+        settings.exec()
 
     def apply_runtime_settings(self, values: Optional[Dict[str, Any]] = None):
         """Применяет настройки интерфейса и поведения без перезапуска."""

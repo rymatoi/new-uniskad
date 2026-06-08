@@ -20,7 +20,7 @@ class ProjectPlugin(BasePlugin):
 
     def activate(self):
         dialog = ProjectSelectionDialog(self.autoopen_project_id, main_window=self.parent())
-        if dialog.exec_():
+        if dialog.exec():
             project = dialog.get_result()
 
             # self.project_treeview = TreeWidget(dialog.projects, project.project_id)

@@ -83,7 +83,7 @@ def get_text(title, label_text, default_text='', icon=":/uniskad.ico"):
     dialog.setTextEchoMode(QLineEdit.EchoMode.Normal)
     dialog.setWindowFlags(dialog.windowFlags() & ~Qt.WindowType.WindowContextHelpButtonHint)
     dialog.resize(300, 100)
-    ok = dialog.exec_()
+    ok = dialog.exec()
     name = dialog.textValue()
     if ok and name:
         return name

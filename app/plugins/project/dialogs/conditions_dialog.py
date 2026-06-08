@@ -166,7 +166,7 @@ class ConditionWidget(QWidget):
 
     def edit_condition(self, num):
         dialog = EditProjectItemDialog(self)
-        if dialog.exec_():
+        if dialog.exec():
             pass
 
     def update(self):

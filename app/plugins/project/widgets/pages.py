@@ -51,7 +51,7 @@ class ProjectTablePage1(TablePage1):
             self.table.selectAll()
 
         dialog = ExportTxtDialog(self.table)
-        if dialog.exec_():  # Если произошло изменение данных
+        if dialog.exec():  # Если произошло изменение данных
             result = dialog.get_result()
 
     def get_row_db_object(self, param_name, prop_name, prop_value):
@@ -238,14 +238,14 @@ class ProjectTablePage1(TablePage1):
         item = self.table.itemFromIndex(index)
         row = item.key[0]
         dialog = RowSettingsDialog(row, item, parent=self)
-        if dialog.exec_():  # Если произошло изменение данных
+        if dialog.exec():  # Если произошло изменение данных
             result = dialog.get_result()
 
     def column_settings(self, index):
         item = self.table.itemFromIndex(index)
         column = item.key[1]
         dialog = ColumnSettingsDialog(column, item, parent=self)
-        if dialog.exec_():  # Если произошло изменение данных
+        if dialog.exec():  # Если произошло изменение данных
             result = dialog.get_result()
 
     def update_row_prop(self, name, prop_name, prop_value):
@@ -272,7 +272,7 @@ class ProjectTablePage1(TablePage1):
 
     def edit_formula_list(self):
         dialog = ManageUserFormulasDialog(self, self.mw)
-        if dialog.exec_():  # Если произошло изменение данных
+        if dialog.exec():  # Если произошло изменение данных
             result = dialog.get_result()
 
 
@@ -326,7 +326,7 @@ class ProjectPlotPage(PlotPage):
 
     def plane_settings(self):
         dialog = EditPlaneDialog(self.item)
-        if dialog.exec_():  # Если произошло изменение данных
+        if dialog.exec():  # Если произошло изменение данных
             result = dialog.get_result()
             self.plotView.refresh()
 
@@ -344,7 +344,7 @@ class ProjectPlotPage(PlotPage):
         # Create a printer dialog
         printer = QPrinter()
         dialog = QPrintDialog(printer, self)
-        if dialog.exec_():
+        if dialog.exec():
             painter = QPainter(printer)
             painter.begin(self)
             rect = painter.viewport()

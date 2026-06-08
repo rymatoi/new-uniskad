@@ -961,7 +961,7 @@ class TreeView(QTreeView):
         if not self.DISABLE_MENU:
             index = self.indexAt(pos)
             menu = self.menu(index)
-            menu.exec_(self.viewport().mapToGlobal(pos))
+            menu.exec(self.viewport().mapToGlobal(pos))
 
     def _load_menu(self, mode='base_state', location='treeview'):
         menu = sp.get_user_menu_(mode, location)
@@ -2356,7 +2356,7 @@ class TablePage1(QtWidgets.QWidget):
         button_box.rejected.connect(help_dialog.reject)
         layout.addWidget(button_box)
 
-        help_dialog.exec_()
+        help_dialog.exec()
 
     def update_formula_context(self):
         if not hasattr(self, 'formula_edit'):
@@ -2639,7 +2639,7 @@ class TableWidget(QTableWidget):
 
     def __init__(self, parent, main_window):
         super().__init__()
-        self.setLocale(QLocale(QLocale.Language.English, QLocale.Territory.UnitedKingdom))
+        self.setLocale(QLocale(QLocale.Language.English, QLocale.Country.UnitedKingdom))
         self.columns = {}
         self.ord_columns = []
         self.rows = {}
