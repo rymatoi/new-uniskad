@@ -83,10 +83,13 @@ QToolBar {
     spacing: 4px;
 }
 
-QHeaderView::section {
+/* Table headers use a restrained grey fill and clear cell boundaries. */
+QHeaderView::section,
+QTableCornerButton::section {
+    background: palette(button);
     border: none;
-    border-right: 1px solid palette(midlight);
-    border-bottom: 1px solid palette(midlight);
+    border-right: 1px solid palette(mid);
+    border-bottom: 1px solid palette(mid);
     padding: 5px 7px;
 }
 
