@@ -120,7 +120,7 @@ class RowSettingsDialog(BaseDialog):
                     cell.update_dependencies()
                 if model is not None:
                     index = model.index(row_index, column_index)
-                    model.dataChanged.emit(index, index, [Qt.DisplayRole])
+                    model.dataChanged.emit(index, index, [Qt.ItemDataRole.DisplayRole])
 
         if getattr(self.table_page, 'refresh_formula_result', None) is not None:
             self.table_page.refresh_formula_result()

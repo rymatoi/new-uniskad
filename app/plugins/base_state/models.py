@@ -522,20 +522,20 @@ class TreeModel(QAbstractItemModel):
         return QModelIndex()
 
     def headerData(self, section: int, orientation: PySide6.QtCore.Qt.Orientation, role: int = ...):
-        if orientation == Qt.Horizontal and role == Qt.DisplayRole:
+        if orientation == Qt.Horizontal and role == Qt.ItemDataRole.DisplayRole:
             return self.headers[section]
 
     def data(self, index: QModelIndex, role: int = ...):
         if not index.isValid():
             return None
         node = index.internalPointer()
-        if role == Qt.DisplayRole:
+        if role == Qt.ItemDataRole.DisplayRole:
             return node.data(index.column())
 
-        if role == Qt.ToolTipRole:
+        if role == Qt.ItemDataRole.ToolTipRole:
             return node.data()
 
-        if role == Qt.BackgroundColorRole:
+        if role == Qt.ItemDataRole.BackgroundRole:
             if getattr(node, 'search_highlight', False):
                 highlight = QColor('#fff59d')
                 if node.font_bgcolor:
@@ -552,10 +552,10 @@ class TreeModel(QAbstractItemModel):
             else:
                 return None
 
-        if role == Qt.TextColorRole:
+        if role == Qt.ItemDataRole.ForegroundRole:
             return QColor(node.font_text_color)
 
-        if role == Qt.DecorationRole:
+        if role == Qt.ItemDataRole.DecorationRole:
             icon = node.get_icon(index.column())
 
             if hasattr(node._data, 'deleted') and node._data.deleted is True:
@@ -585,7 +585,7 @@ class TreeModel(QAbstractItemModel):
 
             return icon
 
-        if role == Qt.FontRole:
+        if role == Qt.ItemDataRole.FontRole:
             font = QFont()
             if self.font_name:
                 if not node.font_name:
@@ -605,14 +605,14 @@ class TreeModel(QAbstractItemModel):
             font.setStrikeOut(replace_dict.get(node.font_strikeout, node.font_strikeout))
             return font
 
-        if role == Qt.UserRole:
+        if role == Qt.ItemDataRole.UserRole:
             if hasattr(node._data, 'deleted'):
                 return node._data.deleted
             else:
                 return False
 
         if self.CHECKABLE:
-            if role == Qt.CheckStateRole and index.column() == 0:
+            if role == Qt.ItemDataRole.CheckStateRole and index.column() == 0:
                 return node.is_checked()
 
     def moveItem(self, sourceIndex, destinationIndex):
@@ -729,7 +729,7 @@ class TreeModel(QAbstractItemModel):
 
     def setData(self, index: "QModelIndex", value: "Any", role: int = ...) -> bool:
         """Изменяет данные на интерфейсе"""
-        if index.column() == 0 and role == Qt.CheckStateRole:
+        if index.column() == 0 and role == Qt.ItemDataRole.CheckStateRole:
             self._check(index, Qt.CheckState(value))
             self.itemChecked.emit(self.nodeFromIndex(index))
             return True

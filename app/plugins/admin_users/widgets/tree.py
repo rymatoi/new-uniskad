@@ -28,7 +28,7 @@ class AdminUsersTreeView(TreeView):
     #         index = self.model().index(row, 0)
     #         if not index.internalPointer():
     #             continue
-    #         hidden = self.model().data(index, Qt.UserRole)
+    #         hidden = self.model().data(index, Qt.ItemDataRole.UserRole)
     #         if not self.HIDE_REMOVED_ITEMS:
     #             self.setItemVisibility(self.model(), index, False)
     #         else:
