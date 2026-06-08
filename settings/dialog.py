@@ -6,6 +6,7 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QFont, QFontDatabase
 from PySide6.QtWidgets import (
     QCheckBox,
+    QComboBox,
     QDialogButtonBox,
     QFontComboBox,
     QFormLayout,
@@ -26,11 +27,15 @@ class SettingsDialog(BaseDialog):
     """Локальное окно настроек приложения."""
 
     settings_applied = Signal(dict)
+    role_changed = Signal(str)
 
     def __init__(self, parent=None, flags=None):
         super().__init__(parent, flags)
 
         self.user_settings = getattr(parent, "user_settings", UserSettings())
+        self.roles = getattr(parent, "roles", [])
+        current_role = getattr(parent, "current_role", None)
+        self._initial_role_name = getattr(current_role, "name", None)
         self._defaults = {
             "application_close_timeout": 30,
             "restore_window_layout": True,
@@ -113,6 +118,18 @@ class SettingsDialog(BaseDialog):
         session_group = QGroupBox("Сеанс", self.general_tab)
         session_group.setLayout(layout)
 
+        role_layout = QFormLayout()
+        role_layout.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
+
+        self.role_combo = QComboBox(self.general_tab)
+        for role in self.roles:
+            self.role_combo.addItem(role.rolename, role.name)
+        self.role_combo.setEnabled(len(self.roles) > 1)
+        role_layout.addRow("Текущая роль:", self.role_combo)
+
+        role_group = QGroupBox("Пользователь", self.general_tab)
+        role_group.setLayout(role_layout)
+
         notifications_layout = QFormLayout()
         notifications_layout.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
 
@@ -131,6 +148,7 @@ class SettingsDialog(BaseDialog):
 
         container_layout = QVBoxLayout(self.general_tab)
         container_layout.addWidget(session_group)
+        container_layout.addWidget(role_group)
         container_layout.addWidget(notifications_group)
         container_layout.addStretch()
 
@@ -186,6 +204,7 @@ class SettingsDialog(BaseDialog):
         self.status_bar_checkbox.stateChanged.connect(self._mark_dirty)
         self.notifications_enabled_checkbox.stateChanged.connect(self._mark_dirty)
         self.notifications_timeout_spin.valueChanged.connect(self._mark_dirty)
+        self.role_combo.currentIndexChanged.connect(self._mark_dirty)
 
         # Appearance tab
         self.use_custom_font_checkbox.stateChanged.connect(self._on_use_custom_font_changed)
@@ -197,6 +216,10 @@ class SettingsDialog(BaseDialog):
         self.clear_font_button.clicked.connect(self._clear_interface_settings)
 
     def _load_settings(self) -> None:
+        role_index = self.role_combo.findData(self._initial_role_name)
+        if role_index >= 0:
+            self.role_combo.setCurrentIndex(role_index)
+
         timeout = int(self._get_setting("application_close_timeout"))
         self.close_timeout_spin.setValue(max(timeout, 1))
 
@@ -285,6 +308,11 @@ class SettingsDialog(BaseDialog):
             self.user_settings.set(key, value)
 
         self.settings_applied.emit(values)
+
+        selected_role_name = self.role_combo.currentData()
+        if selected_role_name and selected_role_name != self._initial_role_name:
+            self.role_changed.emit(selected_role_name)
+            self._initial_role_name = selected_role_name
 
         self._dirty = False
         if self.apply_button:
