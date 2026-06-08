@@ -1,12 +1,15 @@
 from PySide6.QtCore import QTimer
 from PySide6.QtGui import QFont, QKeyEvent, QMouseEvent
-from PySide6.QtWidgets import QApplication, QMainWindow, QDialog
+from PySide6.QtWidgets import QApplication, QMainWindow, QDialog, QWidget
+
+from app.interface_style import FriendlyProxyStyle
 
 
 class Application(QApplication):
     def __init__(self, *argv):
         super().__init__(*argv)
         self._default_font = QFont(self.font())
+        self.setStyle(FriendlyProxyStyle(self.style()))
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.close_main_window)
         self.timer_disabled = False
@@ -29,6 +32,29 @@ class Application(QApplication):
             if font_size and int(font_size) > 0:
                 font.setPointSize(int(font_size))
         self.setFont(font)
+        self._update_existing_widget_fonts(font)
+
+    def _update_existing_widget_fonts(self, interface_font):
+        """Refresh already-created widgets while retaining emphasis and decoration.
+
+        QApplication.setFont() becomes the default for newly created widgets, but
+        widgets whose font was already resolved (for example custom dock headers
+        and widgets with a stylesheet) can keep the previous point size.
+        """
+
+        for widget in self.allWidgets():
+            if not isinstance(widget, QWidget) or widget.property("preserveInterfaceFont"):
+                continue
+
+            widget_font = QFont(widget.font())
+            widget_font.setFamily(interface_font.family())
+            if interface_font.pointSizeF() > 0:
+                widget_font.setPointSizeF(interface_font.pointSizeF())
+            elif interface_font.pixelSize() > 0:
+                widget_font.setPixelSize(interface_font.pixelSize())
+            widget.setFont(widget_font)
+            widget.updateGeometry()
+        self.processEvents()
 
     def initialize_main_window(self):
         self._main_window_initialized = True
