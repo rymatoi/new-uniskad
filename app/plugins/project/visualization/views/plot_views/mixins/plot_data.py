@@ -5,6 +5,9 @@ import numpy as np
 import pyqtgraph as pg
 
 
+_UNSET = object()
+
+
 class PlotDataMixin:
     """Миксин для управления данными графика"""
 
@@ -20,7 +23,17 @@ class PlotDataMixin:
     constraints: dict
     param_constraints: list
 
-    def __init__(self, item, main_window):
+    def __init__(self, item=_UNSET, main_window=_UNSET):
+        # PySide6 may call the next Python class in the MRO while constructing
+        # the underlying Qt widget.  BasePlotView performs explicit mixin
+        # initialization with the real item/main_window immediately after the
+        # PlotWidget is created, so this cooperative no-argument call must not
+        # initialize data state or fail with a TypeError.
+        if item is _UNSET and main_window is _UNSET:
+            return
+        if item is _UNSET or main_window is _UNSET:
+            raise TypeError("PlotDataMixin requires both item and main_window")
+
         self._curve_items: List[CurveItem] = []
         self._item = item
         self.data_processor: Any = self.init_data_processor()
