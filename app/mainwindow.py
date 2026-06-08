@@ -5,8 +5,7 @@ from typing import Any, Dict, Optional
 from PySide6 import QtWidgets
 from PySide6.QtCore import QEventLoop, QSize, Slot, Qt
 from PySide6.QtGui import QIcon, QCloseEvent, QKeySequence, QAction, QShortcut
-from PySide6.QtWidgets import QMenu, QToolBar, QHBoxLayout, QToolButton, QWidget, QDialog, QDockWidget, \
-    QProgressBar, QLabel
+from PySide6.QtWidgets import QDialog, QDockWidget, QProgressBar, QLabel
 from app import app_logger, _menu, basic_funcs
 from app.cache import DataCache
 from app.history_manager.history_manager import EventStack
@@ -145,12 +144,9 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # self.setWindowTitle('UNISKAD')
 
-        self.toolbar_layout = QHBoxLayout(self)
-
         self.init_modes()
+        self.init_roles()
         self.init_menu()
-        self.init_toolbar()
-        # self.init_role_buttons_toolbar()
         self.init_dock_widgets()
 
         self.connect_triggered_funcs()
@@ -209,83 +205,13 @@ class MainWindow(QtWidgets.QMainWindow):
         self.user = next(
             user for user in sp.get_full_users_list() if user.login == current_user_name['get_sesion_user'])
 
-    def init_toolbar(self):
-        toolbar = QToolBar(self)
-        toolbar.setWindowTitle('Панель инструментов')
-        toolbar.setObjectName('main_window_toolbar')
-
-        # self._move_up = QAction(QIcon(":up.png"), 'Переместить вверх', self, )
-        # self._move_down = QAction(QIcon(":down.png"), 'Переместить вниз', self, )
-        #
-        # toolbar.addAction(self._move_up)
-        # toolbar.addAction(self._move_down)
-
-        self.toolbar = toolbar
-
-        self.role_button = QToolButton(self)
-        self.role_button.setPopupMode(QToolButton.ToolButtonPopupMode.MenuButtonPopup)
-        self.role_button.setMenu(self._init_role_button_menu())
-
-        default_user_role = self._get_default_user_role()
-        self.role_button.setText(default_user_role.rolename)
-
-        self.current_role = default_user_role
-
-        self.toolbar_layout.addStretch()
-        self.toolbar_layout.addWidget(self.role_button)
-
-        widget = QWidget()
-        widget.setLayout(self.toolbar_layout)
-        toolbar.addWidget(widget)
-        self.addToolBar(Qt.ToolBarArea.TopToolBarArea, toolbar)
-
-    def init_role_buttons_toolbar(self):
-        """
-        Создает и инициализирует панель инструментов
-        :return:
-        """
-        toolbar = QToolBar(self)
-        toolbar.setWindowTitle('Панель инструментов')
-
-        layout = QHBoxLayout(self)
-        layout.addStretch()
-
-        self.role_button = QToolButton(self)
-        self.role_button.setPopupMode(QToolButton.ToolButtonPopupMode.MenuButtonPopup)
-        self.role_button.setMenu(self._init_role_button_menu())
-
-        default_user_role = self._get_default_user_role()
-        self.role_button.setText(default_user_role.rolename)
-        layout.addWidget(self.role_button)
-
-        widget = QWidget()
-        widget.setLayout(layout)
-        toolbar.addWidget(widget)
-        self.addToolBar(Qt.ToolBarArea.TopToolBarArea, toolbar)
-
-    def _init_role_button_menu(self):
-        """
-        Инициализирует кнопку переключения ролей (будет переделано, ибо обращается к пунктам меню, а нужно к списку ролей
-        # TODO
-        :return:
-        """
+    def init_roles(self):
+        """Загружает доступные пользователю роли и выбирает роль по умолчанию."""
         self.roles = sp.get_user_role_list_()
         for role in self.roles:
-            role.children = None
             role.name = f'_role_{role.id}'
-            role.is_root = True
-            role.translation = role.rolename
-            role.is_menu = None
-            role.is_checkable = False
-            role.init_order = 0
 
-        # role_button_menu = sp.get_user_menu_('any', 'role_button')
-
-        # user_rolenames = [role.rolename for role in self.roles]
-        # role_button_menu = [role for role in role_button_menu if role.translation in user_rolenames]
-        menu = QMenu(self)
-        _menu.init_menu(self.roles, self, menu)
-        return menu
+        self.current_role = self._get_default_user_role()
 
     def _get_default_user_role(self):
         """
@@ -730,7 +656,6 @@ class MainWindow(QtWidgets.QMainWindow):
             self.menuBar().clear()
             self.init_menu()
             self.connect_triggered_funcs()
-            self.role_button.setText(getattr(self, role).text())
             self.current_role = current_role
 
             self.clear_interface()
@@ -771,6 +696,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def show_settings(self):
         settings = SettingsDialog(self)
         settings.settings_applied.connect(self.apply_runtime_settings)
+        settings.role_changed.connect(self.change_role)
         settings.exec()
 
     def apply_runtime_settings(self, values: Optional[Dict[str, Any]] = None):
