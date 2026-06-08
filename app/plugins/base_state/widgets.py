@@ -157,13 +157,6 @@ class TreeView(QTreeView):
         super(TreeView, self).setModel(model)
         self.clear_pending_save()
         model.set_view(self)
-        self.model().font_name = 'Times New Roman'
-        self.model().font_size = 14
-        if self.main_window:
-            if font_name := self.main_window.user_settings.get('font_name'):
-                self.model().font_name = font_name
-            if font_size := self.main_window.user_settings.get('font_size'):
-                self.model().font_size = font_size
         self.resizeColumnToContents(0)
         self.refresh()
         self._reset_tree_state()
@@ -1218,18 +1211,14 @@ class TreeView(QTreeView):
 
         if prop == 'font':
 
-            curr_font = QFont()
+            curr_font = QFont(self.font())
             curr_font.setBold(True if item.font_bold == 'True' else False)
             curr_font.setUnderline(True if item.font_underline == 'True' else False)
             curr_font.setItalic(True if item.font_italic == 'True' else False)
             if item.font_name:
                 curr_font.setFamily(item.font_name)
-            else:
-                curr_font.setFamily(self.main_window.user_settings.get('font_name'))
             if item.font_size:
                 curr_font.setPointSize(int(item.font_size))
-            else:
-                curr_font.setPointSize(int(self.main_window.user_settings.get('font_size')))
             curr_font.setStrikeOut(True if item.font_strikeout == 'True' else False)
 
             ok, font = QFontDialog.getFont(curr_font)
@@ -1787,11 +1776,17 @@ class TableItem(QTableWidgetItem):
 
         if role == Qt.ItemDataRole.FontRole:
             font = QFont()
-            # font.setFamily(self.get('font_name', 'Times'))
-            font.setBold(self.get('font_bold', bool, False))
-            font.setItalic(self.get('font_italic', bool, False))
-            font.setPixelSize(self.get('font_size', int, 14))
-            return font
+            has_custom_font = False
+            if self.get('font_bold', bool, False):
+                font.setBold(True)
+                has_custom_font = True
+            if self.get('font_italic', bool, False):
+                font.setItalic(True)
+                has_custom_font = True
+            if font_size := self.get('font_size', int, None):
+                font.setPixelSize(font_size)
+                has_custom_font = True
+            return font if has_custom_font else None
 
         if role == Qt.ItemDataRole.TextAlignmentRole:
             return tw.get_column_prop(self.key[1], 'alignment', int, 4)

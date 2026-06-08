@@ -248,8 +248,8 @@ class TreeModel(QAbstractItemModel):
         self.checked_list = []
         self._prop_dict = {}
 
-        self.font_name = 'Times New Roman'
-        self.font_size = 14
+        self.font_name = None
+        self.font_size = None
 
         # self.register_nodes()
 
@@ -622,23 +622,26 @@ class TreeModel(QAbstractItemModel):
 
         if role == Qt.ItemDataRole.FontRole:
             font = QFont()
-            if self.font_name:
-                if not node.font_name:
-                    font.setFamily(self.font_name)
-                else:
-                    font.setFamily(node.font_name)
-            if self.font_size:
-                if not node.font_size:
-                    font.setPointSizeF(float(self.font_size))
-                else:
-                    font.setPointSizeF(float(node.font_size))
-            else:
-                font.setPixelSize(int(float(node.font_size)))
-            font.setBold(replace_dict.get(node.font_bold, node.font_bold))
-            font.setUnderline(replace_dict.get(node.font_underline, node.font_underline))
-            font.setItalic(replace_dict.get(node.font_italic, node.font_italic))
-            font.setStrikeOut(replace_dict.get(node.font_strikeout, node.font_strikeout))
-            return font
+            has_custom_font = False
+            if node.font_name:
+                font.setFamily(node.font_name)
+                has_custom_font = True
+            if node.font_size:
+                font.setPointSizeF(float(node.font_size))
+                has_custom_font = True
+            if replace_dict.get(node.font_bold, node.font_bold):
+                font.setBold(True)
+                has_custom_font = True
+            if replace_dict.get(node.font_underline, node.font_underline):
+                font.setUnderline(True)
+                has_custom_font = True
+            if replace_dict.get(node.font_italic, node.font_italic):
+                font.setItalic(True)
+                has_custom_font = True
+            if replace_dict.get(node.font_strikeout, node.font_strikeout):
+                font.setStrikeOut(True)
+                has_custom_font = True
+            return font if has_custom_font else None
 
         if role == Qt.ItemDataRole.UserRole:
             if hasattr(node._data, 'deleted'):

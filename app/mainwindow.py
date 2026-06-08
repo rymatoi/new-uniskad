@@ -4,7 +4,7 @@ from typing import Any, Dict, Optional
 
 from PySide6 import QtWidgets
 from PySide6.QtCore import QEventLoop, QSize, Slot, Qt
-from PySide6.QtGui import QIcon, QCloseEvent, QKeySequence, QFont, QAction, QShortcut
+from PySide6.QtGui import QIcon, QCloseEvent, QKeySequence, QAction, QShortcut
 from PySide6.QtWidgets import QMenu, QToolBar, QHBoxLayout, QToolButton, QWidget, QDialog, QDockWidget, \
     QProgressBar, QLabel
 from app import app_logger, _menu, basic_funcs
@@ -71,10 +71,12 @@ class MainWindow(QtWidgets.QMainWindow):
         self.version = '250425'
         self.script_version = '2025'
 
+        self.user_settings = UserSettings()
+        self._default_app_font = config.config.app.default_font()
+        self._apply_saved_font_settings()
+
         super(MainWindow, self).__init__()
 
-        self.user_settings = UserSettings()
-        self._default_app_font = QFont(config.config.app.font())
         self._tree_states_to_restore = {}
         self._pending_window_state_bytes = None
         self._pending_central_window_state_bytes = None
@@ -804,16 +806,20 @@ class MainWindow(QtWidgets.QMainWindow):
         )
         self._apply_notification_settings(notifications_enabled, notifications_timeout)
 
+    def _apply_saved_font_settings(self) -> None:
+        default_point_size = self._default_app_font.pointSize() if self._default_app_font.pointSize() > 0 else 10
+        config.config.app.apply_interface_font(
+            self._coerce_bool(self.user_settings.get('use_custom_font', False), default=False),
+            self.user_settings.get('font_name', self._default_app_font.family()),
+            self._coerce_int(
+                self.user_settings.get('font_size', default_point_size),
+                default=default_point_size,
+                minimum=6,
+            ),
+        )
+
     def _apply_font_settings(self, use_custom_font: bool, font_name: Any, font_size: int) -> None:
-        if use_custom_font:
-            font = QFont(self._default_app_font)
-            if font_name:
-                font.setFamily(str(font_name))
-            if font_size and font_size > 0:
-                font.setPointSize(int(font_size))
-            config.config.app.setFont(font)
-        else:
-            config.config.app.setFont(QFont(self._default_app_font))
+        config.config.app.apply_interface_font(use_custom_font, font_name, font_size)
 
     def _apply_notification_settings(self, enabled: bool, timeout_seconds: int) -> None:
         self.notifications_enabled = enabled
