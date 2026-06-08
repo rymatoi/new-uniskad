@@ -44,7 +44,7 @@ class Node(object):
         self.font_text_color = None
         self.icon = None
 
-        self.checked = False
+        self.checked = Qt.CheckState.Unchecked
         self._checked_count = 0
 
         self.name = None
@@ -77,11 +77,18 @@ class Node(object):
 
     def is_checked(self):
         """Условие наличия галочки"""
-        return self.checked
+        return self._check_state(self.checked)
 
     def check(self, state):
         """Установка галочки/снятие галочки"""
-        self.checked = state
+        self.checked = self._check_state(state)
+
+    @staticmethod
+    def _check_state(state):
+        """Normalize legacy boolean values to the PySide6 check-state enum."""
+        if isinstance(state, Qt.CheckState):
+            return state
+        return Qt.CheckState.Checked if state else Qt.CheckState.Unchecked
 
     @staticmethod
     def internal_actions() -> List[str]:
@@ -118,7 +125,10 @@ class Node(object):
         return len(self._children)
 
     def checked_children_count(self):
-        return [child for child in self._children if child.is_checked()]
+        return [
+            child for child in self._children
+            if child.is_checked() != Qt.CheckState.Unchecked
+        ]
 
     def child(self, row):
         if 0 <= row < self.childCount():
@@ -306,18 +316,8 @@ class TreeModel(QAbstractItemModel):
         return self._node_matches_allowed(child_node, allowed_children)
 
     def get_root_elements(self):
-        root_elements = []
-
-        # Iterate over all rows in the model
-        for row in range(self.rowCount()):
-            # Get the index of each item in the first column
-            index = self.index(row, 0)
-
-            # Use the parent() method to check if it has a valid parent
-            if index.parent().isValid():
-                root_elements.append(index)
-
-        return root_elements
+        """Return indexes of every top-level item in the model."""
+        return [self.index(row, 0) for row in range(self.rowCount())]
 
     def set_view(self, view):
         self.view = view
