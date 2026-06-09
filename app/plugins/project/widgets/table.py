@@ -66,6 +66,27 @@ class ProjectTableView(ModelViewTable):
     TABLE_FIT = PROJECT_DATA
     SAVE_FUNCTION = staticmethod(sp.new_upd_project_data_array)
 
+    def update_table(self):
+        started = time.perf_counter()
+        deleted = [record for record in self.need_update if record.deleted]
+        updated = [record for record in self.need_update if not record.deleted]
+
+        deleted_success = (not deleted or sp.del_restore_project_data_array(
+            [record.table_fit(self.TABLE_FIT) for record in deleted]))
+        updated_success = (deleted_success and
+                           (not updated or self.SAVE_FUNCTION(
+                               [record.table_fit(self.TABLE_FIT) for record in updated])))
+        success = deleted_success and updated_success
+        logger.info(
+            "ProjectTableView: save/update path completed in %.4f seconds "
+            "(saved deleted records=%d/%d, saved updated records=%d/%d, success=%s)",
+            time.perf_counter() - started, len(deleted) if deleted_success else 0,
+            len(deleted), len(updated) if updated_success else 0, len(updated), success)
+        if success:
+            self.need_update = []
+            self.post_save()
+        return success
+
     def post_save(self):
         try:
             self._parent._parent._parent.model().update_external_graphs()

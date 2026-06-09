@@ -93,7 +93,7 @@ def test_project_page_header_menus_use_header_logical_indexes(application, monke
     assert (captured[1].row(), captured[1].column()) == (0, 0)
 
 
-def test_project_sparse_row_deletion_queues_existing_records_and_persists(application):
+def test_project_sparse_row_deletion_uses_delete_restore_save_path(application, monkeypatch):
     column_1 = datetime.datetime(2024, 1, 1)
     column_2 = datetime.datetime(2024, 1, 2)
     row_property = record('A', None, 'type', 'row', 1)
@@ -119,6 +119,19 @@ def test_project_sparse_row_deletion_queues_existing_records_and_persists(applic
     assert all(item.deleted for item in view.need_update)
     assert view.ord_rows == ['B']
 
+    deleted = []
+    monkeypatch.setattr(
+        'app.plugins.project.widgets.table.sp.del_restore_project_data_array',
+        lambda items: deleted.extend(items) or True)
+    monkeypatch.setattr(
+        view, 'SAVE_FUNCTION',
+        lambda items: pytest.fail('deleted Project records must not use the update procedure'))
+
+    assert view.update_table()
+    expected_deleted = {row_property, row_npp, existing_cell_type, existing_cell_value}
+    assert set(deleted) == {item.table_fit(view.TABLE_FIT) for item in expected_deleted}
+    assert view.need_update == []
+
     reloaded = ProjectTableView()
     reloaded.model().load_data([item for item in records if not item.deleted])
     assert reloaded.ord_rows == ['B']
@@ -141,8 +154,13 @@ def test_project_sparse_column_deletion_queues_existing_records_and_saves(applic
                record('B', column_2, 'value', '2', 7)]
     view = ProjectTableView()
     view.model().load_data(records)
-    saved = []
-    monkeypatch.setattr(view, 'SAVE_FUNCTION', lambda items: saved.extend(items) or True)
+    deleted = []
+    monkeypatch.setattr(
+        'app.plugins.project.widgets.table.sp.del_restore_project_data_array',
+        lambda items: deleted.extend(items) or True)
+    monkeypatch.setattr(
+        view, 'SAVE_FUNCTION',
+        lambda items: pytest.fail('deleted Project records must not use the update procedure'))
 
     # B/column_1 is intentionally absent. Deletion must not materialize it.
     assert ('B', column_1) not in view.table
@@ -153,9 +171,54 @@ def test_project_sparse_column_deletion_queues_existing_records_and_saves(applic
 
     deleted_records = {column_property, column_npp, existing_cell}
     assert all(item.deleted for item in deleted_records)
-    assert set(saved) == {item.table_fit(view.TABLE_FIT) for item in deleted_records}
+    assert set(deleted) == {item.table_fit(view.TABLE_FIT) for item in deleted_records}
     assert view.need_update == []
     assert view.ord_columns == [column_2]
+
+
+def test_project_save_splits_deleted_and_updated_records_and_clears_after_both_succeed(
+        application, monkeypatch):
+    deleted_record = record('A', None, 'row_npp', '1', 1)
+    deleted_record.deleted = True
+    updated_record = record('B', None, 'row_npp', '2', 2)
+    view = ProjectTableView()
+    view.need_update = [deleted_record, updated_record]
+    calls = []
+    post_save_calls = []
+    monkeypatch.setattr(view, 'post_save', lambda: post_save_calls.append(True))
+    monkeypatch.setattr(
+        'app.plugins.project.widgets.table.sp.del_restore_project_data_array',
+        lambda items: calls.append(('deleted', items)) or True)
+    monkeypatch.setattr(
+        view, 'SAVE_FUNCTION',
+        lambda items: calls.append(('updated', items)) or True)
+
+    assert view.update_table()
+
+    assert calls == [
+        ('deleted', [deleted_record.table_fit(view.TABLE_FIT)]),
+        ('updated', [updated_record.table_fit(view.TABLE_FIT)]),
+    ]
+    assert view.need_update == []
+    assert post_save_calls == [True]
+
+
+def test_project_save_keeps_queue_when_a_required_save_fails(application, monkeypatch):
+    deleted_record = record('A', None, 'row_npp', '1', 1)
+    deleted_record.deleted = True
+    updated_record = record('B', None, 'row_npp', '2', 2)
+    view = ProjectTableView()
+    view.need_update = [deleted_record, updated_record]
+    monkeypatch.setattr(
+        view, 'post_save',
+        lambda: pytest.fail('post-save hooks must run only after all saves succeed'))
+    monkeypatch.setattr(
+        'app.plugins.project.widgets.table.sp.del_restore_project_data_array',
+        lambda items: True)
+    monkeypatch.setattr(view, 'SAVE_FUNCTION', lambda items: False)
+
+    assert not view.update_table()
+    assert view.need_update == [deleted_record, updated_record]
 
 
 def test_project_page_view_delete_queues_before_removing_sparse_row(application, monkeypatch):
