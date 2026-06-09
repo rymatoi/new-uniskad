@@ -18,6 +18,7 @@ from app.ui_font import explicit_format_font
 from app._eval_expr import eval_context, eval_expr
 from app.basic_funcs import timing_decorator
 from app.formula import FormulaDelegate, FormulaLineEdit
+from app.menu_service import get_menu
 from app.plugins.base_state.models import Node, ANY_CHILD_TYPE
 from db import sp, session
 
@@ -958,7 +959,7 @@ class TreeView(QTreeView):
             menu.exec_(self.viewport().mapToGlobal(pos))
 
     def _load_menu(self, mode='base_state', location='treeview'):
-        menu = sp.get_user_menu_(mode, location)
+        menu = get_menu(mode, location)
         self.available_actions += [action.name for action in menu]
         return menu
 
@@ -1600,7 +1601,7 @@ class DockWidget(QDockWidget):
         menu.popup(QCursor.pos())
 
     def _load_menu(self, mode, location):
-        menu = sp.get_user_menu_(mode, location)
+        menu = get_menu(mode, location)
         self.available_actions += [action.name for action in menu]
         return menu
 
@@ -2256,7 +2257,7 @@ class TablePage1(QtWidgets.QWidget):
         self.init_table(cells)
 
     def _load_menu(self, mode, location):
-        menu = sp.get_user_menu_(mode, location)
+        menu = get_menu(mode, location)
         self.available_actions += [action.name for action in menu]
         return menu
 

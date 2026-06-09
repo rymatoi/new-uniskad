@@ -205,6 +205,7 @@ class Session:
                                     if old_connection and not old_connection.is_closed():
                                         with contextlib.suppress(Exception):
                                             await old_connection.close()
+                                    self._clear_menu_cache('database session reconnected')
                                     return True
 
                                 last_error = RuntimeError(
@@ -515,6 +516,7 @@ class Session:
                     logger.error("Stored procedure %s raised database error: %s", func.__name__, result)
                     if 'seslogin' in str(result):
                         self.call('checkuserpassword', self._login, self._password)
+                        self._clear_menu_cache('database session reauthorized')
                     db_timing_log(
                         f"[DB wrapper END] {func.__name__}: RaiseError, "
                         f"progress={progress_time:.4f}s, "
@@ -543,11 +545,20 @@ class Session:
 
         return decorator
 
+    @staticmethod
+    def _clear_menu_cache(reason):
+        # Lazy import keeps database Session initialization independent from
+        # the application-level menu service.
+        from app.menu_service import clear_menu_cache
+
+        clear_menu_cache(reason)
+
     def connected(self) -> bool:
         return self._remote_connection and not self._remote_connection.is_closed()
 
     def close(self):
         logger.info("Closing session")
+        self._clear_menu_cache('database session closed')
         if self.connected():
             # noinspection PyBroadException
             try:
@@ -570,6 +581,7 @@ class Session:
     def authorize(self, login, password, auth_manually=False):
         self._login = login
         self._password = password
+        self._clear_menu_cache('authorization updated')
         logger.info(
             "Authorization updated (login=%s, manual=%s)",
             login,

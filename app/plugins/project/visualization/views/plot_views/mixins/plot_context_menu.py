@@ -12,6 +12,7 @@ from app.plugins.project.visualization.views.plot_views.menu_tools.plot_menu_act
     ActionTarget, get_available_actions
 from app.plugins.project.visualization.views.plot_views.menu_tools.curve_clipboard import CurveClipboard
 from db import sp
+from app.menu_service import get_menu
 from app.plugins.project.dialogs.create_approx import ApproxDialog
 from app.plugins.project.dialogs.create_interpolation import InterpDialog
 from app.plugins.project.dialogs.extrapolation_dialog import ExtrapolationDialog
@@ -41,9 +42,9 @@ class PlotContextMenuMixin:
 
     def _cache_available_actions(self):
         """Кэширует доступные действия из базы данных"""
-        curve_actions = sp.get_user_menu_('project', 'curve')
-        point_actions = sp.get_user_menu_('project', 'point')
-        plot_actions = sp.get_user_menu_('project', 'plot')
+        curve_actions = get_menu('project', 'curve')
+        point_actions = get_menu('project', 'point')
+        plot_actions = get_menu('project', 'plot')
 
         self.available_action_names = {
             ActionTarget.CURVE: {action.name for action in get_available_actions(curve_actions)},
