@@ -79,6 +79,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._tree_states_to_restore = {}
         self._pending_window_state_bytes = None
         self._pending_central_window_state_bytes = None
+        self._restoring_after_role_switch = False
 
         config.config.app.enable_timer(self.user_settings.get('application_close_timeout', 30))
         config.config.app._main_window_initialized = True  # TODO test
@@ -437,7 +438,9 @@ class MainWindow(QtWidgets.QMainWindow):
         if not isinstance(state, dict):
             return
         try:
-            accepted = tree_widget.schedule_state_restore(state)
+            accepted = tree_widget.schedule_state_restore(
+                state, after_role_switch=self._restoring_after_role_switch
+            )
         except Exception as exc:
             logger.warning('Не удалось восстановить состояние дерева "%s": %s', plugin_name, exc)
             return
@@ -474,160 +477,188 @@ class MainWindow(QtWidgets.QMainWindow):
             self._pending_window_state_bytes = None
             self._pending_central_window_state_bytes = None
 
-    def save_windows_state(self):
-        remember_session = self._coerce_bool(self.user_settings.get('remember_last_session', True), default=True)
-        restore_layout = self._coerce_bool(self.user_settings.get('restore_window_layout', True), default=True)
+    def capture_ui_state(self, *, include_session=True, include_layout=True):
+        """Capture the current UI state using the application-exit persistence format."""
+        state = {}
 
-        if remember_session:
+        if include_session:
             active_plugins = []
             active_project_id = None
             for dw in self.findChildren(QDockWidget):
                 if not dw.isHidden() and hasattr(dw, 'plugin_name'):
                     plugin_name = dw.plugin_name
                     active_plugins.append(plugin_name)
-                    if plugin_name == 'project' and hasattr(dw, 'project_id') and dw.project_id is not None:
+                    if plugin_name == self.PROJECT and getattr(dw, 'project_id', None) is not None:
                         active_project_id = str(dw.project_id)
 
             if active_project_id is None and hasattr(self, 'project_tree_dock_widget'):
                 project_dock = self.project_tree_dock_widget
-                if hasattr(project_dock, 'project_id') and project_dock.project_id is not None:
+                if getattr(project_dock, 'project_id', None) is not None:
                     active_project_id = str(project_dock.project_id)
 
-            if active_plugins:
-                ordered_unique_plugins = list(dict.fromkeys(active_plugins))
-            else:
-                ordered_unique_plugins = []
+            state['active_plugins'] = list(dict.fromkeys(active_plugins))
+            state['active_project'] = active_project_id
 
-            self.user_settings.set('active_plugins', ordered_unique_plugins)
-
-            if active_project_id is not None:
-                self.user_settings.set('active_project', active_project_id)
-            else:
-                self.user_settings.remove('active_project')
-        else:
-            self.user_settings.remove('active_plugins')
-            self.user_settings.remove('active_project')
-
-        if restore_layout:
-            try:
-                geometry_bytes = self.saveGeometry()
-                logger.debug('Сохраняем геометрию окна: длина raw=%s', geometry_bytes.size())
-                self.user_settings.set('main_window_geometry', geometry_bytes)
-            except Exception as exc:
-                logger.warning('Не удалось сохранить геометрию окна: %s', exc)
-
-            try:
-                state_bytes = self.saveState()
-                logger.debug('Сохраняем состояние окна: длина raw=%s', state_bytes.size())
-                self.user_settings.set('main_window_state', state_bytes)
-            except Exception as exc:
-                logger.warning('Не удалось сохранить состояние окна: %s', exc)
-
-            try:
-                central_state_bytes = self.ui.centralWidget.saveState()
-                logger.debug('Сохраняем состояние центрального окна: длина raw=%s', central_state_bytes.size())
-                self.user_settings.set('central_window_state', central_state_bytes)
-            except Exception as exc:
-                logger.warning('Не удалось сохранить состояние центрального окна: %s', exc)
-        else:
-            self.user_settings.remove('main_window_geometry')
-            self.user_settings.remove('main_window_state')
-            self.user_settings.remove('central_window_state')
-
-        if remember_session:
             existing_states = self._coerce_tree_states(self.user_settings.get('tree_states', {}))
             tree_states = dict(existing_states)
-
-            for dock_name, dock_data in self.dock_widgets.items():
+            tree_states.update(self._tree_states_to_restore)
+            for dock_name in self.dock_widgets:
                 dock_widget = getattr(self, f'{dock_name}_tree_dock_widget', None)
                 if dock_widget is None:
                     continue
                 tree_widget = dock_widget.widget()
-                if not isinstance(tree_widget, TreeView):
-                    continue
-                if tree_widget.model() is None:
+                if not isinstance(tree_widget, TreeView) or tree_widget.model() is None:
                     continue
                 plugin_key = getattr(dock_widget, 'plugin_name', dock_name)
                 if not plugin_key:
                     continue
                 try:
-                    state = tree_widget.capture_persistent_state()
+                    tree_states[str(plugin_key)] = tree_widget.capture_persistent_state()
                 except Exception:
                     logger.exception('Не удалось сохранить состояние дерева для режима "%s".', plugin_key)
-                    continue
-                tree_states[str(plugin_key)] = state
+            state['tree_states'] = tree_states
 
-            if tree_states:
+        if include_layout:
+            for key, capture in (
+                    ('main_window_geometry', self.saveGeometry),
+                    ('main_window_state', self.saveState),
+                    ('central_window_state', self.ui.centralWidget.saveState)):
                 try:
-                    serialized = json.dumps(tree_states, ensure_ascii=False)
-                    self.user_settings.set('tree_states', serialized)
+                    state[key] = capture()
+                except Exception as exc:
+                    logger.warning('Не удалось захватить состояние UI "%s": %s', key, exc)
+
+        tree_states = state.get('tree_states', {})
+        open_tabs = sum(len(value.get('open_tabs') or []) for value in tree_states.values())
+        active_tabs = {
+            plugin: value.get('active_tab') for plugin, value in tree_states.items() if value.get('active_tab')
+        }
+        logger.info(
+            'UI state captured: active_modes=%s, open_tabs=%s, active_tabs=%s',
+            state.get('active_plugins', []), open_tabs, active_tabs,
+        )
+        return state
+
+    def save_ui_state(self, reason='application close'):
+        """Capture and persist UI state without duplicating close-event behavior."""
+        remember_session = self._coerce_bool(self.user_settings.get('remember_last_session', True), default=True)
+        restore_layout = self._coerce_bool(self.user_settings.get('restore_window_layout', True), default=True)
+        state = self.capture_ui_state(include_session=remember_session, include_layout=restore_layout)
+
+        if remember_session:
+            self.user_settings.set('active_plugins', state.get('active_plugins', []))
+            if state.get('active_project') is not None:
+                self.user_settings.set('active_project', state['active_project'])
+            else:
+                self.user_settings.remove('active_project')
+            if state.get('tree_states'):
+                try:
+                    self.user_settings.set('tree_states', json.dumps(state['tree_states'], ensure_ascii=False))
                 except (TypeError, ValueError) as exc:
                     logger.warning('Не удалось сериализовать состояние деревьев: %s', exc)
             else:
                 self.user_settings.remove('tree_states')
         else:
-            self.user_settings.remove('tree_states')
+            for key in ('active_plugins', 'active_project', 'tree_states'):
+                self.user_settings.remove(key)
 
-    def restore_windows_state(self):
-        restore_layout = self._coerce_bool(self.user_settings.get('restore_window_layout', True), default=True)
-        remember_session = self._coerce_bool(self.user_settings.get('remember_last_session', True), default=True)
+        for key in ('main_window_geometry', 'main_window_state', 'central_window_state'):
+            if restore_layout and key in state:
+                self.user_settings.set(key, state[key])
+            else:
+                self.user_settings.remove(key)
+        logger.info('UI state saved: reason=%s', reason)
+        return state
 
-        if restore_layout:
-            geometry_bytes = self.user_settings.get_bytes('main_window_geometry')
-            if not geometry_bytes.isEmpty():
+    def _plugin_restore_action(self, plugin):
+        return {
+            self.ADMIN_ROLES: '_admin_roles',
+            self.ADMIN_USERS: '_admin_users',
+            self.WORK_DATA: '_products_dictionary',
+            self.SYNONYM_DICTIONARY: '_synonym_dictionary',
+            self.EIZM_DICTIONARY: '_eizm_dictionary',
+            self.PROJECT: '_select_project',
+        }.get(plugin)
+
+    def restore_ui_state(self, state, *, after_role_switch=False):
+        """Restore captured/startup UI state, skipping entries forbidden by the active role."""
+        if not isinstance(state, dict):
+            logger.warning('UI state restore skipped: state is not a mapping')
+            return False
+        logger.info('UI state restore started: after_role_switch=%s', after_role_switch)
+        self._restoring_after_role_switch = after_role_switch
+        try:
+            geometry = state.get('main_window_geometry')
+            if geometry is not None:
                 try:
-                    if not geometry_bytes.isEmpty():
-                        restored = self.restoreGeometry(geometry_bytes)
-                        logger.debug('Результат восстановления геометрии окна: %s', restored)
-                    else:
-                        logger.debug('Геометрия окна пуста, пропускаем восстановление')
+                    self.restoreGeometry(geometry)
                 except Exception as exc:
                     logger.warning('Не удалось восстановить геометрию окна: %s', exc)
+            self._pending_window_state_bytes = state.get('main_window_state')
+            self._pending_central_window_state_bytes = state.get('central_window_state')
+            self._tree_states_to_restore = self._coerce_tree_states(state.get('tree_states', {}))
 
-            window_state = self.user_settings.get_bytes('main_window_state')
-            if not window_state.isEmpty():
-                self._pending_window_state_bytes = window_state
-            else:
-                self._pending_window_state_bytes = None
+            active_project = state.get('active_project')
+            if active_project and hasattr(self, 'project') and self.project is not None:
+                self.project.autoopen_project_id = str(active_project)
 
-            central_state = self.user_settings.get_bytes('central_window_state')
-            if not central_state.isEmpty():
-                self._pending_central_window_state_bytes = central_state
-            else:
-                self._pending_central_window_state_bytes = None
-        else:
-            self._pending_window_state_bytes = None
-            self._pending_central_window_state_bytes = None
+            for plugin in state.get('active_plugins') or []:
+                action_name = self._plugin_restore_action(plugin)
+                if action_name and action_name not in self.available_actions:
+                    logger.info('UI restore entry skipped: plugin=%s, reason=permission denied', plugin)
+                    self._tree_states_to_restore.pop(str(plugin), None)
+                    continue
+                obj = getattr(self, plugin, None)
+                dock_widget = getattr(self, f'{plugin}_tree_dock_widget', None)
+                tree_name = getattr(self, f'{plugin.upper()}_TREE', None)
+                if obj is None or dock_widget is None or tree_name is None:
+                    logger.info('UI restore entry skipped: plugin=%s, reason=missing mode data', plugin)
+                    self._tree_states_to_restore.pop(str(plugin), None)
+                    continue
+                try:
+                    self.activate_tree(obj, dock_widget, tree_name)
+                except Exception as exc:
+                    logger.warning('UI restore entry skipped: plugin=%s, reason=%s', plugin, exc)
 
+            self._apply_pending_window_state()
+            if after_role_switch:
+                self._enforce_role_restore_visibility()
+            logger.info('UI state restore completed: after_role_switch=%s', after_role_switch)
+            return True
+        finally:
+            self._restoring_after_role_switch = False
+
+    def restore_saved_ui_state(self, reason='application start'):
+        """Load the existing persisted state format and restore it."""
+        restore_layout = self._coerce_bool(self.user_settings.get('restore_window_layout', True), default=True)
+        remember_session = self._coerce_bool(self.user_settings.get('remember_last_session', True), default=True)
+        state = {}
+        if restore_layout:
+            for key in ('main_window_geometry', 'main_window_state', 'central_window_state'):
+                value = self.user_settings.get_bytes(key)
+                if not value.isEmpty():
+                    state[key] = value
         if remember_session:
-            self._tree_states_to_restore = self._coerce_tree_states(self.user_settings.get('tree_states', {}))
-        else:
-            self._tree_states_to_restore = {}
-
-        restore_last_project = self._coerce_bool(self.user_settings.get('restore_last_project', True), default=True)
-        if remember_session and restore_last_project and hasattr(self, 'project') and self.project is not None:
-            active_project_setting = self.user_settings.get('active_project')
-            if active_project_setting:
-                self.project.autoopen_project_id = str(active_project_setting)
-
-        active_plugins = []
-        if remember_session:
+            state['tree_states'] = self._coerce_tree_states(self.user_settings.get('tree_states', {}))
+            restore_last_project = self._coerce_bool(self.user_settings.get('restore_last_project', True), default=True)
+            state['active_project'] = self.user_settings.get('active_project') if restore_last_project else None
             stored_plugins = self.user_settings.get('active_plugins')
             if isinstance(stored_plugins, str):
                 try:
                     stored_plugins = ast.literal_eval(stored_plugins)
                 except (ValueError, SyntaxError):
                     stored_plugins = [stored_plugins]
+            state['active_plugins'] = list(stored_plugins) if isinstance(stored_plugins, (list, tuple)) else []
+        logger.info('Restoring saved UI state: reason=%s', reason)
+        return self.restore_ui_state(state)
 
-            if isinstance(stored_plugins, (list, tuple)):
-                active_plugins = list(stored_plugins)
+    def save_windows_state(self):
+        """Backward-compatible wrapper for application-close persistence."""
+        return self.save_ui_state(reason='application close')
 
-        for plugin in active_plugins:
-            if hasattr(self, plugin) and hasattr(self, f'{plugin}_tree_dock_widget'):
-                self.activate_tree(getattr(self, plugin), getattr(self, plugin + '_tree_dock_widget'),
-                                   getattr(self, plugin.upper() + '_TREE'))
-
-        self._apply_pending_window_state()
+    def restore_windows_state(self):
+        """Backward-compatible wrapper for application-start restoration."""
+        return self.restore_saved_ui_state(reason='application start')
 
     # slots:
     def import_files(self, type_):
@@ -651,15 +682,44 @@ class MainWindow(QtWidgets.QMainWindow):
         if self.current_role.rolename == current_role.rolename:
             return
 
+        ui_state = self.capture_ui_state()
         success = sp.set_sesion_role(current_role.id_role)
         if success:
             clear_menu_cache('active role changed')
+            self._prepare_interface_for_role_switch()
+            self.available_actions = []
             self.menuBar().clear()
             self.init_menu()
             self.connect_triggered_funcs()
             self.current_role = current_role
+            self.restore_ui_state(ui_state, after_role_switch=True)
 
-            self.clear_interface()
+    def _prepare_interface_for_role_switch(self):
+        """Hide the current interface and mark old page docks so layout restore cannot revive them."""
+        for widget in self.findChildren(QDockWidget):
+            widget.hide()
+            if not hasattr(widget, 'plugin_name'):
+                widget._stale_after_role_switch = True
+
+    def _dock_plugin_name(self, widget):
+        plugin_name = getattr(widget, 'plugin_name', None)
+        if plugin_name:
+            return plugin_name
+        tree_view = getattr(widget, '_parent', None)
+        dock_widget = getattr(tree_view, 'dock_widget', None)
+        return getattr(dock_widget, 'plugin_name', None)
+
+    def _enforce_role_restore_visibility(self):
+        """Keep stale or no-longer-authorized docks hidden after restoring Qt layout bytes."""
+        for widget in self.findChildren(QDockWidget):
+            if getattr(widget, '_stale_after_role_switch', False):
+                widget.hide()
+                continue
+            plugin_name = self._dock_plugin_name(widget)
+            action_name = self._plugin_restore_action(plugin_name)
+            if action_name and action_name not in self.available_actions:
+                widget.hide()
+                logger.info('UI restore entry skipped: plugin=%s, reason=permission denied', plugin_name)
 
     def clear_interface(self):
         for widget in self.findChildren(QDockWidget):

@@ -290,10 +290,12 @@ class TreeView(QTreeView):
 
         return state
 
-    def schedule_state_restore(self, state):
+    def schedule_state_restore(self, state, after_role_switch=False):
         if not isinstance(state, dict):
             return False
         self._pending_restore_state = state
+        if after_role_switch:
+            logger.info('Tree UI state restore started after role switch')
         applied = self._apply_pending_state()
         return applied or isinstance(self._pending_restore_state, dict)
 
@@ -349,25 +351,44 @@ class TreeView(QTreeView):
         try:
             for identifier in open_tabs:
                 index = index_map.get(str(identifier))
-                if index is not None:
-                    try:
-                        self.open_item(index)
-                    except Exception:
-                        logger.exception('Не удалось восстановить вкладку для узла "%s".', identifier)
+                if index is None:
+                    logger.info('UI restore entry skipped: tab=%s, reason=missing node data', identifier)
+                    continue
+                item = index.internalPointer()
+                if not self.check_availability(item, 'open'):
+                    logger.info('UI restore entry skipped: tab=%s, reason=permission denied', identifier)
+                    continue
+                try:
+                    tab = self.open_item(index)
+                    if tab is None:
+                        logger.info('UI restore entry skipped: tab=%s, reason=unavailable tab type', identifier)
+                    elif hasattr(tab, 'ensure_loaded') and not getattr(tab, '_loaded', True):
+                        logger.info('Lazy Project tab restored as placeholder: tab=%s', identifier)
+                except Exception as exc:
+                    logger.info('UI restore entry skipped: tab=%s, reason=%s', identifier, exc)
         finally:
             self._restoring_tabs = previous_flag
 
         if active_identifier:
             target_index = index_map.get(str(active_identifier))
             tab_widget = self._opened_tabs.get(target_index)
-            if tab_widget is not None:
+            if target_index is None:
+                logger.info('UI restore entry skipped: active_tab=%s, reason=missing node data', active_identifier)
+            elif tab_widget is None:
+                logger.info('UI restore entry skipped: active_tab=%s, reason=tab unavailable', active_identifier)
+            else:
                 def raise_tab():
                     try:
                         tab_widget.raise_()
                         tab_widget.activateWindow()
                         ensure_loaded = getattr(tab_widget, 'ensure_loaded', None)
+                        caused_lazy_load = ensure_loaded is not None and not getattr(tab_widget, '_loaded', True)
                         if ensure_loaded is not None:
                             ensure_loaded()
+                        logger.info(
+                            'Active tab restored: tab=%s, caused_lazy_load=%s',
+                            active_identifier, caused_lazy_load,
+                        )
                     except Exception:
                         logger.exception('Не удалось активировать вкладку "%s".', active_identifier)
                 QTimer.singleShot(0, raise_tab)
@@ -1174,11 +1195,11 @@ class TreeView(QTreeView):
             identifier = self._node_identifier(index)
             if identifier:
                 self._active_tab_identifier = str(identifier)
-            return
+            return existing_tab
 
         item = index.internalPointer()
         if not self.check_availability(item, 'open'):
-            return
+            return None
 
         item_type = self.model().item_types.get(item.internal_type(), 'root')
         children = []
@@ -1215,6 +1236,7 @@ class TreeView(QTreeView):
             ensure_loaded = getattr(tab, 'ensure_loaded', None)
             if ensure_loaded is not None:
                 ensure_loaded()
+        return tab
 
     def change_property(self, prop, index):
         need_tab_update = False
