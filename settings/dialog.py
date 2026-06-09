@@ -316,8 +316,10 @@ class SettingsDialog(BaseDialog):
             "active_plugins",
             "active_project",
         ]
+        state_key_factory = getattr(self.parent(), "_ui_state_setting", None)
         for key in keys:
-            self.user_settings.remove(key)
+            setting = state_key_factory(key) if state_key_factory else key
+            self.user_settings.remove(setting)
 
         QMessageBox.information(
             self,

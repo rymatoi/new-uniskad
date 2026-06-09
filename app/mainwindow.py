@@ -1,6 +1,7 @@
 import ast
 import json
 from typing import Any, Dict, Optional
+from urllib.parse import quote
 
 from PySide2 import QtWidgets
 from PySide2.QtCore import QEventLoop, Slot
@@ -477,7 +478,17 @@ class MainWindow(QtWidgets.QMainWindow):
             self._pending_window_state_bytes = None
             self._pending_central_window_state_bytes = None
 
-    def capture_ui_state(self, *, include_session=True, include_layout=True):
+    def _ui_state_key(self, role=None):
+        """Return the stable settings prefix for one login/active-role pair."""
+        login = getattr(getattr(self, 'user', None), 'login', None) or session._login or 'unknown'
+        active_role = role or getattr(self, 'current_role', None)
+        role_id = getattr(active_role, 'id_role', None) or getattr(active_role, 'id', None) or 'unknown'
+        return f"ui_state/{quote(str(login), safe='')}/{quote(str(role_id), safe='')}"
+
+    def _ui_state_setting(self, name, role=None):
+        return f'{self._ui_state_key(role)}/{name}'
+
+    def capture_ui_state(self, *, include_session=True, include_layout=True, role=None):
         """Capture the current UI state using the application-exit persistence format."""
         state = {}
 
@@ -499,7 +510,9 @@ class MainWindow(QtWidgets.QMainWindow):
             state['active_plugins'] = list(dict.fromkeys(active_plugins))
             state['active_project'] = active_project_id
 
-            existing_states = self._coerce_tree_states(self.user_settings.get('tree_states', {}))
+            existing_states = self._coerce_tree_states(
+                self.user_settings.get(self._ui_state_setting('tree_states', role), {})
+            )
             tree_states = dict(existing_states)
             tree_states.update(self._tree_states_to_restore)
             for dock_name in self.dock_widgets:
@@ -539,35 +552,41 @@ class MainWindow(QtWidgets.QMainWindow):
         )
         return state
 
-    def save_ui_state(self, reason='application close'):
-        """Capture and persist UI state without duplicating close-event behavior."""
+    def save_ui_state(self, reason='application close', role=None):
+        """Capture and persist UI state for exactly one login/role pair."""
         remember_session = self._coerce_bool(self.user_settings.get('remember_last_session', True), default=True)
         restore_layout = self._coerce_bool(self.user_settings.get('restore_window_layout', True), default=True)
-        state = self.capture_ui_state(include_session=remember_session, include_layout=restore_layout)
+        state_key = self._ui_state_key(role)
+        state = self.capture_ui_state(
+            include_session=remember_session, include_layout=restore_layout, role=role
+        )
 
         if remember_session:
-            self.user_settings.set('active_plugins', state.get('active_plugins', []))
+            self.user_settings.set(f'{state_key}/active_plugins', state.get('active_plugins', []))
             if state.get('active_project') is not None:
-                self.user_settings.set('active_project', state['active_project'])
+                self.user_settings.set(f'{state_key}/active_project', state['active_project'])
             else:
-                self.user_settings.remove('active_project')
+                self.user_settings.remove(f'{state_key}/active_project')
             if state.get('tree_states'):
                 try:
-                    self.user_settings.set('tree_states', json.dumps(state['tree_states'], ensure_ascii=False))
+                    self.user_settings.set(
+                        f'{state_key}/tree_states', json.dumps(state['tree_states'], ensure_ascii=False)
+                    )
                 except (TypeError, ValueError) as exc:
                     logger.warning('Не удалось сериализовать состояние деревьев: %s', exc)
             else:
-                self.user_settings.remove('tree_states')
+                self.user_settings.remove(f'{state_key}/tree_states')
         else:
             for key in ('active_plugins', 'active_project', 'tree_states'):
-                self.user_settings.remove(key)
+                self.user_settings.remove(f'{state_key}/{key}')
 
         for key in ('main_window_geometry', 'main_window_state', 'central_window_state'):
+            setting = f'{state_key}/{key}'
             if restore_layout and key in state:
-                self.user_settings.set(key, state[key])
+                self.user_settings.set(setting, state[key])
             else:
-                self.user_settings.remove(key)
-        logger.info('UI state saved: reason=%s', reason)
+                self.user_settings.remove(setting)
+        logger.info('UI state saved: reason=%s, state_key=%s', reason, state_key)
         return state
 
     def _plugin_restore_action(self, plugin):
@@ -599,14 +618,17 @@ class MainWindow(QtWidgets.QMainWindow):
             self._tree_states_to_restore = self._coerce_tree_states(state.get('tree_states', {}))
 
             active_project = state.get('active_project')
-            if active_project and hasattr(self, 'project') and self.project is not None:
-                self.project.autoopen_project_id = str(active_project)
+            if hasattr(self, 'project') and self.project is not None:
+                self.project.autoopen_project_id = str(active_project) if active_project else None
 
+            restored_plugins = 0
+            skipped_permission = 0
             for plugin in state.get('active_plugins') or []:
                 action_name = self._plugin_restore_action(plugin)
                 if action_name and action_name not in self.available_actions:
                     logger.info('UI restore entry skipped: plugin=%s, reason=permission denied', plugin)
                     self._tree_states_to_restore.pop(str(plugin), None)
+                    skipped_permission += 1
                     continue
                 obj = getattr(self, plugin, None)
                 dock_widget = getattr(self, f'{plugin}_tree_dock_widget', None)
@@ -617,40 +639,53 @@ class MainWindow(QtWidgets.QMainWindow):
                     continue
                 try:
                     self.activate_tree(obj, dock_widget, tree_name)
+                    restored_plugins += 1
                 except Exception as exc:
                     logger.warning('UI restore entry skipped: plugin=%s, reason=%s', plugin, exc)
 
             self._apply_pending_window_state()
             if after_role_switch:
                 self._enforce_role_restore_visibility()
-            logger.info('UI state restore completed: after_role_switch=%s', after_role_switch)
+            logger.info(
+                'UI state restore completed: after_role_switch=%s, restored_modes=%s, '
+                'skipped_permission=%s', after_role_switch, restored_plugins, skipped_permission,
+            )
             return True
         finally:
             self._restoring_after_role_switch = False
 
-    def restore_saved_ui_state(self, reason='application start'):
-        """Load the existing persisted state format and restore it."""
+    def restore_saved_ui_state(self, reason='application start', role=None, *, after_role_switch=False):
+        """Load and restore state for exactly one login/role pair."""
         restore_layout = self._coerce_bool(self.user_settings.get('restore_window_layout', True), default=True)
         remember_session = self._coerce_bool(self.user_settings.get('remember_last_session', True), default=True)
+        state_key = self._ui_state_key(role)
+        persisted_names = ('main_window_geometry', 'main_window_state', 'central_window_state',
+                           'tree_states', 'active_project', 'active_plugins')
+        found = any(self.user_settings.contains(f'{state_key}/{name}') for name in persisted_names)
         state = {}
         if restore_layout:
             for key in ('main_window_geometry', 'main_window_state', 'central_window_state'):
-                value = self.user_settings.get_bytes(key)
+                value = self.user_settings.get_bytes(f'{state_key}/{key}')
                 if not value.isEmpty():
                     state[key] = value
         if remember_session:
-            state['tree_states'] = self._coerce_tree_states(self.user_settings.get('tree_states', {}))
+            state['tree_states'] = self._coerce_tree_states(
+                self.user_settings.get(f'{state_key}/tree_states', {})
+            )
             restore_last_project = self._coerce_bool(self.user_settings.get('restore_last_project', True), default=True)
-            state['active_project'] = self.user_settings.get('active_project') if restore_last_project else None
-            stored_plugins = self.user_settings.get('active_plugins')
+            state['active_project'] = self.user_settings.get(f'{state_key}/active_project') \
+                if restore_last_project else None
+            stored_plugins = self.user_settings.get(f'{state_key}/active_plugins')
             if isinstance(stored_plugins, str):
                 try:
                     stored_plugins = ast.literal_eval(stored_plugins)
                 except (ValueError, SyntaxError):
                     stored_plugins = [stored_plugins]
             state['active_plugins'] = list(stored_plugins) if isinstance(stored_plugins, (list, tuple)) else []
-        logger.info('Restoring saved UI state: reason=%s', reason)
-        return self.restore_ui_state(state)
+        logger.info(
+            'Restoring saved UI state: reason=%s, state_key=%s, found=%s', reason, state_key, found
+        )
+        return self.restore_ui_state(state, after_role_switch=after_role_switch)
 
     def save_windows_state(self):
         """Backward-compatible wrapper for application-close persistence."""
@@ -682,17 +717,24 @@ class MainWindow(QtWidgets.QMainWindow):
         if self.current_role.rolename == current_role.rolename:
             return
 
-        ui_state = self.capture_ui_state()
+        old_role = self.current_role
+        logger.info(
+            'Active role switch: old_role=%s(%s) -> new_role=%s(%s)',
+            old_role.rolename, old_role.id_role, current_role.rolename, current_role.id_role,
+        )
+        self.save_ui_state(reason='before active role switch', role=old_role)
         success = sp.set_sesion_role(current_role.id_role)
         if success:
+            self.current_role = current_role
             clear_menu_cache('active role changed')
             self._prepare_interface_for_role_switch()
             self.available_actions = []
             self.menuBar().clear()
             self.init_menu()
             self.connect_triggered_funcs()
-            self.current_role = current_role
-            self.restore_ui_state(ui_state, after_role_switch=True)
+            self.restore_saved_ui_state(
+                reason='after active role switch', role=current_role, after_role_switch=True
+            )
 
     def _prepare_interface_for_role_switch(self):
         """Hide the current interface and mark old page docks so layout restore cannot revive them."""

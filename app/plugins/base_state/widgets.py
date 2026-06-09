@@ -343,6 +343,8 @@ class TreeView(QTreeView):
                 self.setCurrentIndex(current_index)
 
         open_tabs = state.get('open_tabs') or []
+        restored_tabs = 0
+        skipped_tabs_permission = 0
         active_identifier = state.get('active_tab')
         if not active_identifier:
             self._active_tab_identifier = None
@@ -357,17 +359,24 @@ class TreeView(QTreeView):
                 item = index.internalPointer()
                 if not self.check_availability(item, 'open'):
                     logger.info('UI restore entry skipped: tab=%s, reason=permission denied', identifier)
+                    skipped_tabs_permission += 1
                     continue
                 try:
                     tab = self.open_item(index)
                     if tab is None:
                         logger.info('UI restore entry skipped: tab=%s, reason=unavailable tab type', identifier)
-                    elif hasattr(tab, 'ensure_loaded') and not getattr(tab, '_loaded', True):
-                        logger.info('Lazy Project tab restored as placeholder: tab=%s', identifier)
+                    else:
+                        restored_tabs += 1
+                        if hasattr(tab, 'ensure_loaded') and not getattr(tab, '_loaded', True):
+                            logger.info('Lazy Project tab restored as placeholder: tab=%s', identifier)
                 except Exception as exc:
                     logger.info('UI restore entry skipped: tab=%s, reason=%s', identifier, exc)
         finally:
             self._restoring_tabs = previous_flag
+        logger.info(
+            'Tree UI state restore completed: restored_tabs=%s, skipped_permission=%s',
+            restored_tabs, skipped_tabs_permission,
+        )
 
         if active_identifier:
             target_index = index_map.get(str(active_identifier))
