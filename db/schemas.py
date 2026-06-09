@@ -396,6 +396,14 @@ class ProjectData(QueryObject):
     eizm_full: str
 
 
+class ProjectDataImportStats(QueryObject):
+    row_type_count: int
+    row_npp_count: int
+    column_type_count: int
+    column_npp_count: int
+    value_count: int
+
+
 class CurveData(QueryObject):
     x_val: str
     y_val: str

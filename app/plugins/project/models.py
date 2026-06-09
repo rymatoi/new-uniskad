@@ -25,6 +25,10 @@ from db.transactions import import_project_other_file_data, \
 logger = app_logger.get_logger(__name__)
 
 
+class InvalidWorkDataDbImport(RuntimeError):
+    """DB import committed records that cannot form a Project table."""
+
+
 def _workdata_import_source(source_test):
     datafile = sp.get_product_uniskad_files(source_test._data.id, 'input_excel')
     if not datafile:
@@ -42,6 +46,32 @@ def _import_workdata_curves_db(target_project_id, id_excel_file, file_version, c
     elapsed = time.perf_counter() - started
     if inserted_rows is None:
         raise RuntimeError('WorkData DB-side import returned no inserted row count')
+
+    stats = sp.get_project_data_import_stats(target_project_id)
+    if stats is None:
+        raise RuntimeError('WorkData DB-side import returned no validation statistics')
+    rows_match = stats.row_type_count == stats.row_npp_count
+    columns_match = stats.column_type_count == stats.column_npp_count
+    logger.info(
+        'WorkData -> ProjectData DB import validation: target_project_id=%s, '
+        'row_type_count=%s, row_npp_count=%s, column_type_count=%s, '
+        'column_npp_count=%s, value_count=%s, rows_match=%s, columns_match=%s, path=db',
+        target_project_id, stats.row_type_count, stats.row_npp_count,
+        stats.column_type_count, stats.column_npp_count, stats.value_count,
+        rows_match, columns_match,
+    )
+    if inserted_rows > 0 and (stats.column_type_count == 0 or stats.column_npp_count == 0):
+        logger.error(
+            'WorkData -> ProjectData DB import produced an unusable table: '
+            'target_project_id=%s, inserted_rows=%s, column_type_count=%s, '
+            'column_npp_count=%s, path=db',
+            target_project_id, inserted_rows, stats.column_type_count,
+            stats.column_npp_count,
+        )
+        raise InvalidWorkDataDbImport('WorkData DB-side import produced no ProjectData columns')
+    if not rows_match or not columns_match:
+        raise InvalidWorkDataDbImport('WorkData DB-side import produced mismatched ProjectData metadata')
+
     logger.info(
         'WorkData -> ProjectData DB import completed: target_project_id=%s, '
         'id_excel_file=%s, file_version=%s, curves=%s, inserted_rows=%s, '
@@ -656,6 +686,12 @@ class TestNode(ProjectRoot):
                             test.project_id, id_excel_file, file_version, param_list
                         )
                         continue
+                    except InvalidWorkDataDbImport:
+                        # A successful but malformed legacy DB function may already have
+                        # committed rows.  Do not add fallback rows on top of that data;
+                        # surface a controlled error instead.  The replacement SQL raises
+                        # inside the function and therefore rolls back before returning.
+                        raise
                     except Exception as exc:
                         fallback_started = time.perf_counter()
                         logger.warning(
