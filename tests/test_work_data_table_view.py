@@ -133,3 +133,29 @@ def test_missing_row_property_does_not_mutate_type_record(application, monkeypat
 
     assert type_record.param_prop_name == 'type'
     assert type_record.prop_value == 'row'
+
+
+def test_qtablewidget_compatibility_counts_and_selected_ranges(application):
+    from PySide2.QtCore import QItemSelection, QItemSelectionModel
+
+    view = make_view(application)
+    selection = QItemSelection(view.model().index(0, 0), view.model().index(1, 1))
+    view.selectionModel().select(selection, QItemSelectionModel.ClearAndSelect)
+
+    assert view.rowCount() == 2
+    assert view.columnCount() == 2
+    ranges = view.selectedRanges()
+    assert len(ranges) == 1
+    assert (ranges[0].topRow(), ranges[0].leftColumn(),
+            ranges[0].bottomRow(), ranges[0].rightColumn()) == (0, 0, 1, 1)
+
+
+def test_set_data_converts_non_string_edit_values_and_preserves_formulas(application):
+    view = make_view(application)
+    index = view.model().index(0, 0)
+    formula = view.table[('A', datetime.datetime(2024, 1, 1))]['formula']
+
+    assert view.model().setData(index, 42, Qt.EditRole)
+    assert formula.prop_value == '42'
+    assert view.model().setData(index, None, Qt.EditRole)
+    assert formula.prop_value == ''

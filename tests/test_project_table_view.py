@@ -47,3 +47,47 @@ def test_project_add_remove_row_and_column_are_lazy(application):
     assert view.removeColumn(1)
     assert view.ord_rows == ['A']
     assert view.ord_columns == [column_1]
+
+
+def test_project_page_header_menus_use_header_logical_indexes(application, monkeypatch):
+    from types import SimpleNamespace
+
+    from PySide2.QtCore import QPoint
+
+    from app.plugins.project.widgets import pages
+
+    column = datetime.datetime(2024, 1, 1)
+    view = ProjectTableView()
+    view.model().load_data([
+        record('A', None, 'row_npp', '1'),
+        record('B', None, 'row_npp', '2'),
+        record(None, column, 'column_npp', '1'),
+        record('A', column, 'value', '1'),
+        record('B', column, 'value', '2'),
+    ])
+    view.setCurrentCell(0, 0)
+    captured = []
+
+    class Menu:
+        def __init__(self, parent):
+            pass
+
+        def popup(self, point):
+            pass
+
+    page = SimpleNamespace(
+        table=view,
+        row_menu={},
+        column_menu={},
+        connect_triggered_funcs=captured.append,
+    )
+    monkeypatch.setattr(pages, 'QMenu', Menu)
+    monkeypatch.setattr(pages._menu, 'init_menu', lambda *args, **kwargs: None)
+
+    row_point = QPoint(0, view.verticalHeader().sectionViewportPosition(1) + 1)
+    pages.ProjectTablePage1.show_row_menu(page, row_point)
+    column_point = QPoint(view.horizontalHeader().sectionViewportPosition(0) + 1, 0)
+    pages.ProjectTablePage1.show_column_menu(page, column_point)
+
+    assert (captured[0].row(), captured[0].column()) == (1, 0)
+    assert (captured[1].row(), captured[1].column()) == (0, 0)
