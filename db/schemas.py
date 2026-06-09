@@ -14,39 +14,112 @@ class QueryField:
 
 
 class QueryObject:
-    """
-    Объект результата выполнения хранимой процедуры.
-    """
+    """Объект результата выполнения хранимой процедуры."""
+
+    _query_field_metadata = None
+    _row_constructor_cache = None
+
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+        # Each schema class gets its own cache.  Building it lazily also keeps
+        # inherited QueryField definitions in the final metadata.
+        cls._query_field_metadata = None
+        cls._row_constructor_cache = None
+
+    @classmethod
+    def _get_query_field_metadata(cls):
+        """Return cached QueryField definitions and their defaults/aliases."""
+        metadata = cls._query_field_metadata
+        if metadata is None:
+            fields = {}
+            for base in reversed(cls.__mro__):
+                for name, value in vars(base).items():
+                    if isinstance(value, QueryField):
+                        fields[name] = value
+            metadata = (fields, tuple(fields.items()))
+            cls._query_field_metadata = metadata
+        return metadata
+
+    @staticmethod
+    def _query_field_value(field, value):
+        # Preserve the historical behavior: a truthy default replaces a
+        # false-y database value, while false-y defaults do not.
+        return field.default if not value and field.default else value
+
+    @classmethod
+    def _get_row_constructor(cls, columns):
+        """Return a cached constructor specialized for a result column set."""
+        cache = cls._row_constructor_cache
+        if cache is None:
+            cache = {}
+            cls._row_constructor_cache = cache
+        column_key = tuple(columns)
+        constructor = cache.get(column_key)
+        if constructor is not None:
+            return constructor
+
+        fields, field_items = cls._get_query_field_metadata()
+        actions = []
+        consumed_fields = set()
+        aliases = {}
+        for name in column_key:
+            field = fields.get(name)
+            alias = field.alias if field is not None else None
+            if alias:
+                aliases[alias] = name
+                consumed_fields.add(alias)
+                actions.append((name, alias, field))
+            else:
+                actions.append((name, None, None))
+            if field is not None:
+                consumed_fields.add(name)
+        defaults = tuple(
+            (name, field.default if field.default is not None else None)
+            for name, field in field_items
+            if name not in consumed_fields
+        )
+
+        def construct(row):
+            obj = cls.__new__(cls)
+            obj._changed_variables = set()
+            obj._alias_dict = aliases.copy()
+            for action, value in zip(actions, row):
+                name, alias, field = action
+                if alias:
+                    setattr(obj, alias, cls._query_field_value(field, value))
+                setattr(obj, name, value)
+            for name, default in defaults:
+                setattr(obj, name, default)
+            return obj
+
+        cache[column_key] = construct
+        return construct
+
+    @classmethod
+    def _from_row(cls, row, columns):
+        """Construct a schema object directly from an asyncpg row."""
+        return cls._get_row_constructor(columns)(row)
 
     def __init__(self, args):
         self._changed_variables = set()
-        self._alias_dict = dict()
-        default_props = [prop for prop in dir(self) if
-                         not prop.startswith('__') and not prop.endswith('__') and prop not in ('_attrs',
-                                                                                                'attrs_update',
-                                                                                                'table_fit',
-                                                                                                '_changed_variables',
-                                                                                                '_alias_dict',
-                                                                                                'set_val',
-                                                                                                )]
-        for k, v in args.items():
-            if hasattr(self, k):
-                if not isinstance(getattr(self, k), QueryField):
-                    logger.error(f'Неправильная инициализация поля {k}.')
-                new_value = getattr(self, k).default if not v and getattr(self, k).default else v
-                new_name = getattr(self, k).alias if getattr(self, k).alias else k
-                if new_name in default_props:
-                    self._alias_dict[new_name] = k
-                    default_props.remove(new_name)
-                if k in default_props:
-                    default_props.remove(k)
-                setattr(self, new_name, new_value)
-            setattr(self, k, v)
-        for prop in default_props:
-            if not getattr(self, prop).default is None:
-                setattr(self, prop, getattr(self, prop).default)
-            else:
-                setattr(self, prop, None)
+        self._alias_dict = {}
+        fields, field_items = self._get_query_field_metadata()
+        consumed_fields = set()
+
+        for name, value in args.items():
+            field = fields.get(name)
+            if field is not None:
+                alias = field.alias
+                if alias:
+                    self._alias_dict[alias] = name
+                    consumed_fields.add(alias)
+                    setattr(self, alias, self._query_field_value(field, value))
+                consumed_fields.add(name)
+            setattr(self, name, value)
+
+        for name, field in field_items:
+            if name not in consumed_fields:
+                setattr(self, name, field.default if field.default is not None else None)
 
     def set_val(self, prop_name, prop_value):
         if prop_name in self._alias_dict:
