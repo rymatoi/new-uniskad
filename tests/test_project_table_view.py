@@ -250,3 +250,33 @@ def test_project_page_view_delete_queues_before_removing_sparse_row(application,
     assert view.ord_rows == []
     assert view.need_update == [existing_cell, row_property]
     assert ('A', column_2) not in view.table
+
+
+def test_project_add_row_and_column_keep_complete_cell_records(application):
+    column_1 = datetime.datetime(2024, 1, 1)
+    column_2 = datetime.datetime(2024, 1, 2)
+    view = ProjectTableView()
+    view.model().load_data([
+        record('A', None, 'row_npp', '1'),
+        record(None, column_1, 'column_npp', '1'),
+        record('A', column_1, 'type', 'cell'),
+        record('A', column_1, 'value', '1'),
+    ])
+
+    view.add_row([
+        record('B', None, 'row_npp', '2'),
+        record('B', column_1, 'type', 'cell'),
+        record('B', column_1, 'value', '0'),
+    ])
+    view.add_column([
+        record(None, column_2, 'column_npp', '2'),
+        record('A', column_2, 'type', 'cell'),
+        record('A', column_2, 'value', '0'),
+        record('B', column_2, 'type', 'cell'),
+        record('B', column_2, 'value', '0'),
+    ])
+
+    for row in ('A', 'B'):
+        for column in (column_1, column_2):
+            assert {'type', 'value'} <= set(view.table[(row, column)])
+            assert view.table[(row, column)]['type'].prop_value == 'cell'

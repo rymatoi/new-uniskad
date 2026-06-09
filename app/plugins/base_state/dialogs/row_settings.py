@@ -111,7 +111,9 @@ class RowSettingsDialog(BaseDialog):
 
         if row_index is not None:
             for column_index, column in enumerate(self.table.ord_columns):
-                cell = self.table.item(row_index, column_index)
+                index = model.index(row_index, column_index)
+                cell = (self.table.ensureItem(index) if hasattr(self.table, 'ensureItem')
+                        else self.table.item(row_index, column_index))
                 if cell is None:
                     continue
                 cell.key = (new_name, column)
@@ -119,7 +121,6 @@ class RowSettingsDialog(BaseDialog):
                 if cell.has_dependencies():
                     cell.update_dependencies()
                 if model is not None:
-                    index = model.index(row_index, column_index)
                     model.dataChanged.emit(index, index, [Qt.DisplayRole])
 
         if getattr(self.table_page, 'refresh_formula_result', None) is not None:
