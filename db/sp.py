@@ -409,6 +409,16 @@ def new_project_data_array(p_project_data: list) -> List[ProjectData]:
 
 
 @session.stored_procedure(modifying=True)
+def import_workdata_file_curves_to_project(p_target_project_id: int,
+                                           p_id_excel_file: int,
+                                           p_file_version: int,
+                                           p_curve_names: list) -> int:
+    return session.call('import_workdata_file_curves_to_project',
+                        p_target_project_id, p_id_excel_file,
+                        p_file_version, p_curve_names)
+
+
+@session.stored_procedure(modifying=True)
 def delete_project(p_id_project: int, p_deleted: bool, p_cascade: bool, p_final_delete: bool = False) -> bool:
     return session.call('delete_project', p_id_project, p_deleted, p_cascade, p_final_delete)
 

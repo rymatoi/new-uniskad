@@ -1,10 +1,11 @@
 import json
+import time
 from copy import copy
 from datetime import datetime
 
 from PySide2.QtGui import QIcon, Qt
 
-from app import basic_funcs
+from app import app_logger, basic_funcs
 from app.plugins.base_state.models import TreeModel, Node, ANY_CHILD_TYPE
 from app.plugins.project import utils
 from app.plugins.project.dialogs.create_epure import CreateEpureDialog
@@ -19,6 +20,36 @@ from db import sp
 from db.tables import PROJECT_TABLE, PROJECT_DATA
 from db.transactions import import_project_other_file_data, \
     delete_file_data_project
+
+
+logger = app_logger.get_logger(__name__)
+
+
+def _workdata_import_source(source_test):
+    datafile = sp.get_product_uniskad_files(source_test._data.id, 'input_excel')
+    if not datafile:
+        raise RuntimeError(
+            f'No input Excel datafile found for WorkData test {source_test._data.id}'
+        )
+    return datafile.id_datafile, int(getattr(source_test, 'final_version', 0))
+
+
+def _import_workdata_curves_db(target_project_id, id_excel_file, file_version, curve_names):
+    started = time.perf_counter()
+    inserted_rows = sp.import_workdata_file_curves_to_project(
+        target_project_id, id_excel_file, file_version, curve_names
+    )
+    elapsed = time.perf_counter() - started
+    if inserted_rows is None:
+        raise RuntimeError('WorkData DB-side import returned no inserted row count')
+    logger.info(
+        'WorkData -> ProjectData DB import completed: target_project_id=%s, '
+        'id_excel_file=%s, file_version=%s, curves=%s, inserted_rows=%s, '
+        'elapsed=%.4fs, path=db',
+        target_project_id, id_excel_file, file_version, len(curve_names),
+        inserted_rows, elapsed,
+    )
+    return inserted_rows
 
 
 class ProjectRoot(Node):
@@ -598,8 +629,11 @@ class TestNode(ProjectRoot):
             dialog = TestDataSelectionDialog(params)
 
             if dialog.exec_():
-                res_data_rows = []
                 param_list = dialog.get_result()
+                source_tests = {
+                    int(item._data.id): item for item in selected
+                    if item.internal_type() == 'test'
+                }
 
                 def new_pr_prop(data, prop_name, prop_value):
                     prop = copy(data)
@@ -608,21 +642,57 @@ class TestNode(ProjectRoot):
                     return prop
 
                 for test in test_projects:
-                    param_data = sp.get_import_file_data_curves_data(int(test.prop_value), param_list)
+                    source_test_id = int(test.prop_value)
+                    source_test = source_tests.get(source_test_id)
+                    id_excel_file = None
+                    file_version = None
+                    try:
+                        if source_test is None:
+                            raise RuntimeError(
+                                f'Selected WorkData test {source_test_id} was not found'
+                            )
+                        id_excel_file, file_version = _workdata_import_source(source_test)
+                        _import_workdata_curves_db(
+                            test.project_id, id_excel_file, file_version, param_list
+                        )
+                        continue
+                    except Exception as exc:
+                        fallback_started = time.perf_counter()
+                        logger.warning(
+                            'WorkData -> ProjectData DB import failed; using fallback: '
+                            'target_project_id=%s, id_excel_file=%s, file_version=%s, '
+                            'source_test_id=%s, curves=%s, error=%s, path=fallback',
+                            test.project_id, id_excel_file, file_version,
+                            source_test_id, len(param_list), exc,
+                        )
+
+                    fallback_rows = []
+                    param_data = sp.get_import_file_data_curves_data(source_test_id, param_list)
                     for param in param_data:
                         param.project_id = test.project_id
                         if param.prop_name == 'type' and param.prop_value == 'row':
-                            res_data_rows.append(
+                            fallback_rows.append(
                                 new_pr_prop(param, 'name', param.excel_param_name).table_fit(PROJECT_DATA))
                             if param.is_secret:
-                                res_data_rows.append(
+                                fallback_rows.append(
                                     new_pr_prop(param, 'is_secret', param.is_secret).table_fit(PROJECT_DATA))
                             if hasattr(param, 'eizm_short'):
-                                res_data_rows.append(
+                                fallback_rows.append(
                                     new_pr_prop(param, 'eizm_short', param.eizm_short).table_fit(PROJECT_DATA))
-                        res_data_rows.append(param.table_fit(PROJECT_DATA))
-                res_data_rows = sorted(res_data_rows, key=lambda x: x[0])
-                sp.new_project_data_array(res_data_rows)
+                        fallback_rows.append(param.table_fit(PROJECT_DATA))
+                    fallback_rows = sorted(fallback_rows, key=lambda x: x[0])
+                    inserted_rows = sp.new_project_data_array(fallback_rows)
+                    inserted_count = (len(inserted_rows) if inserted_rows is not None
+                                      else len(fallback_rows))
+                    logger.info(
+                        'WorkData -> ProjectData fallback import completed: '
+                        'target_project_id=%s, id_excel_file=%s, file_version=%s, '
+                        'source_test_id=%s, curves=%s, inserted_rows=%s, '
+                        'elapsed=%.4fs, path=fallback',
+                        test.project_id, id_excel_file, file_version, source_test_id,
+                        len(param_list), inserted_count,
+                        time.perf_counter() - fallback_started,
+                    )
             return tuple(result_mass)
 
     @staticmethod
