@@ -404,15 +404,104 @@ class ModelViewTable(QTableView):
         self.model()._rebuild_indexes()
         self.model().endResetModel()
 
+    def _queue_deleted_records(self, records, seen):
+        """Mark existing records deleted and retain them for the next save."""
+        queued_ids = {id(record) for record in self.need_update}
+        marked = 0
+        for record in records:
+            record_id = id(record)
+            if record_id in seen:
+                continue
+            seen.add(record_id)
+            record.deleted = True
+            if record_id not in queued_ids:
+                self.need_update.append(record)
+                queued_ids.add(record_id)
+            marked += 1
+        return marked
+
+    def queue_row_deletion(self, row_key):
+        """Queue all existing sparse cell and metadata records for a row."""
+        before = len(self.need_update)
+        seen = set()
+        cell_records = 0
+        property_records = 0
+
+        for (record_row, record_column), properties in list(self.table.items()):
+            matching = (properties.values() if record_row == row_key else
+                        (record for record in properties.values()
+                         if getattr(record, 'excel_param_name', None) == row_key))
+            marked = self._queue_deleted_records(matching, seen)
+            if record_column is None or record_column not in self.ord_columns:
+                property_records += marked
+            else:
+                cell_records += marked
+
+        for (record_row, _), properties in list(self.rows.items()):
+            matching = (properties.values() if record_row == row_key else
+                        (record for record in properties.values()
+                         if getattr(record, 'excel_param_name', None) == row_key))
+            property_records += self._queue_deleted_records(matching, seen)
+
+        # Include unusual metadata records without assuming where a plugin stores them.
+        for properties in list(self.columns.values()):
+            matching = (record for record in properties.values()
+                        if getattr(record, 'excel_param_name', None) == row_key)
+            property_records += self._queue_deleted_records(matching, seen)
+
+        logger.info(
+            "%s: queued row deletion row_key=%r cell_records=%d property_records=%d "
+            "save_items_before=%d save_items_after=%d",
+            type(self).__name__, row_key, cell_records, property_records, before,
+            len(self.need_update))
+        return cell_records, property_records
+
+    def queue_column_deletion(self, column_key):
+        """Queue all existing sparse cell and metadata records for a column."""
+        before = len(self.need_update)
+        seen = set()
+        cell_records = 0
+        property_records = 0
+
+        for (record_row, record_column), properties in list(self.table.items()):
+            matching = (properties.values() if record_column == column_key else
+                        (record for record in properties.values()
+                         if getattr(record, 'date_time_izm', None) == column_key))
+            marked = self._queue_deleted_records(matching, seen)
+            if record_row is None or record_row not in self.ord_rows:
+                property_records += marked
+            else:
+                cell_records += marked
+
+        for (_, record_column), properties in list(self.columns.items()):
+            matching = (properties.values() if record_column == column_key else
+                        (record for record in properties.values()
+                         if getattr(record, 'date_time_izm', None) == column_key))
+            property_records += self._queue_deleted_records(matching, seen)
+
+        # Include unusual metadata records without assuming where a plugin stores them.
+        for properties in list(self.rows.values()):
+            matching = (record for record in properties.values()
+                        if getattr(record, 'date_time_izm', None) == column_key)
+            property_records += self._queue_deleted_records(matching, seen)
+
+        logger.info(
+            "%s: queued column deletion column_key=%r cell_records=%d property_records=%d "
+            "save_items_before=%d save_items_after=%d",
+            type(self).__name__, column_key, cell_records, property_records, before,
+            len(self.need_update))
+        return cell_records, property_records
+
     def removeRow(self, row):
         if not 0 <= row < len(self.ord_rows):
             return False
         row_name = self.ord_rows[row]
         self.model().beginResetModel()
         self.ord_rows.pop(row)
-        self.rows.pop((row_name, None), None)
-        for column in self.ord_columns:
-            self.table.pop((row_name, column), None)
+        for key in [key for key in self.rows if key[0] == row_name]:
+            self.rows.pop(key, None)
+        for key in [key for key in self.table if key[0] == row_name]:
+            self.table.pop(key, None)
         self.model()._items = {}
         self.model()._rebuild_indexes()
         self.model().endResetModel()
@@ -424,9 +513,10 @@ class ModelViewTable(QTableView):
         column_name = self.ord_columns[column]
         self.model().beginResetModel()
         self.ord_columns.pop(column)
-        self.columns.pop((None, column_name), None)
-        for row in self.ord_rows:
-            self.table.pop((row, column_name), None)
+        for key in [key for key in self.columns if key[1] == column_name]:
+            self.columns.pop(key, None)
+        for key in [key for key in self.table if key[1] == column_name]:
+            self.table.pop(key, None)
         self.model()._items = {}
         self.model()._rebuild_indexes()
         self.model().endResetModel()

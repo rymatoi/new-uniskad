@@ -187,6 +187,17 @@ class ProjectTablePage1(TablePage1):
     def remove_row(self, index):
         if not index.isValid():
             return
+        if isinstance(self.table, ProjectTableView):
+            row = index.row()
+            if not 0 <= row < len(self.table.ord_rows):
+                return
+            row_key = self.table.ord_rows[row]
+            self.table.queue_row_deletion(row_key)
+            if self.table.removeRow(row):
+                self.update_formula_context()
+                self._set_formula_target(self.table.currentItem())
+            return
+
         item = self.table.itemFromIndex(index)
         obj_list = []
         cells_to_delete = []
@@ -204,14 +215,11 @@ class ProjectTablePage1(TablePage1):
             [obj.table_fit(PROJECT_DATA) for obj in obj_list])
 
         if result:
-            if isinstance(self.table, ProjectTableView):
-                self.table.removeRow(item.row())
-            else:
-                self.table.ord_rows.remove(item.key[0])
-                del self.table.rows[item.key[0], None]
-                self.table.removeRow(item.row())
-                for cell in cells_to_delete:
-                    del self.table.table[cell]
+            self.table.ord_rows.remove(item.key[0])
+            del self.table.rows[item.key[0], None]
+            self.table.removeRow(item.row())
+            for cell in cells_to_delete:
+                del self.table.table[cell]
             self.update_formula_context()
             self._set_formula_target(self.table.currentItem())
 
@@ -239,6 +247,16 @@ class ProjectTablePage1(TablePage1):
     def remove_column(self, index):
         if not index.isValid():
             return
+        if isinstance(self.table, ProjectTableView):
+            column = index.column()
+            if not 0 <= column < len(self.table.ord_columns):
+                return
+            column_key = self.table.ord_columns[column]
+            self.table.queue_column_deletion(column_key)
+            if self.table.removeColumn(column):
+                self._set_formula_target(self.table.currentItem())
+            return
+
         item = self.table.itemFromIndex(index)
         obj_list = []
         for c in self.table.ord_rows:
@@ -252,12 +270,9 @@ class ProjectTablePage1(TablePage1):
             [obj.table_fit(PROJECT_DATA) for obj in obj_list])
 
         if result:
-            if isinstance(self.table, ProjectTableView):
-                self.table.removeColumn(item.column())
-            else:
-                self.table.removeColumn(item.column())
-                self.table.ord_columns.remove(item.key[1])
-                del self.table.columns[None, item.key[1]]
+            self.table.removeColumn(item.column())
+            self.table.ord_columns.remove(item.key[1])
+            del self.table.columns[None, item.key[1]]
             self._set_formula_target(self.table.currentItem())
 
     def row_settings(self, index):
