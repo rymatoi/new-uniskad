@@ -418,6 +418,11 @@ def import_workdata_file_curves_to_project(p_target_project_id: int,
                         p_file_version, p_curve_names)
 
 
+@session.stored_procedure()
+def get_project_data_import_stats(p_project_id: int) -> ProjectDataImportStats:
+    return session.call('get_project_data_import_stats', p_project_id)
+
+
 @session.stored_procedure(modifying=True)
 def delete_project(p_id_project: int, p_deleted: bool, p_cascade: bool, p_final_delete: bool = False) -> bool:
     return session.call('delete_project', p_id_project, p_deleted, p_cascade, p_final_delete)

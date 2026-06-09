@@ -303,3 +303,30 @@ def test_project_table_font_role_inherits_global_and_preserves_explicit_format(a
     ])
     font = view.model().data(view.model().index(0, 0), Qt.FontRole)
     assert font.italic()
+
+
+def test_project_model_loads_db_import_shape_and_displays_selected_values(application):
+    column_1 = datetime.datetime(2024, 1, 25, 15, 22, 34, 372028)
+    column_2 = datetime.datetime(2024, 1, 25, 15, 22, 35, 740950)
+    records = [
+        record('A', None, 'type', 'row'),
+        record('A', None, 'row_npp', '0'),
+        record('B', None, 'type', 'row'),
+        record('B', None, 'row_npp', '1'),
+        record(None, column_1, 'type', 'column'),
+        record(None, column_1, 'column_npp', '0'),
+        record(None, column_2, 'type', 'column'),
+        record(None, column_2, 'column_npp', '1'),
+        record('A', column_1, 'value', '11'),
+        record('B', column_2, 'value', '22'),
+        record('A', column_1, 'bold', 'True'),
+    ]
+
+    view = ProjectTableView()
+    view.model().load_data(records)
+
+    assert view.model().rowCount() == 2
+    assert view.model().columnCount() == 2
+    assert view.model().data(view.model().index(0, 0)) == '11'
+    assert view.model().data(view.model().index(1, 1)) == '22'
+    assert view.table[('A', column_1)]['bold'].prop_value == 'True'
