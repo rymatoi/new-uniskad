@@ -365,6 +365,9 @@ class TreeView(QTreeView):
                     try:
                         tab_widget.raise_()
                         tab_widget.activateWindow()
+                        ensure_loaded = getattr(tab_widget, 'ensure_loaded', None)
+                        if ensure_loaded is not None:
+                            ensure_loaded()
                     except Exception:
                         logger.exception('Не удалось активировать вкладку "%s".', active_identifier)
                 QTimer.singleShot(0, raise_tab)
@@ -1163,6 +1166,9 @@ class TreeView(QTreeView):
             existing_tab.raise_()
             try:
                 existing_tab.activateWindow()
+                ensure_loaded = getattr(existing_tab, 'ensure_loaded', None)
+                if ensure_loaded is not None:
+                    ensure_loaded()
             except Exception:
                 logger.exception('Не удалось активировать ранее открытую вкладку.')
             identifier = self._node_identifier(index)
@@ -1205,6 +1211,10 @@ class TreeView(QTreeView):
             self._parent.ui.centralWidget.addDockWidget(Qt.TopDockWidgetArea, tab)
         tab.show()
         tab.raise_()
+        if not self._restoring_tabs:
+            ensure_loaded = getattr(tab, 'ensure_loaded', None)
+            if ensure_loaded is not None:
+                ensure_loaded()
 
     def change_property(self, prop, index):
         need_tab_update = False
