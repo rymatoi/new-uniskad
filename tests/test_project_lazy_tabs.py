@@ -71,3 +71,33 @@ def test_project_table_refresh_is_deferred_before_first_load(application, monkey
 
     assert tab._refresh_pending
     assert calls == []
+
+
+def test_restored_project_tabs_stay_lazy_until_active_tab_is_loaded(application, monkeypatch):
+    calls = []
+    page = QWidget()
+    parent = QWidget()
+    parent._restoring_tabs = True
+    monkeypatch.setattr(
+        'app.plugins.project.widgets.tabs.sp.get_project_data',
+        lambda project_id: calls.append(project_id) or ['cell'],
+    )
+    monkeypatch.setattr(
+        'app.plugins.project.widgets.tabs.ProjectTablePage1',
+        lambda cells, item, tab, main_window: page,
+    )
+
+    inactive_tab = ProjectTestTableTab(FakeIndex(make_item(101)), parent)
+    active_tab = ProjectTestTableTab(FakeIndex(make_item(202)), parent)
+    inactive_tab._load_when_visible(True)
+    active_tab._load_when_visible(True)
+
+    assert calls == []
+    assert not inactive_tab._loaded
+    assert not active_tab._loaded
+
+    active_tab.ensure_loaded()
+
+    assert calls == [202]
+    assert not inactive_tab._loaded
+    assert active_tab._loaded

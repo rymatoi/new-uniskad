@@ -18,11 +18,13 @@ def init_menu(menu_list, parent, menu_bar, _exclude=None):
     action_titles = [action.name for action in actions]
     for action in actions:
         if hasattr(parent, action.name):
-            action = getattr(parent, action.name)
-            action.blockSignals(True)
-            action.triggered.connect(lambda: None)
-            action.triggered.disconnect()
-            action.blockSignals(False)
+            existing_action = getattr(parent, action.name)
+            existing_action.blockSignals(True)
+            existing_action.triggered.connect(lambda: None)
+            existing_action.triggered.disconnect()
+            existing_action.blockSignals(False)
+            if action.name not in parent.available_actions:
+                parent.available_actions.append(action.name)
             continue
         setattr(parent, action.name, QAction(action.translation, parent))
         getattr(parent, action.name).setCheckable(
