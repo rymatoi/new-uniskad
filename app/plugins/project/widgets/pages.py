@@ -1,10 +1,10 @@
 from datetime import datetime
-from PySide2.QtGui import QIcon, QPixmap, QPainter, Qt
+from PySide2.QtGui import QCursor, QIcon, QPixmap, QPainter, Qt
 from PySide2.QtPrintSupport import QPrinter, QPrintDialog
-from PySide2.QtWidgets import QAction
+from PySide2.QtWidgets import QAction, QMenu
 from pyqtgraph import InfiniteLine
 
-from app import app_logger, basic_funcs
+from app import _menu, app_logger, basic_funcs
 from app.basic_funcs import export_file
 from app.plugins.base_state.dialogs.column_settings import ColumnSettingsDialog
 from app.plugins.base_state.dialogs.export_txt_template import ExportTxtDialog
@@ -41,6 +41,24 @@ class ProjectTablePage1(TablePage1):
         self.add_toolbar_action('_export_excel',
                                 QAction(QIcon(":export_excel.png"), 'Экспорт Excel', self,
                                         triggered=lambda: self.export_excel()))
+
+    def show_row_menu(self, point):
+        row = self.table.verticalHeader().logicalIndexAt(point)
+        column = max(self.table.currentColumn(), 0)
+        index = self.table.model().index(row, column)
+        menu = QMenu(self)
+        _menu.init_menu(self.row_menu, self, menu, _exclude=['_rename_row', '_recalculate_eizm'])
+        self.connect_triggered_funcs(index)
+        menu.popup(QCursor.pos())
+
+    def show_column_menu(self, point):
+        column = self.table.horizontalHeader().logicalIndexAt(point)
+        row = max(self.table.currentRow(), 0)
+        index = self.table.model().index(row, column)
+        menu = QMenu(self)
+        _menu.init_menu(self.column_menu, self, menu)
+        self.connect_triggered_funcs(index)
+        menu.popup(QCursor.pos())
 
     def export_excel(self):
         filepath = basic_funcs.export_file(self.item.name.replace('"', '').replace("'", ''), "Экспорт испытания",

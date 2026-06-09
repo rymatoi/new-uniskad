@@ -7,7 +7,7 @@ from openpyxl.workbook import Workbook
 from PySide2.QtCore import QAbstractTableModel, QLocale, QTimer, Qt, Signal
 from PySide2.QtGui import QKeySequence
 from PySide2.QtWidgets import (QAbstractItemView, QApplication, QInputDialog,
-                               QTableView)
+                               QTableView, QTableWidgetSelectionRange)
 
 from app import app_logger
 from app.plugins.base_state.widgets import TableItem
@@ -130,8 +130,9 @@ class LazyTableModel(QAbstractTableModel):
         return item.data(role) if item is not None else None
 
     def setData(self, index, value, role=Qt.EditRole):
-        if role != Qt.EditRole or not index.isValid() or not isinstance(value, str):
+        if role != Qt.EditRole or not index.isValid():
             return False
+        value = '' if value is None else str(value)
         item = self.item(index)
         if item is None or value == item.get('formula', str, ''):
             return False
@@ -282,6 +283,17 @@ class ModelViewTable(QTableView):
 
     def selectedItems(self):
         return [self.itemFromIndex(index) for index in self.selectedIndexes()]
+
+    def selectedRanges(self):
+        return [QTableWidgetSelectionRange(selection.top(), selection.left(),
+                                           selection.bottom(), selection.right())
+                for selection in self.selectionModel().selection()]
+
+    def rowCount(self):
+        return self.model().rowCount()
+
+    def columnCount(self):
+        return self.model().columnCount()
 
     def setCurrentCell(self, row, column):
         self.setCurrentIndex(self.model().index(row, column))
