@@ -1,3 +1,4 @@
+import os
 import time
 
 from PySide2.QtCore import QDir, QStandardPaths, QUrl
@@ -8,9 +9,8 @@ from app import app_logger
 from app.basic_funcs import timing_decorator
 from app.plugins.base_state.widgets import Tab
 from app.plugins.project.widgets.pages import ProjectPlotPage
-from app.plugins.work_data.widgets.pages import WorkDataTablePage1
+from app.plugins.work_data.widgets.pages import WorkDataTablePage1, WorkDataTableViewPage
 from db import sp
-from db.schemas import ImportFileData
 from db.tables import IMPORT_FILE_DATA
 
 logger = app_logger.get_logger(__name__)
@@ -42,11 +42,15 @@ class WorkDataTab(Tab):
         cells.sort(
             key=lambda x: (x.id_record, x.excel_param_name, x.param_prop_name, x.date_time_izm))
 
-        self.table_page = WorkDataTablePage1(cells, self.item, self, main_window)
+        use_table_view = os.getenv('UNISKAD_WORK_DATA_TABLE_VIEW', '').lower() in {'1', 'true', 'yes', 'on'}
+        page_class = WorkDataTableViewPage if use_table_view else WorkDataTablePage1
+        logger.debug("Work Data table implementation: %s", page_class.__name__)
+        self.table_page = page_class(cells, self.item, self, main_window)
         self.setWidget(self.table_page)
 
     @timing_decorator
     def process_data(self, cells, sprav_names, sprav_eizm, secret_grantness_level):
+        total_started = time.perf_counter()
         stage_started = time.perf_counter()
         sprav_names_by_id = {item.id_name: item for item in sprav_names}
         sprav_eizm_by_id = {item.id_eizm: item for item in sprav_eizm}
@@ -110,45 +114,32 @@ class WorkDataTab(Tab):
         )
 
         stage_started = time.perf_counter()
-        columns = (
-            'id_excel_file', 'id_record', 'file_version', 'is_secret',
-            'excel_param_name', 'param_prop_name', 'date_time_izm',
-            'prop_value', 'deleted', 'npp', 'id_name', 'sprav_name',
-            'accuracy', 'id_eizm', 'eizm_short', 'eizm_full',
-        )
-        construct = ImportFileData._get_row_constructor(columns)
         enrichment_get = mapped_enrichment_by_id.get
         empty_mapped_enrichment = empty_enrichment + empty_eizm
-        processed_data = []
-        append = processed_data.append
         for cell in filtered_cells:
             sprav_name, accuracy, is_secret, id_eizm, eizm_short, eizm_full = enrichment_get(
                 cell.id_name, empty_mapped_enrichment)
-            append(construct((
-                cell.id_excel_file,
-                cell.id_record,
-                cell.file_version,
-                is_secret,
-                sprav_name,
-                cell.param_prop_name,
-                cell.date_time_izm,
-                cell.prop_value,
-                cell.deleted,
-                cell.npp,
-                cell.id_name,
-                sprav_name,
-                accuracy,
-                id_eizm,
-                eizm_short,
-                eizm_full,
-            )))
+            cell.is_secret = is_secret
+            cell.excel_param_name = sprav_name
+            cell.sprav_name = sprav_name
+            # Keep both sides of the QueryField alias synchronized when rows
+            # came from either the optimized or legacy DB parser.
+            cell.prop_name = cell.param_prop_name
+            cell.accuracy = accuracy
+            cell.id_eizm = id_eizm
+            cell.eizm_short = eizm_short
+            cell.eizm_full = eizm_full
         logger.debug(
-            "WorkDataTab.process_data: constructed final list in %.4f seconds "
+            "WorkDataTab.process_data: enriched rows in place in %.4f seconds "
             "(%d rows)",
             time.perf_counter() - stage_started,
-            len(processed_data),
+            len(filtered_cells),
         )
-        return processed_data
+        logger.debug(
+            "WorkDataTab.process_data: total in-place processing took %.4f seconds",
+            time.perf_counter() - total_started,
+        )
+        return filtered_cells
 
     def add_data(self, obj_list):
         if not obj_list:
