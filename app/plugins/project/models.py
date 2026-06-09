@@ -4,6 +4,7 @@ from copy import copy
 from datetime import datetime
 
 from PySide2.QtGui import QIcon, Qt
+from asyncpg import RaiseError
 
 from app import app_logger, basic_funcs
 from app.plugins.base_state.models import TreeModel, Node, ANY_CHILD_TYPE
@@ -44,6 +45,13 @@ def _import_workdata_curves_db(target_project_id, id_excel_file, file_version, c
         target_project_id, id_excel_file, file_version, curve_names
     )
     elapsed = time.perf_counter() - started
+    if isinstance(inserted_rows, RaiseError):
+        logger.error(
+            'WorkData -> ProjectData DB import raised database error: '
+            'target_project_id=%s, id_excel_file=%s, file_version=%s, error=%s, path=db',
+            target_project_id, id_excel_file, file_version, inserted_rows,
+        )
+        raise inserted_rows
     if inserted_rows is None:
         raise RuntimeError('WorkData DB-side import returned no inserted row count')
 

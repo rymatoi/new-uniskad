@@ -8,8 +8,13 @@ def test_db_import_sql_copies_legacy_keys_properties_and_validates_columns():
     assert 'FROM sc_ref.get_import_file_data2(p_id_excel_file, p_file_version)' in SQL
     assert 'selected_names AS MATERIALIZED' in SQL
     assert 'SELECT DISTINCT unnest(p_curve_names)::varchar AS excel_param_name' in SQL
+    assert 'raw_source_data AS MATERIALIZED' in SQL
     assert 'source_data AS MATERIALIZED' in SQL
     assert 'WHERE data.excel_param_name IS NULL' in SQL
+    assert "data.param_prop_name IS DISTINCT FROM 'row_npp'" in SQL
+    assert 'row_type.excel_param_name IS NOT DISTINCT FROM data.excel_param_name' in SQL
+    assert "row_type.param_prop_name = 'type'" in SQL
+    assert "row_type.prop_value = 'row'" in SQL
     assert 'OR EXISTS (' in SQL
     assert 'FROM selected_names sn' in SQL
     assert 'sn.excel_param_name = data.excel_param_name' in SQL

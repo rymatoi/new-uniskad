@@ -37,7 +37,7 @@ DECLARE
 BEGIN
     WITH selected_names AS MATERIALIZED (
         SELECT DISTINCT unnest(p_curve_names)::varchar AS excel_param_name
-    ), source_data AS MATERIALIZED (
+    ), raw_source_data AS MATERIALIZED (
         SELECT data.*
         FROM sc_ref.get_import_file_data2(p_id_excel_file, p_file_version) AS data
         WHERE data.excel_param_name IS NULL
@@ -45,6 +45,20 @@ BEGIN
                SELECT 1
                FROM selected_names sn
                WHERE sn.excel_param_name = data.excel_param_name
+           )
+    ), source_data AS MATERIALIZED (
+        -- Source file 474/version 0 contains two orphan row_npp records without
+        -- matching row type records.  The legacy fallback does not create rows
+        -- for them, so do not copy those unusable ordering records either.
+        SELECT data.*
+        FROM raw_source_data data
+        WHERE data.param_prop_name IS DISTINCT FROM 'row_npp'
+           OR EXISTS (
+               SELECT 1
+               FROM raw_source_data row_type
+               WHERE row_type.excel_param_name IS NOT DISTINCT FROM data.excel_param_name
+                 AND row_type.param_prop_name = 'type'
+                 AND row_type.prop_value = 'row'
            )
     ), project_rows AS (
         -- Copy every selected source record unchanged.  Null excel_param_name +
