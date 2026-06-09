@@ -371,6 +371,15 @@ class Session:
                 if return_type_ in [bool, int, float]:
                     t_scalar = time.perf_counter()
                     one = res.one()
+
+                    if one is None:
+                        db_timing_log(
+                            f"[DB parse END] {func.__name__}: scalar empty result, "
+                            f"scalar_time={time.perf_counter() - t_scalar:.4f}s, "
+                            f"total={time.perf_counter() - t_parse_total:.4f}s"
+                        )
+                        return None
+
                     if one[0] is None:
                         db_timing_log(
                             f"[DB parse END] {func.__name__}: scalar None, "
@@ -378,6 +387,7 @@ class Session:
                             f"total={time.perf_counter() - t_parse_total:.4f}s"
                         )
                         return None
+
                     value = return_type_(one[0])
                     db_timing_log(
                         f"[DB parse END] {func.__name__}: scalar={type(value).__name__}, "
@@ -396,6 +406,7 @@ class Session:
 
                     as_type = res.columns
                     value = res.one()
+
                     if value is None:
                         db_timing_log(
                             f"[DB parse END] {func.__name__}: one=None, "
@@ -404,7 +415,7 @@ class Session:
                         return None
 
                     constructor_factory = getattr(return_type_, '_get_row_constructor', None)
-                    if constructor_factory is not None:
+                    if constructor_factory is not None and as_type is not None:
                         obj = constructor_factory(as_type)(value)
                     else:
                         obj = return_type_({as_type[i]: value[i] for i in range(len(value))})
@@ -419,12 +430,30 @@ class Session:
                 res_one = res.one()
                 return_type_ = return_type_.__args__[0]
 
+                # ВАЖНЫЙ ФИКС:
+                # если процедура вернула пустой список, не пытаемся строить row_constructor
+                # по columns=None. Старое поведение было — вернуть [].
+                if not res.result:
+                    db_timing_log(
+                        f"[DB parse END] {func.__name__}: empty list result, "
+                        f"model={getattr(return_type_, '__name__', return_type_)}, "
+                        f"total={time.perf_counter() - t_parse_total:.4f}s"
+                    )
+                    return []
+
                 if return_type_ in [int, bool, str]:
                     t_list_scalar = time.perf_counter()
                     if isinstance(res_one, list) or isinstance(res_one, tuple):
-                        result_list = [return_type_(val) if val is not None else None for val in res_one[0]]
+                        result_list = [
+                            return_type_(val) if val is not None else None
+                            for val in res_one[0]
+                        ]
                     else:
-                        result_list = [return_type_(val) if val is not None else None for val in list(res_one)[0]]
+                        result_list = [
+                            return_type_(val) if val is not None else None
+                            for val in list(res_one)[0]
+                        ]
+
                     db_timing_log(
                         f"[DB parse END] {func.__name__}: list_scalar={return_type_.__name__}, "
                         f"rows={len(result_list)}, "
@@ -435,7 +464,8 @@ class Session:
 
                 t_loop = time.perf_counter()
                 constructor_factory = getattr(return_type_, '_get_row_constructor', None)
-                if constructor_factory is not None:
+
+                if constructor_factory is not None and as_type is not None:
                     row_constructor = constructor_factory(as_type)
                     parsed_result = [row_constructor(row) for row in res.result]
                 else:
@@ -443,6 +473,7 @@ class Session:
                         return_type_({as_type[i]: row[i] for i in range(len(row))})
                         for row in res.result
                     ]
+
                 loop_time = time.perf_counter() - t_loop
                 res.result = parsed_result
 
