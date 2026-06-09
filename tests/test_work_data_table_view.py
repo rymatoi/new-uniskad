@@ -100,21 +100,41 @@ def test_export_uses_model_values_without_eager_items(application, tmp_path):
     assert view.model()._items == {}
 
 
-def test_row_rename_updates_metadata_without_corrupting_cell_values(application):
+def test_work_data_view_rejects_structural_operations_without_mutation(application):
     view = make_view(application)
-    column_1 = datetime.datetime(2024, 1, 1)
-    original_value = view.table[('A', column_1)]['value'].prop_value
-    original_formula = view.table[('A', column_1)]['formula'].prop_value
+    rows = list(view.ord_rows)
+    columns = list(view.ord_columns)
+    table_keys = set(view.table)
 
-    view.update_ord_row('Renamed A', 'A')
+    assert not view.update_ord_row('Renamed A', 'A')
+    assert not view.add_row([record('New', None, 'row_npp', '3')])
+    assert not view.add_column([record(None, datetime.datetime(2024, 1, 3), 'column_npp', '3')])
+    assert not view.queue_row_deletion('A')
+    assert not view.queue_column_deletion(columns[0])
+    assert not view.removeRow(0)
+    assert not view.removeColumn(0)
 
-    assert ('A', column_1) not in view.table
-    assert view.table[('Renamed A', column_1)]['value'].prop_value == original_value
-    assert view.table[('Renamed A', column_1)]['formula'].prop_value == original_formula
-    assert all(obj.excel_param_name == 'Renamed A'
-               for obj in view.rows[('Renamed A', None)].values())
-    assert all(obj.excel_param_name == 'Renamed A'
-               for obj in view.table[('Renamed A', column_1)].values())
+    assert view.ord_rows == rows
+    assert view.ord_columns == columns
+    assert set(view.table) == table_keys
+    assert view.need_update == []
+
+
+def test_work_data_legacy_table_rejects_structural_operations(application):
+    from app.plugins.work_data.widgets.table import WorkDataTableWidget
+
+    table = WorkDataTableWidget(None, None)
+    table.load_table(sample_records())
+    rows = list(table.ord_rows)
+    columns = list(table.ord_columns)
+
+    assert not table.update_ord_row('Renamed A', 'A')
+    assert not table.add_row([record('New', None, 'row_npp', '3')])
+    assert not table.add_column([record(None, datetime.datetime(2024, 1, 3), 'column_npp', '3')])
+    assert not table.removeRow(0)
+    assert not table.removeColumn(0)
+    assert table.ord_rows == rows
+    assert table.ord_columns == columns
 
 
 def test_missing_row_property_does_not_mutate_type_record(application, monkeypatch):
@@ -258,3 +278,70 @@ def test_row_formula_materializes_missing_sparse_cell(application, monkeypatch):
     assert {'type', 'value', 'cformula'} <= set(view.table[missing_key])
     assert view.table[missing_key]['cformula'].prop_value == '2'
     assert {'type', 'value', 'cformula'} <= {item.param_prop_name for item in view.need_update}
+
+
+def test_work_data_page_rejects_structural_properties_without_db_write(application, monkeypatch):
+    from types import SimpleNamespace
+
+    from app.plugins.work_data.widgets.pages import WorkDataTablePage1
+
+    calls = []
+    page = SimpleNamespace(
+        table=SimpleNamespace(rows={('A', None): {'row_npp': record('A', None, 'row_npp', '1')}},
+                              columns={}, update_row_obj=lambda *args: None),
+        STRUCTURAL_ROW_PROPERTIES=WorkDataTablePage1.STRUCTURAL_ROW_PROPERTIES,
+        STRUCTURAL_COLUMN_PROPERTIES=WorkDataTablePage1.STRUCTURAL_COLUMN_PROPERTIES,
+        _reject_structural_edit=lambda: False,
+        _property_template=WorkDataTablePage1._property_template,
+    )
+    monkeypatch.setattr('app.plugins.work_data.widgets.pages.sp.new_upd_excel_data_record',
+                        lambda value: calls.append(value) or True)
+
+    assert not WorkDataTablePage1.update_row_prop(page, 'A', 'name', 'Renamed A')
+    assert calls == []
+
+
+def test_work_data_page_clones_allowed_property_without_type_metadata(application, monkeypatch):
+    from types import SimpleNamespace
+
+    from app.plugins.work_data.widgets.pages import WorkDataTablePage1
+
+    row_npp = record('A', None, 'row_npp', '1')
+    updated = []
+    page = SimpleNamespace(
+        table=SimpleNamespace(rows={('A', None): {'row_npp': row_npp}}, columns={},
+                              update_row_obj=lambda *args: updated.append(args)),
+        STRUCTURAL_ROW_PROPERTIES=WorkDataTablePage1.STRUCTURAL_ROW_PROPERTIES,
+        _reject_structural_edit=lambda: False,
+        _property_template=WorkDataTablePage1._property_template,
+    )
+    monkeypatch.setattr('app.plugins.work_data.widgets.pages.sp.new_upd_excel_data_record',
+                        lambda value: True)
+
+    assert WorkDataTablePage1.update_row_prop(page, 'A', 'accuracy', 3)
+    assert updated[0][1] == 'accuracy'
+    assert row_npp.param_prop_name == 'row_npp'
+    assert row_npp.prop_value == '1'
+
+
+def test_row_settings_does_not_rename_when_structural_editing_is_disabled(application):
+    from types import SimpleNamespace
+
+    from app.plugins.base_state.dialogs.row_settings import RowSettingsDialog
+
+    updates = []
+    dialog = RowSettingsDialog.__new__(RowSettingsDialog)
+    dialog.structural_editing_enabled = False
+    dialog.row = 'A'
+    dialog.table_page = SimpleNamespace(
+        structural_editing_enabled=False,
+        update_row_prop=lambda *args: updates.append(args),
+    )
+    dialog.table = SimpleNamespace(
+        get_row_prop=lambda *args: '',
+        update_ord_row=lambda *args: updates.append(args),
+    )
+    dialog.ui = SimpleNamespace(nameLineEdit=SimpleNamespace(text=lambda: 'Renamed A'))
+
+    assert not dialog.update_name('Renamed A')
+    assert updates == []

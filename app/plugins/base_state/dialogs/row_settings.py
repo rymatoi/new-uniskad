@@ -22,6 +22,10 @@ class RowSettingsDialog(BaseDialog):
         self._setup_formula_editor()
 
         self.init_values()
+        self.structural_editing_enabled = getattr(
+            self.table_page, 'structural_editing_enabled', True)
+        self.ui.nameLineEdit.setReadOnly(not self.structural_editing_enabled)
+        self.ui.nameLineEdit.setEnabled(self.structural_editing_enabled)
         self.create_connections()
 
     def _setup_formula_editor(self):
@@ -83,9 +87,14 @@ class RowSettingsDialog(BaseDialog):
         self.ui.fromComboBox_2.currentTextChanged.connect(self.update_comboboxes)
 
     def update_name(self, new_name):
+        if not getattr(self, 'structural_editing_enabled',
+                       getattr(self.table_page, 'structural_editing_enabled', True)):
+            return False
         if self.table.get_row_prop(new_name, 'name', str, '') != self.ui.nameLineEdit.text():
             self.table_page.update_row_prop(self.row, 'name', self.ui.nameLineEdit.text())
             self.table.update_ord_row(new_name, self.row)
+            return True
+        return False
 
     def update_comboboxes(self):
         self.ui.toComboBox_2.clear()
@@ -100,8 +109,10 @@ class RowSettingsDialog(BaseDialog):
         if formula_text and not formula_text.startswith('='):
             formula_text = f'={formula_text}'
         self.table_page.update_row_prop(self.row, 'row_formula', formula_text)
-        self.update_name(new_name)
-        self.row = new_name
+        if self.update_name(new_name):
+            self.row = new_name
+        else:
+            new_name = self.row
 
         model = self.table.model()
         try:

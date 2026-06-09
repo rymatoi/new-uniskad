@@ -2,7 +2,7 @@ from PySide2.QtCore import Qt
 from PySide2.QtGui import QIcon, QCursor
 from PySide2.QtWidgets import QAction, QMenu
 
-from app import basic_funcs, _menu
+from app import basic_funcs, _menu, app_logger
 from app.basic_funcs import timing_decorator
 from app.plugins.base_state.dialogs.column_settings import ColumnSettingsDialog
 from app.plugins.base_state.dialogs.row_settings import RowSettingsDialog
@@ -12,14 +12,25 @@ from app.plugins.work_data.widgets.table import WorkDataTableView, WorkDataTable
 from db import sp
 from db.tables import IMPORT_FILE_DATA
 
+logger = app_logger.get_logger(__name__)
+
 
 class WorkDataTablePage1(TablePage1):
     TABLE = WorkDataTableWidget
+    structural_editing_enabled = False
+    STRUCTURAL_ACTIONS = {
+        '_add_row', '_remove_row', '_rename_row',
+        '_add_column', '_remove_column', '_rename_column',
+    }
+    STRUCTURAL_ROW_PROPERTIES = {'name', 'row_npp', 'type'}
+    STRUCTURAL_COLUMN_PROPERTIES = {'name', 'column_npp', 'type', 'date_time_izm'}
 
     @timing_decorator
     def __init__(self, cells, item, parent=None, main_window=None):
         super().__init__(cells, item, parent, main_window)
         # self.available_actions += ['_export_txt_template']
+        self.available_actions = [action for action in self.available_actions
+                                  if action not in self.STRUCTURAL_ACTIONS]
         self.add_toolbar_action('_export_txt_template',
                                 QAction(QIcon(":export_excel.png"), 'Экспорт Excel', self,
                                         triggered=lambda: self.export_excel()))
@@ -30,7 +41,8 @@ class WorkDataTablePage1(TablePage1):
     def show_column_menu(self, point):
         index = self.table.indexAt(point)
         menu = QMenu(self)
-        _menu.init_menu(self.column_menu, self, menu, _exclude=['_row_settings', '_remove_column', '_add_column'])
+        _menu.init_menu(self.column_menu, self, menu,
+                        _exclude=self.STRUCTURAL_ACTIONS | {'_row_settings'})
         self.connect_triggered_funcs(index)
         menu.popup(QCursor.pos())
 
@@ -90,29 +102,80 @@ class WorkDataTablePage1(TablePage1):
         if dialog.exec_():  # Если произошло изменение данных
             result = dialog.get_result()
 
+    def _reject_structural_edit(self):
+        logger.warning('Work Data structural editing is disabled')
+        return False
+
+    def connect_triggered_funcs(self, index):
+        """Connect only non-structural actions, even when DB menu data contains them."""
+        self._connect_func('_row_settings', self.row_settings, index)
+        self._connect_func('_column_settings', self.column_settings, index)
+
+    def add_row(self, index):
+        return self._reject_structural_edit()
+
+    def add_column(self, index):
+        return self._reject_structural_edit()
+
+    def remove_row(self, index):
+        return self._reject_structural_edit()
+
+    def remove_column(self, index):
+        return self._reject_structural_edit()
+
+    def remove_rows(self, index):
+        return self._reject_structural_edit()
+
+    def remove_columns(self, index):
+        return self._reject_structural_edit()
+
+    def rename_row(self, index):
+        return self._reject_structural_edit()
+
+    def rename_column(self, index):
+        return self._reject_structural_edit()
+
+    @staticmethod
+    def _property_template(properties):
+        return properties.get('type') or next(iter(properties.values()), None)
+
     def update_row_prop(self, name, prop_name, prop_value):
-        if prop_name in self.table.rows[(name, None)]:
-            record = self.table.rows[(name, None)][prop_name]
+        if prop_name in self.STRUCTURAL_ROW_PROPERTIES:
+            return self._reject_structural_edit()
+        properties = self.table.rows.get((name, None), {})
+        if prop_name in properties:
+            record = properties[prop_name]
             record.prop_value = str(prop_value)
-            _record = record.table_fit(IMPORT_FILE_DATA)
         else:
-            record = clone_property_record(self.table.rows[(name, None)]['type'], prop_name, prop_value)
-            _record = record.table_fit(IMPORT_FILE_DATA)
-        success = sp.new_upd_excel_data_record(_record)
+            template = self._property_template(properties)
+            if template is None:
+                logger.warning('Cannot update Work Data row property %s: row %r has no metadata',
+                               prop_name, name)
+                return False
+            record = clone_property_record(template, prop_name, prop_value)
+        success = sp.new_upd_excel_data_record(record.table_fit(IMPORT_FILE_DATA))
         if success:
             self.table.update_row_obj(name, prop_name, record)
+        return bool(success)
 
     def update_column_prop(self, name, prop_name, prop_value):
-        if prop_name in self.table.columns[(None, name)]:
-            record = self.table.columns[(None, name)][prop_name]
+        if prop_name in self.STRUCTURAL_COLUMN_PROPERTIES:
+            return self._reject_structural_edit()
+        properties = self.table.columns.get((None, name), {})
+        if prop_name in properties:
+            record = properties[prop_name]
             record.prop_value = str(prop_value)
-            _record = record.table_fit(IMPORT_FILE_DATA)
         else:
-            record = clone_property_record(self.table.columns[(None, name)]['type'], prop_name, prop_value)
-            _record = record.table_fit(IMPORT_FILE_DATA)
-        success = sp.new_upd_excel_data_record(_record)
+            template = self._property_template(properties)
+            if template is None:
+                logger.warning('Cannot update Work Data column property %s: column %r has no metadata',
+                               prop_name, name)
+                return False
+            record = clone_property_record(template, prop_name, prop_value)
+        success = sp.new_upd_excel_data_record(record.table_fit(IMPORT_FILE_DATA))
         if success:
             self.table.update_column_obj(name, prop_name, record)
+        return bool(success)
 
 
 class WorkDataTableViewPage(WorkDataTablePage1):
@@ -127,7 +190,8 @@ class WorkDataTableViewPage(WorkDataTablePage1):
         column = max(self.table.currentColumn(), 0)
         index = self.table.model().index(row, column)
         menu = QMenu(self)
-        _menu.init_menu(self.row_menu, self, menu, _exclude=['_rename_row', '_recalculate_eizm'])
+        _menu.init_menu(self.row_menu, self, menu,
+                        _exclude=self.STRUCTURAL_ACTIONS | {'_recalculate_eizm'})
         self.connect_triggered_funcs(index)
         menu.popup(QCursor.pos())
 
@@ -137,7 +201,7 @@ class WorkDataTableViewPage(WorkDataTablePage1):
         index = self.table.model().index(row, column)
         menu = QMenu(self)
         _menu.init_menu(self.column_menu, self, menu,
-                        _exclude=['_row_settings', '_remove_column', '_add_column'])
+                        _exclude=self.STRUCTURAL_ACTIONS | {'_row_settings'})
         self.connect_triggered_funcs(index)
         menu.popup(QCursor.pos())
 
