@@ -15,13 +15,17 @@ from db import sp
 
 logger = app_logger.get_logger(__name__)
 
-def clone_property_record(template, prop_name, prop_value):
-    """Create an independent missing-property record from a compatible template."""
+def clone_property_record(template, prop_name, prop_value, key=None):
+    """Create an independent property record from a compatible record template."""
     record = copy(template)
     record.id_record = None
     record.param_prop_name = str(prop_name)
     record.prop_name = str(prop_name)
     record.prop_value = str(prop_value)
+    record.deleted = False
+    if key is not None:
+        record.excel_param_name, record.date_time_izm = key
+        record.sprav_name = None
     return record
 
 
@@ -50,6 +54,10 @@ class LazyTableModelItem(TableItem):
         return '' if value is None else str(value)
 
     def update_cell(self, prop, value):
+        # A mutation of a malformed legacy/sparse cell must first restore the
+        # base records expected by TableItem business rules.
+        model = self.tableWidget().model()
+        model.item(model.index(self.row(), self.column()), create=True)
         tmp = self.get_prop_template(prop, value)
         self.tableWidget().need_update.append(tmp)
         self.add_prop(tmp)
@@ -126,14 +134,18 @@ class LazyTableModel(QAbstractTableModel):
         return 0 if parent is not None and parent.isValid() else len(self.ord_columns)
 
     def data(self, index, role=Qt.DisplayRole):
+        if not index.isValid():
+            return None
         item = self.item(index)
-        return item.data(role) if item is not None else None
+        if item is None:
+            return '' if role in (Qt.DisplayRole, Qt.EditRole) else None
+        return item.data(role)
 
     def setData(self, index, value, role=Qt.EditRole):
         if role != Qt.EditRole or not index.isValid():
             return False
         value = '' if value is None else str(value)
-        item = self.item(index)
+        item = self.item(index, create=True)
         if item is None or value == item.get('formula', str, ''):
             return False
         item.setData(role, value)
@@ -157,16 +169,43 @@ class LazyTableModel(QAbstractTableModel):
         # numbers; retain that legacy display instead of exposing timestamps.
         return section + 1 if 0 <= section < len(self.ord_columns) else None
 
-    def item(self, index):
+    def item(self, index, create=False):
         if not index.isValid() or not (0 <= index.row() < len(self.ord_rows)) or not (
                 0 <= index.column() < len(self.ord_columns)):
             return None
         key = (self.ord_rows[index.row()], self.ord_columns[index.column()])
+        if create:
+            self.ensure_cell(key)
+        cell = self.table.get(key)
+        if cell is None:
+            return None
         item = self._items.get(key)
         if item is None:
-            item = self.ITEM_CLASS(self.parent(), self.table.setdefault(key, {}), key)
+            item = self.ITEM_CLASS(self.parent(), cell, key)
             self._items[key] = item
         return item
+
+    def ensure_cell(self, key):
+        """Materialize a complete independent cell and queue newly-created records."""
+        cell = self.table.get(key)
+        template = next(iter(cell.values()), None) if cell is not None else None
+        for records_by_key in (self.table, self.rows, self.columns):
+            if template is not None:
+                break
+            template = next((record for properties in records_by_key.values()
+                             for record in properties.values()), None)
+        if template is None:
+            return None
+
+        cell = self.table.setdefault(key, {})
+        for prop_name, prop_value in (('value', '0'), ('type', 'cell')):
+            if prop_name in cell:
+                continue
+            record = clone_property_record(template, prop_name, prop_value, key)
+            cell[prop_name] = record
+            self.parent().need_update.append(record)
+            template = record
+        return cell
 
     @staticmethod
     def _get(cell, prop, cast_type=None, default=None):
@@ -260,11 +299,14 @@ class ModelViewTable(QTableView):
         logger.info("ModelViewTable: loaded and set up QTableView in %.4f seconds",
                     time.perf_counter() - started)
 
-    def item(self, row, column):
-        return self.model().item(self.model().index(row, column))
+    def item(self, row, column, create=False):
+        return self.model().item(self.model().index(row, column), create=create)
 
-    def itemFromIndex(self, index):
-        return self.model().item(index)
+    def itemFromIndex(self, index, create=False):
+        return self.model().item(index, create=create)
+
+    def ensureItem(self, index):
+        return self.model().item(index, create=True)
 
     def indexFromItem(self, item):
         if item is None:
@@ -359,7 +401,9 @@ class ModelViewTable(QTableView):
             for prop in row_props.values():
                 prop.excel_param_name = new_name
         for column in self.ord_columns:
-            cell = self.table.pop((old_name, column), {})
+            cell = self.table.pop((old_name, column), None)
+            if cell is None:
+                continue
             self.table[(new_name, column)] = cell
             for prop in cell.values():
                 prop.excel_param_name = new_name
@@ -388,7 +432,7 @@ class ModelViewTable(QTableView):
         if row_index is not None:
             for column in range(len(self.ord_columns)):
                 item = self.item(row_index, column)
-                if item.get('formula', str, None):
+                if item is not None and item.get('formula', str, None):
                     item.calculate_formula()
 
     def add_column(self, db_objects):
@@ -552,14 +596,18 @@ class ModelViewTable(QTableView):
             for column in range(self.model().columnCount()):
                 broken = self.is_value_broken(column, x_row, y_row, filter_data.get('condition'),
                                               filter_data.get('condition_percent'))
-                self.item(x_row, column).update_cell('broken', str(broken))
+                self.item(x_row, column, create=True).update_cell('broken', str(broken))
         if missing_rows:
             logger.warning('Не удалось применить фильтры: отсутствуют строки %s', ', '.join(sorted(missing_rows)))
 
     def is_value_broken(self, column, x_row, y_row, condition, condition_percent):
         try:
-            x_value = float(self.item(x_row, column).value())
-            y_value = float(self.item(y_row, column).value())
+            x_item = self.item(x_row, column)
+            y_item = self.item(y_row, column)
+            if x_item is None or y_item is None:
+                return False
+            x_value = float(x_item.value())
+            y_value = float(y_item.value())
             percent = float(condition_percent)
         except (TypeError, ValueError):
             return False
@@ -611,7 +659,8 @@ class ModelViewTable(QTableView):
         lines = []
         for row in sorted(by_row):
             values = [self.ord_rows[row]]
-            values.extend(self.item(row, column).text() for column in sorted(by_row[row]))
+            values.extend((item.text() if (item := self.item(row, column)) else '')
+                          for column in sorted(by_row[row]))
             lines.append('\t'.join(values))
         QApplication.clipboard().setText('\n'.join(lines))
 

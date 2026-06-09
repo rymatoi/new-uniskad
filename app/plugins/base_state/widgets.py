@@ -1726,7 +1726,7 @@ class TableItem(QTableWidgetItem):
         try:
             float(num)
             return True
-        except ValueError:
+        except (TypeError, ValueError):
             return False
 
     def toString(self, value, precision):
@@ -1748,8 +1748,11 @@ class TableItem(QTableWidgetItem):
                     return self.toString(float(cformula) * mul_val, accuracy)
             except:
                 return cformula
-        if not self.is_float(self.get('value')):
-            return self.get('value')
+        value = self.get('value')
+        if value is None:
+            return ''
+        if not self.is_float(value):
+            return value
 
         if plus_val:
             return self.toString(self.get('value', float, 0) + plus_val, accuracy)
@@ -2106,8 +2109,8 @@ class TableItem(QTableWidgetItem):
             else:
                 continue
             if cell_key not in used_keys:
-                if self in cell.dependencies:
-                    cell.dependencies.remove(self)
+                if self.key in cell.dependencies:
+                    cell.dependencies.remove(self.key)
                     cell.update_cell('dependencies', str([(_c[0], _c[1].strftime("%Y-%m-%d %H:%M:%S.%f")) for _c in
                                                           cell.dependencies]))
 
@@ -2195,15 +2198,21 @@ class TableItem(QTableWidgetItem):
         pass
 
     def get_prop_template(self, prop_name, prop_value):
-        if self.get(prop_name):
-            cell = copy(self.cell[prop_name])
+        template = self.cell.get(prop_name)
+        if template is not None:
+            cell = copy(template)
             cell.prop_value = prop_value
-        else:
-            cell = copy(self.cell['value'])
-            cell.id_record = None
-            cell.param_prop_name = prop_name
-            cell.prop_name = prop_name
-            cell.prop_value = prop_value
+            return cell
+
+        template = self.cell.get('value') or next(iter(self.cell.values()), None)
+        if template is None:
+            raise ValueError('Cannot create a cell property without a record template')
+        cell = copy(template)
+        cell.id_record = None
+        cell.param_prop_name = prop_name
+        cell.prop_name = prop_name
+        cell.prop_value = prop_value
+        cell.deleted = False
         return cell
 
     def add_prop(self, obj):
@@ -2423,9 +2432,7 @@ class TablePage1(QtWidgets.QWidget):
         if self._syncing_formula_editor:
             return
         item = self.formula_target_item or self.table.currentItem()
-        if item is None:
-            return
-        index = self.table.indexFromItem(item)
+        index = self.table.indexFromItem(item) if item is not None else self.table.currentIndex()
         if not index.isValid():
             return
         text = self.formula_edit.text()
@@ -2434,6 +2441,8 @@ class TablePage1(QtWidgets.QWidget):
             self.table.model().setData(index, text, Qt.EditRole)
         finally:
             self._applying_formula = False
+        item = self.table.itemFromIndex(index)
+        self.formula_target_item = item
         self.refresh_formula_result(item)
         if hasattr(self.table, 'highlight_formula_references'):
             self.table.highlight_formula_references(item)
@@ -2581,7 +2590,8 @@ class TablePage1(QtWidgets.QWidget):
         selected_cells = self.table.selectedIndexes()
         if not len(selected_cells):
             return
-        first_cell = self.table.itemFromIndex(selected_cells[0])
+        first_cell = (self.table.ensureItem(selected_cells[0]) if hasattr(self.table, 'ensureItem')
+                      else self.table.itemFromIndex(selected_cells[0]))
         result_prop_value = None
         if prop == 'font_text_color':
             result_prop_value = QColorDialog.getColor()
@@ -2609,7 +2619,8 @@ class TablePage1(QtWidgets.QWidget):
             return
 
         for cell in selected_cells:
-            c = self.table.itemFromIndex(cell)
+            c = (self.table.ensureItem(cell) if hasattr(self.table, 'ensureItem')
+                 else self.table.itemFromIndex(cell))
             c.update_cell(prop, str(result_prop_value))
 
     def bulk_update_cells(self, cells, prop_name, prop_value):

@@ -159,3 +159,102 @@ def test_set_data_converts_non_string_edit_values_and_preserves_formulas(applica
     assert formula.prop_value == '42'
     assert view.model().setData(index, None, Qt.EditRole)
     assert formula.prop_value == ''
+
+
+def sparse_records():
+    column_1 = datetime.datetime(2024, 1, 1)
+    column_2 = datetime.datetime(2024, 1, 2)
+    return [
+        record('A', None, 'row_npp', '1'),
+        record('A', None, 'accuracy', '2'),
+        record(None, column_1, 'column_npp', '1'),
+        record(None, column_2, 'column_npp', '2'),
+        record('A', column_1, 'type', 'cell'),
+        record('A', column_1, 'value', '1'),
+    ]
+
+
+def test_displaying_missing_sparse_intersection_is_empty_and_non_mutating(application):
+    view = WorkDataTableView()
+    view.model().load_data(sparse_records())
+    key = ('A', datetime.datetime(2024, 1, 2))
+    index = view.model().index(0, 1)
+
+    assert key not in view.table
+    assert view.model().data(index, Qt.DisplayRole) == ''
+    assert view.model().data(index, Qt.EditRole) == ''
+    assert view.itemFromIndex(index) is None
+    assert key not in view.table
+    assert view.need_update == []
+
+
+def test_editing_missing_sparse_intersection_creates_complete_queued_cell(application):
+    view = WorkDataTableView()
+    view.model().load_data(sparse_records())
+    key = ('A', datetime.datetime(2024, 1, 2))
+    index = view.model().index(0, 1)
+
+    assert view.model().setData(index, '=1+1', Qt.EditRole)
+
+    assert {'type', 'value', 'formula', 'cformula'} <= set(view.table[key])
+    assert view.table[key]['type'].prop_value == 'cell'
+    assert view.table[key]['value'].prop_value == '0'
+    assert view.table[key]['cformula'].prop_value == '2'
+    assert {'type', 'value', 'formula', 'cformula'} <= {
+        item.param_prop_name for item in view.need_update
+    }
+    assert view.table[key]['type'] is not view.table[key]['value']
+
+
+def test_formula_record_without_value_safely_displays_and_heals_on_write(application):
+    column = datetime.datetime(2024, 1, 1)
+    cformula = record('A', column, 'cformula', '')
+    view = WorkDataTableView()
+    view.model().load_data([
+        record('A', None, 'row_npp', '1'),
+        record(None, column, 'column_npp', '1'),
+        record('A', column, 'formula', '=1+1'),
+        cformula,
+    ])
+    index = view.model().index(0, 0)
+
+    assert view.model().data(index, Qt.DisplayRole) == ''
+    assert 'value' not in view.table[('A', column)]
+    assert view.model().setData(index, '=2+2', Qt.EditRole)
+    assert {'type', 'value', 'formula', 'cformula'} <= set(view.table[('A', column)])
+
+
+def test_row_formula_materializes_missing_sparse_cell(application, monkeypatch):
+    from types import SimpleNamespace
+
+    from app.plugins.base_state.dialogs.row_settings import RowSettingsDialog
+    from dialogs.base import BaseDialog
+
+    view = WorkDataTableView()
+    view.model().load_data(sparse_records())
+    missing_key = ('A', datetime.datetime(2024, 1, 2))
+
+    def update_row_prop(row, prop, value):
+        view.update_row_obj(row, prop, record(row, None, prop, str(value), None))
+
+    page = SimpleNamespace(update_row_prop=update_row_prop, refresh_formula_result=lambda: None)
+    dialog = RowSettingsDialog.__new__(RowSettingsDialog)
+    BaseDialog.__init__(dialog)
+    dialog.table_page = page
+    dialog.table = view
+    dialog.item = view.item(0, 0)
+    dialog.row = 'A'
+    dialog.formula_edit = SimpleNamespace(text=lambda: '=COLUMN()')
+    dialog.ui = SimpleNamespace(
+        nameLineEdit=SimpleNamespace(text=lambda: 'A'),
+        accuracySpinBox=SimpleNamespace(value=lambda: 2),
+        fromComboBox_2=SimpleNamespace(currentText=lambda: 'Пусто'),
+        toComboBox_2=SimpleNamespace(currentText=lambda: 'Пусто'),
+    )
+    monkeypatch.setattr(BaseDialog, 'accept', lambda self: None)
+
+    RowSettingsDialog.accept(dialog)
+
+    assert {'type', 'value', 'cformula'} <= set(view.table[missing_key])
+    assert view.table[missing_key]['cformula'].prop_value == '2'
+    assert {'type', 'value', 'cformula'} <= {item.param_prop_name for item in view.need_update}

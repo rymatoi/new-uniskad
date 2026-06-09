@@ -75,14 +75,16 @@ class WorkDataTablePage1(TablePage1):
         )
 
     def row_settings(self, index):
-        item = self.table.itemFromIndex(index)
+        item = (self.table.ensureItem(index) if hasattr(self.table, 'ensureItem')
+                else self.table.itemFromIndex(index))
         row = item.key[0]
         dialog = RowSettingsDialog(row, item, parent=self)
         if dialog.exec_():  # Если произошло изменение данных
             result = dialog.get_result()
 
     def column_settings(self, index):
-        item = self.table.itemFromIndex(index)
+        item = (self.table.ensureItem(index) if hasattr(self.table, 'ensureItem')
+                else self.table.itemFromIndex(index))
         column = item.key[1]
         dialog = ColumnSettingsDialog(column, item, parent=self)
         if dialog.exec_():  # Если произошло изменение данных
