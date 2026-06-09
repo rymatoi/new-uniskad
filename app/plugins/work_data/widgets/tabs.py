@@ -1,3 +1,5 @@
+import time
+
 from PySide2.QtCore import QDir, QStandardPaths, QUrl
 from PySide2.QtGui import QDesktopServices, Qt
 from PySide2.QtWidgets import QLabel
@@ -45,55 +47,107 @@ class WorkDataTab(Tab):
 
     @timing_decorator
     def process_data(self, cells, sprav_names, sprav_eizm, secret_grantness_level):
-        # Создаем словарь для быстрого доступа к sprav_names по id_name
-        sprav_names_dict = {sn.id_name: sn for sn in sprav_names}
+        stage_started = time.perf_counter()
+        sprav_names_by_id = {item.id_name: item for item in sprav_names}
+        sprav_eizm_by_id = {item.id_eizm: item for item in sprav_eizm}
+        logger.debug(
+            "WorkDataTab.process_data: built lookup dictionaries in %.4f seconds "
+            "(%d names, %d units)",
+            time.perf_counter() - stage_started,
+            len(sprav_names_by_id),
+            len(sprav_eizm_by_id),
+        )
 
-        # Создаем словарь для sprav_eizm по id_eizm
-        sprav_eizm_dict = {se.id_eizm: se for se in sprav_eizm}
+        stage_started = time.perf_counter()
+        # Secret filtering is intentionally a pass-through here, matching the
+        # existing behavior.  The flag is still logged so this stage can be
+        # measured and filtering can be restored separately if required.
+        filtered_cells = cells
+        logger.debug(
+            "WorkDataTab.process_data: filtered secret rows in %.4f seconds "
+            "(pass-through, secret_grantness_level=%s, %d rows)",
+            time.perf_counter() - stage_started,
+            secret_grantness_level,
+            len(filtered_cells),
+        )
 
-        # Обработка данных
+        stage_started = time.perf_counter()
+        empty_enrichment = (None, None, None, None)
+        enrichment_by_id = {}
+        names_get = sprav_names_by_id.get
+        for id_name, main_sprav in sprav_names_by_id.items():
+            perm_sprav = names_get(main_sprav.id_permanent_name)
+            resolved_sprav = perm_sprav if perm_sprav is not None else main_sprav
+            enrichment_by_id[id_name] = (
+                resolved_sprav.param_name,
+                resolved_sprav.accuracy,
+                resolved_sprav.is_secret,
+                resolved_sprav.param_id_eizm,
+            )
+        logger.debug(
+            "WorkDataTab.process_data: enriched sprav_names in %.4f seconds "
+            "(%d resolved names)",
+            time.perf_counter() - stage_started,
+            len(enrichment_by_id),
+        )
+
+        stage_started = time.perf_counter()
+        eizm_values_by_id = {
+            id_eizm: (eizm.eizm_short, eizm.eizm_full)
+            for id_eizm, eizm in sprav_eizm_by_id.items()
+        }
+        empty_eizm = (None, None)
+        eizm_get = eizm_values_by_id.get
+        mapped_enrichment_by_id = {
+            id_name: enrichment + eizm_get(enrichment[3], empty_eizm)
+            for id_name, enrichment in enrichment_by_id.items()
+        }
+        logger.debug(
+            "WorkDataTab.process_data: mapped units/eizm in %.4f seconds "
+            "(%d mapped names)",
+            time.perf_counter() - stage_started,
+            len(mapped_enrichment_by_id),
+        )
+
+        stage_started = time.perf_counter()
+        columns = (
+            'id_excel_file', 'id_record', 'file_version', 'is_secret',
+            'excel_param_name', 'param_prop_name', 'date_time_izm',
+            'prop_value', 'deleted', 'npp', 'id_name', 'sprav_name',
+            'accuracy', 'id_eizm', 'eizm_short', 'eizm_full',
+        )
+        construct = ImportFileData._get_row_constructor(columns)
+        enrichment_get = mapped_enrichment_by_id.get
+        empty_mapped_enrichment = empty_enrichment + empty_eizm
         processed_data = []
-        for cell in cells:
-            # Данные из sprav_names
-            main_sprav = sprav_names_dict.get(cell.id_name)
-            perm_sprav = sprav_names_dict.get(main_sprav.id_permanent_name) if main_sprav else None
-
-            # is_secret = perm_sprav.is_secret if perm_sprav else (main_sprav.is_secret if main_sprav else False)
-            #
-            # if is_secret is not secret_grantness_level:
-            #     continue
-
-            # Выбираем данные для param_name, accuracy, param_id_eizm
-            sprav_name = perm_sprav.param_name if perm_sprav else (main_sprav.param_name if main_sprav else None)
-            accuracy = perm_sprav.accuracy if perm_sprav else (main_sprav.accuracy if main_sprav else None)
-            is_secret = perm_sprav.is_secret if perm_sprav else (main_sprav.is_secret if main_sprav else None)
-            param_id_eizm = perm_sprav.param_id_eizm if perm_sprav else (
-                main_sprav.param_id_eizm if main_sprav else None)
-
-            # Данные из sprav_eizm
-            eizm = sprav_eizm_dict.get(param_id_eizm)
-            eizm_short = eizm.eizm_short if eizm else None
-            eizm_full = eizm.eizm_full if eizm else None
-
-            processed_data.append(ImportFileData({
-                'id_excel_file': cell.id_excel_file,
-                "id_record": cell.id_record,
-                "file_version": cell.file_version,
-                'is_secret': is_secret,
-                "excel_param_name": sprav_name,
-                "param_prop_name": cell.param_prop_name,
-                "date_time_izm": cell.date_time_izm,
-                "prop_value": cell.prop_value,
-                "deleted": cell.deleted,
-                "npp": cell.npp,
-                "id_name": cell.id_name,
-                "sprav_name": sprav_name,
-                "accuracy": accuracy,
-                "id_eizm": param_id_eizm,
-                "eizm_short": eizm_short,
-                "eizm_full": eizm_full
-            }))
-
+        append = processed_data.append
+        for cell in filtered_cells:
+            sprav_name, accuracy, is_secret, id_eizm, eizm_short, eizm_full = enrichment_get(
+                cell.id_name, empty_mapped_enrichment)
+            append(construct((
+                cell.id_excel_file,
+                cell.id_record,
+                cell.file_version,
+                is_secret,
+                sprav_name,
+                cell.param_prop_name,
+                cell.date_time_izm,
+                cell.prop_value,
+                cell.deleted,
+                cell.npp,
+                cell.id_name,
+                sprav_name,
+                accuracy,
+                id_eizm,
+                eizm_short,
+                eizm_full,
+            )))
+        logger.debug(
+            "WorkDataTab.process_data: constructed final list in %.4f seconds "
+            "(%d rows)",
+            time.perf_counter() - stage_started,
+            len(processed_data),
+        )
         return processed_data
 
     def add_data(self, obj_list):
