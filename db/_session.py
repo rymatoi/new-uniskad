@@ -36,9 +36,9 @@ class QueryResult:
 
 
 class Worker(QThread):
+    # Keep QThread.started/finished intact: Qt emits them only at the actual
+    # boundaries of the native thread lifecycle.
     result_ready = Signal(object)
-    started = Signal()
-    finished = Signal()
 
     def __init__(self, func, *args, **kwargs):
         super().__init__()
@@ -47,7 +47,6 @@ class Worker(QThread):
         self.kwargs = kwargs
 
     def run(self):
-        self.started.emit()
         try:
             result = self.func(*self.args, **self.kwargs)
         except Exception as exc:  # noqa: BLE001 - want to propagate any failure to the UI thread safely
@@ -55,8 +54,6 @@ class Worker(QThread):
             self.result_ready.emit(exc)
         else:
             self.result_ready.emit(result)
-        finally:
-            self.finished.emit()
 
 
 class _ProgressEmitter(QObject):
