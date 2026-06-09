@@ -98,3 +98,38 @@ def test_export_uses_model_values_without_eager_items(application, tmp_path):
     assert worksheet.cell(1, 1).value == 'A'
     assert worksheet.cell(1, 2).value == 1.25
     assert view.model()._items == {}
+
+
+def test_row_rename_updates_metadata_without_corrupting_cell_values(application):
+    view = make_view(application)
+    column_1 = datetime.datetime(2024, 1, 1)
+    original_value = view.table[('A', column_1)]['value'].prop_value
+    original_formula = view.table[('A', column_1)]['formula'].prop_value
+
+    view.update_ord_row('Renamed A', 'A')
+
+    assert ('A', column_1) not in view.table
+    assert view.table[('Renamed A', column_1)]['value'].prop_value == original_value
+    assert view.table[('Renamed A', column_1)]['formula'].prop_value == original_formula
+    assert all(obj.excel_param_name == 'Renamed A'
+               for obj in view.rows[('Renamed A', None)].values())
+    assert all(obj.excel_param_name == 'Renamed A'
+               for obj in view.table[('Renamed A', column_1)].values())
+
+
+def test_missing_row_property_does_not_mutate_type_record(application, monkeypatch):
+    from app.plugins.work_data.widgets.pages import WorkDataTablePage1
+
+    type_record = record('A', None, 'type', 'row')
+    table = type('Table', (), {
+        'rows': {('A', None): {'type': type_record}},
+        'update_row_obj': lambda self, *args: None,
+    })()
+    page = type('Page', (), {'table': table})()
+    monkeypatch.setattr('app.plugins.work_data.widgets.pages.sp.new_upd_excel_data_record',
+                        lambda value: value)
+
+    WorkDataTablePage1.update_row_prop(page, 'A', 'row_formula', '=1+1')
+
+    assert type_record.param_prop_name == 'type'
+    assert type_record.prop_value == 'row'

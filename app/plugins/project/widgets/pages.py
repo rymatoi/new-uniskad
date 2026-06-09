@@ -10,10 +10,11 @@ from app.plugins.base_state.dialogs.column_settings import ColumnSettingsDialog
 from app.plugins.base_state.dialogs.export_txt_template import ExportTxtDialog
 from app.plugins.base_state.dialogs.manage_user_formulas import ManageUserFormulasDialog
 from app.plugins.base_state.dialogs.row_settings import RowSettingsDialog
+from app.feature_flags import is_feature_enabled
 from app.plugins.base_state.widgets import TablePage1
 from app.plugins.project.dialogs.edit_plane import EditPlaneDialog
 from app.plugins.project.plot.plot_page import PlotPage
-from app.plugins.project.widgets.table import ProjectTableWidget
+from app.plugins.project.widgets.table import ProjectTableView, ProjectTableWidget
 
 from app.utils import convert, excel
 from db import sp
@@ -26,7 +27,9 @@ class ProjectTablePage1(TablePage1):
     TABLE = ProjectTableWidget
 
     def __init__(self, cells, item, parent=None, main_window=None):
-
+        use_table_view = is_feature_enabled('UNISKAD_PROJECT_TABLE_VIEW')
+        self.TABLE = ProjectTableView if use_table_view else ProjectTableWidget
+        logger.info("Project table implementation: %s", self.TABLE.__name__)
         super().__init__(cells, item, parent, main_window)
 
         self.add_toolbar_action('_edit_formula_list', QAction(QIcon(":formula.png"), 'Список шаблонных формул', self,
@@ -183,11 +186,14 @@ class ProjectTablePage1(TablePage1):
             [obj.table_fit(PROJECT_DATA) for obj in obj_list])
 
         if result:
-            self.table.ord_rows.remove(item.key[0])
-            del self.table.rows[item.key[0], None]
-            self.table.removeRow(item.row())
-            for cell in cells_to_delete:
-                del self.table.table[cell]
+            if isinstance(self.table, ProjectTableView):
+                self.table.removeRow(item.row())
+            else:
+                self.table.ord_rows.remove(item.key[0])
+                del self.table.rows[item.key[0], None]
+                self.table.removeRow(item.row())
+                for cell in cells_to_delete:
+                    del self.table.table[cell]
             self.update_formula_context()
             self._set_formula_target(self.table.currentItem())
 
@@ -228,9 +234,12 @@ class ProjectTablePage1(TablePage1):
             [obj.table_fit(PROJECT_DATA) for obj in obj_list])
 
         if result:
-            self.table.removeColumn(item.column())
-            self.table.ord_columns.remove(item.key[1])
-            del self.table.columns[None, item.key[1]]
+            if isinstance(self.table, ProjectTableView):
+                self.table.removeColumn(item.column())
+            else:
+                self.table.removeColumn(item.column())
+                self.table.ord_columns.remove(item.key[1])
+                del self.table.columns[None, item.key[1]]
             self._set_formula_target(self.table.currentItem())
 
     def row_settings(self, index):
