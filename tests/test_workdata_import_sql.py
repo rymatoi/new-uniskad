@@ -6,8 +6,14 @@ SQL = (Path(__file__).parents[1] / 'db/sql/import_workdata_file_curves_to_projec
 
 def test_db_import_sql_copies_legacy_keys_properties_and_validates_columns():
     assert 'FROM sc_ref.get_import_file_data2(p_id_excel_file, p_file_version)' in SQL
-    assert 'data.excel_param_name = ANY(p_curve_names)' in SQL
-    assert 'OR data.excel_param_name IS NULL' in SQL
+    assert 'selected_names AS MATERIALIZED' in SQL
+    assert 'SELECT DISTINCT unnest(p_curve_names)::varchar AS excel_param_name' in SQL
+    assert 'source_data AS MATERIALIZED' in SQL
+    assert 'WHERE data.excel_param_name IS NULL' in SQL
+    assert 'OR EXISTS (' in SQL
+    assert 'FROM selected_names sn' in SQL
+    assert 'sn.excel_param_name = data.excel_param_name' in SQL
+    assert 'data.excel_param_name = ANY(p_curve_names)' not in SQL
     assert "excel_param_name, 'name', NULL" in SQL
     assert "excel_param_name, 'is_secret', NULL" in SQL
     assert "excel_param_name, 'eizm_short', NULL" in SQL
