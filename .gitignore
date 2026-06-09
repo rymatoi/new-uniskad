@@ -1,0 +1,16 @@
+__pycache__/
+*.py[cod]
+*.pyo
+
+venv/
+.venv/
+
+*.log
+
+db_full_dump_*.txt
+explain_*.txt
+db_diagnose.py
+dump_db_structure.py
+db.zip
+
+.env

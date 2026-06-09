@@ -1,6 +1,7 @@
 import asyncio
 import contextlib
 import threading
+import time
 from functools import wraps
 from inspect import signature
 
@@ -14,6 +15,15 @@ from config.config import config
 from app import app_logger
 
 logger = app_logger.get_logger(__name__)
+
+# Временный подробный дебаг производительности DB-слоя.
+# Потом можно поставить False или удалить эти print-ы.
+DB_TIMING_DEBUG = True
+
+def db_timing_print(message):
+    if DB_TIMING_DEBUG:
+        print(message)
+
 
 
 class QueryResult:
@@ -231,6 +241,7 @@ class Session:
         logger.info("Progress bar message: %s", message)
 
     async def execute(self, procedure_name, *args):
+        t_execute_total = time.perf_counter()
         query = f'SELECT * FROM "sc_ref".{procedure_name}({",".join([f"${i + 1}" for i, _ in enumerate(args)])})'
         try:
             if self._execute_lock is None:
@@ -250,22 +261,66 @@ class Session:
                 procedure_name,
                 len(args),
             )
-            async with self._execute_lock:
-                logger.debug("Execute lock acquired for %s", procedure_name)
-                result = await self._remote_connection.fetch(query, *args)
 
-            return QueryResult(result, columns=list(result[0].keys()) if len(result) else None)
+            db_timing_print(
+                f"[DB execute START] {procedure_name}: args={args}, query={query}"
+            )
+
+            t_wait_lock = time.perf_counter()
+            async with self._execute_lock:
+                lock_wait_time = time.perf_counter() - t_wait_lock
+                logger.debug("Execute lock acquired for %s", procedure_name)
+
+                t_fetch = time.perf_counter()
+                result = await self._remote_connection.fetch(query, *args)
+                fetch_time = time.perf_counter() - t_fetch
+
+            t_columns = time.perf_counter()
+            columns = list(result[0].keys()) if len(result) else None
+            columns_time = time.perf_counter() - t_columns
+
+            total_time = time.perf_counter() - t_execute_total
+            db_timing_print(
+                f"[DB execute END] {procedure_name}: "
+                f"rows={len(result)}, "
+                f"lock_wait={lock_wait_time:.4f}s, "
+                f"fetch={fetch_time:.4f}s, "
+                f"columns={columns_time:.4f}s, "
+                f"total={total_time:.4f}s"
+            )
+
+            return QueryResult(result, columns=columns)
         except (asyncpg.exceptions.ConnectionDoesNotExistError, asyncpg.exceptions.ConnectionFailureError):
             logger.warning("Connection lost while executing %s. Attempting to reconnect", procedure_name)
             self.update_loading_bar("Соединение потеряно. Попытка восстановления")
             if await self.reconnect_db():
                 try:
+                    db_timing_print(f"[DB execute RETRY START] {procedure_name}: args={args}")
+
+                    t_wait_lock = time.perf_counter()
                     async with self._execute_lock:
+                        lock_wait_time = time.perf_counter() - t_wait_lock
                         logger.debug(
                             "Execute lock reacquired for %s after reconnect", procedure_name
                         )
+
+                        t_fetch = time.perf_counter()
                         result = await self._remote_connection.fetch(query, *args)
-                    return QueryResult(result, columns=list(result[0].keys()) if len(result) else None)
+                        fetch_time = time.perf_counter() - t_fetch
+
+                    t_columns = time.perf_counter()
+                    columns = list(result[0].keys()) if len(result) else None
+                    columns_time = time.perf_counter() - t_columns
+
+                    db_timing_print(
+                        f"[DB execute RETRY END] {procedure_name}: "
+                        f"rows={len(result)}, "
+                        f"lock_wait={lock_wait_time:.4f}s, "
+                        f"fetch={fetch_time:.4f}s, "
+                        f"columns={columns_time:.4f}s"
+                    )
+
+                    return QueryResult(result, columns=columns)
                 except Exception as e:
                     logger.exception("Error executing %s after reconnect", procedure_name)
                     return e
@@ -298,57 +353,186 @@ class Session:
             return_type = sig.return_annotation
 
             def parse_obj_as(return_type_, res):
+                t_parse_total = time.perf_counter()
+
                 if res is None or isinstance(res, Exception):
                     logger.error("Error during procedure execution in %s: %s", func.__name__, res)
+                    db_timing_print(
+                        f"[DB parse ERROR] {func.__name__}: res={res}, "
+                        f"time={time.perf_counter() - t_parse_total:.4f}s"
+                    )
                     return None
 
+                raw_rows_count = len(res.result) if getattr(res, 'result', None) is not None else 0
+                columns_count = len(res.columns) if getattr(res, 'columns', None) is not None else 0
+                db_timing_print(
+                    f"[DB parse START] {func.__name__}: "
+                    f"return_type={return_type_}, "
+                    f"raw_rows={raw_rows_count}, "
+                    f"columns={columns_count}"
+                )
+
                 if return_type_ in [bool, int, float]:
-                    if res.one()[0] is None:
+                    t_scalar = time.perf_counter()
+                    one = res.one()
+                    if one[0] is None:
+                        db_timing_print(
+                            f"[DB parse END] {func.__name__}: scalar None, "
+                            f"scalar_time={time.perf_counter() - t_scalar:.4f}s, "
+                            f"total={time.perf_counter() - t_parse_total:.4f}s"
+                        )
                         return None
-                    return return_type_(res.one()[0])
+                    value = return_type_(one[0])
+                    db_timing_print(
+                        f"[DB parse END] {func.__name__}: scalar={type(value).__name__}, "
+                        f"scalar_time={time.perf_counter() - t_scalar:.4f}s, "
+                        f"total={time.perf_counter() - t_parse_total:.4f}s"
+                    )
+                    return value
 
                 if not isinstance(return_type_, typing._GenericAlias):
                     if return_type_ is None:
+                        db_timing_print(
+                            f"[DB parse END] {func.__name__}: return_type is None, "
+                            f"total={time.perf_counter() - t_parse_total:.4f}s"
+                        )
                         return None
+
                     as_type = res.columns
                     value = res.one()
                     if value is None:
+                        db_timing_print(
+                            f"[DB parse END] {func.__name__}: one=None, "
+                            f"total={time.perf_counter() - t_parse_total:.4f}s"
+                        )
                         return None
+
+                    t_dict = time.perf_counter()
                     _kwargs = {as_type[i]: value[i] for i in range(len(value))}
-                    return return_type_(_kwargs)
-                else:
-                    as_type = res.columns
-                    res_one = res.one()
-                    return_type_ = return_type_.__args__[0]
-                    if return_type_ in [int, bool, str]:
-                        if isinstance(res_one, list) or isinstance(res_one, tuple):
-                            return [return_type_(val) if val is not None else None for val in res_one[0]]
-                        else:
-                            return [return_type_(val) if val is not None else None for val in list(res_one)[0]]
-                    parsed_result = []
-                    for row in res.result:
-                        _kwargs = {as_type[i]: row[i] for i in range(len(row))}
-                        parsed_result.append(return_type_(_kwargs))
-                    res.result = parsed_result
-                    return res.all()
+                    dict_time = time.perf_counter() - t_dict
+
+                    t_model = time.perf_counter()
+                    obj = return_type_(_kwargs)
+                    model_time = time.perf_counter() - t_model
+
+                    db_timing_print(
+                        f"[DB parse END] {func.__name__}: one_model={return_type_.__name__}, "
+                        f"dict={dict_time:.4f}s, "
+                        f"model={model_time:.4f}s, "
+                        f"total={time.perf_counter() - t_parse_total:.4f}s"
+                    )
+                    return obj
+
+                as_type = res.columns
+                res_one = res.one()
+                return_type_ = return_type_.__args__[0]
+
+                if return_type_ in [int, bool, str]:
+                    t_list_scalar = time.perf_counter()
+                    if isinstance(res_one, list) or isinstance(res_one, tuple):
+                        result_list = [return_type_(val) if val is not None else None for val in res_one[0]]
+                    else:
+                        result_list = [return_type_(val) if val is not None else None for val in list(res_one)[0]]
+                    db_timing_print(
+                        f"[DB parse END] {func.__name__}: list_scalar={return_type_.__name__}, "
+                        f"rows={len(result_list)}, "
+                        f"list_time={time.perf_counter() - t_list_scalar:.4f}s, "
+                        f"total={time.perf_counter() - t_parse_total:.4f}s"
+                    )
+                    return result_list
+
+                parsed_result = []
+                dict_total_time = 0.0
+                model_total_time = 0.0
+                t_loop = time.perf_counter()
+
+                for row_index, row in enumerate(res.result):
+                    t_dict = time.perf_counter()
+                    _kwargs = {as_type[i]: row[i] for i in range(len(row))}
+                    dict_total_time += time.perf_counter() - t_dict
+
+                    t_model = time.perf_counter()
+                    parsed_result.append(return_type_(_kwargs))
+                    model_total_time += time.perf_counter() - t_model
+
+                    if DB_TIMING_DEBUG and row_index and row_index % 50000 == 0:
+                        db_timing_print(
+                            f"[DB parse PROGRESS] {func.__name__}: "
+                            f"parsed={row_index}/{raw_rows_count}, "
+                            f"elapsed={time.perf_counter() - t_loop:.4f}s"
+                        )
+
+                loop_time = time.perf_counter() - t_loop
+                res.result = parsed_result
+
+                t_all = time.perf_counter()
+                all_result = res.all()
+                all_time = time.perf_counter() - t_all
+
+                db_timing_print(
+                    f"[DB parse END] {func.__name__}: "
+                    f"model={return_type_.__name__}, "
+                    f"rows={len(parsed_result)}, "
+                    f"dict_total={dict_total_time:.4f}s, "
+                    f"model_total={model_total_time:.4f}s, "
+                    f"loop={loop_time:.4f}s, "
+                    f"res_all={all_time:.4f}s, "
+                    f"total={time.perf_counter() - t_parse_total:.4f}s"
+                )
+                return all_result
 
             @wraps(func)
             def wrapper(*args, **kwargs):
+                t_wrapper_total = time.perf_counter()
+
                 # Адаптация аргументов
                 logger.info(
                     "Calling stored procedure wrapper %s (description=%s)",
                     func.__name__,
                     description or 'Загрузка'
                 )
+                db_timing_print(
+                    f"[DB wrapper START] {func.__name__}: "
+                    f"description={description or 'Загрузка'}, "
+                    f"return_type={return_type}, "
+                    f"args={args}, kwargs={kwargs}"
+                )
+
+                t_progress = time.perf_counter()
                 self.update_loading_bar(description if description else 'Загрузка')
+                progress_time = time.perf_counter() - t_progress
+
+                t_func = time.perf_counter()
                 result = func(*args, **kwargs)
+                func_time = time.perf_counter() - t_func
+
                 if isinstance(result, RaiseError):
                     logger.error("Stored procedure %s raised database error: %s", func.__name__, result)
                     if 'seslogin' in str(result):
                         self.call('checkuserpassword', self._login, self._password)
+                    db_timing_print(
+                        f"[DB wrapper END] {func.__name__}: RaiseError, "
+                        f"progress={progress_time:.4f}s, "
+                        f"func_call={func_time:.4f}s, "
+                        f"total={time.perf_counter() - t_wrapper_total:.4f}s"
+                    )
                     return result
 
-                return parse_obj_as(return_type, result)
+                t_parse = time.perf_counter()
+                parsed = parse_obj_as(return_type, result)
+                parse_time = time.perf_counter() - t_parse
+
+                total_time = time.perf_counter() - t_wrapper_total
+                parsed_len = len(parsed) if isinstance(parsed, list) else 'not_list'
+                db_timing_print(
+                    f"[DB wrapper END] {func.__name__}: "
+                    f"progress={progress_time:.4f}s, "
+                    f"func_call={func_time:.4f}s, "
+                    f"parse={parse_time:.4f}s, "
+                    f"total={total_time:.4f}s, "
+                    f"parsed_len={parsed_len}"
+                )
+                return parsed
 
             return wrapper
 

@@ -20,6 +20,9 @@ class WorkDataTab(Tab):
         if not datafile:
             main_window.show_notification('Данные для открытия таблицы отсутствуют.')
             return
+        
+        print("DEBUG get_import_file_data_simple args:", datafile.id_datafile, int(self.item.final_version))
+
         cells = sp.get_import_file_data_simple(datafile.id_datafile, int(self.item.final_version))
         sprav_names = dc.get_sprav_names()
         sprav_eizm = dc.get_sprav_eizm()

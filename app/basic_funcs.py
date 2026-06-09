@@ -226,7 +226,13 @@ def timing_decorator(func):
         result = func(*args, **kwargs)
         end_time = time.time()  # Записываем конечное время
         elapsed_time = end_time - start_time
-        print(f"Функция '{func.__name__}' выполнена за {elapsed_time:.4f} секунд.")
+        print(
+
+                f"Функция '{func.__module__}.{func.__qualname__}' "
+
+                f"выполнена за {elapsed_time:.4f} секунд."
+
+            )
         return result
 
     return wrapper
