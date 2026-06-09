@@ -444,11 +444,6 @@
                   </item>
                   <item row="0" column="1">
                    <widget class="QDoubleSpinBox" name="yMajor">
-                    <property name="font">
-                     <font>
-                      <kerning>true</kerning>
-                     </font>
-                    </property>
                     <property name="wrapping">
                      <bool>false</bool>
                     </property>

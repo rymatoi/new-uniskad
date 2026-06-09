@@ -16,9 +16,11 @@ from PySide2.QtWidgets import (
     QTabWidget,
     QVBoxLayout,
     QWidget,
+    QApplication,
 )
 
 from db.user_settings import UserSettings
+from app.ui_font import apply_application_font
 from dialogs.base import BaseDialog
 
 
@@ -284,6 +286,7 @@ class SettingsDialog(BaseDialog):
         for key, value in values.items():
             self.user_settings.set(key, value)
 
+        apply_application_font(QApplication.instance(), values)
         self.settings_applied.emit(values)
 
         self._dirty = False
@@ -341,12 +344,13 @@ class SettingsDialog(BaseDialog):
         if self.apply_button:
             self.apply_button.setEnabled(False)
 
+        apply_application_font(QApplication.instance(), self.user_settings)
         self.settings_applied.emit({})
 
         QMessageBox.information(
             self,
             "Интерфейс сброшен",
-            "Настройки интерфейса будут восстановлены при следующем запуске.",
+            "Настройки интерфейса восстановлены.",
         )
 
 

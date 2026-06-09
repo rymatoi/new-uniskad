@@ -349,9 +349,6 @@ class Ui_EditPlaneDialog(object):
 
         self.yMajor = QDoubleSpinBox(self.yAxisGroup)
         self.yMajor.setObjectName(u"yMajor")
-        font = QFont()
-        font.setKerning(True)
-        self.yMajor.setFont(font)
         self.yMajor.setWrapping(False)
         self.yMajor.setButtonSymbols(QAbstractSpinBox.NoButtons)
         self.yMajor.setAccelerated(False)
