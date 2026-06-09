@@ -4,13 +4,14 @@ from typing import Any, Dict, Optional
 
 from PySide2 import QtWidgets
 from PySide2.QtCore import QEventLoop, QSize, Slot
-from PySide2.QtGui import QIcon, QCloseEvent, Qt, QKeySequence, QFont
+from PySide2.QtGui import QIcon, QCloseEvent, Qt, QKeySequence
 from PySide2.QtWidgets import QMenu, QToolBar, QHBoxLayout, QToolButton, QWidget, QDialog, QShortcut, QDockWidget, \
     QAction, QProgressBar, QLabel
 from app import app_logger, _menu, basic_funcs
 from app.cache import DataCache
 from app.history_manager.history_manager import EventStack
 from app.notifications import StackedNotifications
+from app.ui_font import apply_application_font
 from app.plugins import *
 from app.plugins.admin_users.widgets.docks import AdminUsersDockWidget
 from app.plugins.base_state.widgets import TreeView, DockWidget
@@ -74,7 +75,6 @@ class MainWindow(QtWidgets.QMainWindow):
         super(MainWindow, self).__init__()
 
         self.user_settings = UserSettings()
-        self._default_app_font = QFont(config.config.app.font())
         self._tree_states_to_restore = {}
         self._pending_window_state_bytes = None
         self._pending_central_window_state_bytes = None
@@ -787,11 +787,11 @@ class MainWindow(QtWidgets.QMainWindow):
         status_bar_visible = self._coerce_bool(setting('show_status_bar', True), default=True)
         self.statusBar().setVisible(status_bar_visible)
 
-        use_custom_font = self._coerce_bool(setting('use_custom_font', False), default=False)
-        font_name = setting('font_name', self._default_app_font.family())
-        default_point_size = self._default_app_font.pointSize() if self._default_app_font.pointSize() > 0 else 10
-        font_size = self._coerce_int(setting('font_size', default_point_size), default=default_point_size, minimum=6)
-        self._apply_font_settings(use_custom_font, font_name, font_size)
+        apply_application_font(config.config.app, {
+            'use_custom_font': setting('use_custom_font', False),
+            'font_name': setting('font_name', None),
+            'font_size': setting('font_size', None),
+        })
 
         notifications_enabled = self._coerce_bool(
             setting('enable_notifications', True),
@@ -803,17 +803,6 @@ class MainWindow(QtWidgets.QMainWindow):
             minimum=1,
         )
         self._apply_notification_settings(notifications_enabled, notifications_timeout)
-
-    def _apply_font_settings(self, use_custom_font: bool, font_name: Any, font_size: int) -> None:
-        if use_custom_font:
-            font = QFont(self._default_app_font)
-            if font_name:
-                font.setFamily(str(font_name))
-            if font_size and font_size > 0:
-                font.setPointSize(int(font_size))
-            config.config.app.setFont(font)
-        else:
-            config.config.app.setFont(QFont(self._default_app_font))
 
     def _apply_notification_settings(self, enabled: bool, timeout_seconds: int) -> None:
         self.notifications_enabled = enabled

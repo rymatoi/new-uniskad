@@ -345,3 +345,30 @@ def test_row_settings_does_not_rename_when_structural_editing_is_disabled(applic
 
     assert not dialog.update_name('Renamed A')
     assert updates == []
+
+
+def test_table_font_role_inherits_global_without_explicit_format(application):
+    view = make_view(application)
+    index = view.model().index(0, 0)
+
+    assert view.model().data(index, Qt.FontRole) is None
+
+
+def test_table_font_role_preserves_cell_row_column_format_precedence(application):
+    column = datetime.datetime(2024, 1, 1)
+    view = WorkDataTableView()
+    view.model().load_data([
+        record('A', None, 'row_npp', '1'),
+        record('A', None, 'font_size', '16'),
+        record(None, column, 'column_npp', '1'),
+        record(None, column, 'font_name', 'DejaVu Serif'),
+        record('A', column, 'value', '1'),
+        record('A', column, 'font_size', '19'),
+        record('A', column, 'font_bold', 'True'),
+    ])
+
+    font = view.model().data(view.model().index(0, 0), Qt.FontRole)
+
+    assert font.family() == 'DejaVu Serif'
+    assert font.pointSize() == 19
+    assert font.bold()

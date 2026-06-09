@@ -3,14 +3,11 @@ from copy import copy
 from typing import List
 import PySide2
 from PySide2.QtCore import QAbstractItemModel, QPointF, Signal, QPersistentModelIndex
-from PySide2.QtGui import QIcon, QFont, QColor, QPainter, QPen, QPixmap
+from PySide2.QtGui import QIcon, QColor, QPainter, QPen, QPixmap
+
+from app.ui_font import explicit_format_font
 
 from PySide2.QtCore import Qt, QModelIndex
-
-replace_dict = {
-    'True': True,
-    'False': False
-}
 
 
 ANY_CHILD_TYPE = 'any'
@@ -238,8 +235,8 @@ class TreeModel(QAbstractItemModel):
         self.checked_list = []
         self._prop_dict = {}
 
-        self.font_name = 'Times New Roman'
-        self.font_size = 14
+        self.font_name = None
+        self.font_size = None
 
         # self.register_nodes()
 
@@ -586,24 +583,9 @@ class TreeModel(QAbstractItemModel):
             return icon
 
         if role == Qt.FontRole:
-            font = QFont()
-            if self.font_name:
-                if not node.font_name:
-                    font.setFamily(self.font_name)
-                else:
-                    font.setFamily(node.font_name)
-            if self.font_size:
-                if not node.font_size:
-                    font.setPointSize(float(self.font_size))
-                else:
-                    font.setPointSize(float(node.font_size))
-            else:
-                font.setPixelSize(float(node.font_size))
-            font.setBold(replace_dict.get(node.font_bold, node.font_bold))
-            font.setUnderline(replace_dict.get(node.font_underline, node.font_underline))
-            font.setItalic(replace_dict.get(node.font_italic, node.font_italic))
-            font.setStrikeOut(replace_dict.get(node.font_strikeout, node.font_strikeout))
-            return font
+            # Ordinary tree text inherits the application font; customized
+            # nodes remain explicit overrides.
+            return explicit_format_font(node)
 
         if role == Qt.UserRole:
             if hasattr(node._data, 'deleted'):

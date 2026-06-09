@@ -14,6 +14,7 @@ from PySide2.QtWidgets import QTreeView, QMenu, QColorDialog, QInputDialog, QDoc
     QApplication, QStyle, QSizePolicy, QDialog, QDialogButtonBox, QTextBrowser
 from openpyxl.workbook import Workbook
 from app import app_logger, _menu, basic_funcs
+from app.ui_font import explicit_format_font
 from app._eval_expr import eval_context, eval_expr
 from app.basic_funcs import timing_decorator
 from app.formula import FormulaDelegate, FormulaLineEdit
@@ -157,13 +158,6 @@ class TreeView(QTreeView):
         super(TreeView, self).setModel(model)
         self.clear_pending_save()
         model.set_view(self)
-        self.model().font_name = 'Times New Roman'
-        self.model().font_size = 14
-        if self.main_window:
-            if font_name := self.main_window.user_settings.get('font_name'):
-                self.model().font_name = font_name
-            if font_size := self.main_window.user_settings.get('font_size'):
-                self.model().font_size = font_size
         self.resizeColumnToContents(0)
         self.refresh()
         self._reset_tree_state()
@@ -1789,12 +1783,11 @@ class TableItem(QTableWidgetItem):
             return QColor(self.get('font_text_color', str))
 
         if role == Qt.FontRole:
-            font = QFont()
-            # font.setFamily(self.get('font_name', 'Times'))
-            font.setBold(self.get('font_bold', bool, False))
-            font.setItalic(self.get('font_italic', bool, False))
-            font.setPixelSize(self.get('font_size', int, 14))
-            return font
+            # Cell formatting wins over row and column formatting.  With no
+            # explicit format, return None so Qt inherits QApplication.font().
+            row = tw.rows.get((self.key[0], None), {})
+            column = tw.columns.get((None, self.key[1]), {})
+            return explicit_format_font(self.cell, row, column)
 
         if role == Qt.TextAlignmentRole:
             return tw.get_column_prop(self.key[1], 'alignment', int, 4)

@@ -9,6 +9,8 @@ import db
 import resources.resources_rc
 from dialogs.login import LoginDialog
 from app.mainwindow import MainWindow
+from app.ui_font import apply_application_font
+from db.user_settings import UserSettings
 
 logger = app_logger.get_logger(__name__)
 
@@ -48,6 +50,7 @@ def create_login_dialog():
 
 if __name__ == '__main__':
     #set_locale()
+    apply_application_font(config.app, UserSettings(), refresh=False)
     login = create_login_dialog()
     if login.exec_() == QDialog.Accepted:
         window = MainWindow()

@@ -280,3 +280,26 @@ def test_project_add_row_and_column_keep_complete_cell_records(application):
         for column in (column_1, column_2):
             assert {'type', 'value'} <= set(view.table[(row, column)])
             assert view.table[(row, column)]['type'].prop_value == 'cell'
+
+
+def test_project_table_font_role_inherits_global_and_preserves_explicit_format(application):
+    from PySide2.QtCore import Qt
+
+    column = datetime.datetime(2024, 1, 1)
+    view = ProjectTableView()
+    view.model().load_data([
+        record('A', None, 'row_npp', '1'),
+        record(None, column, 'column_npp', '1'),
+        record('A', column, 'value', '1'),
+    ])
+    index = view.model().index(0, 0)
+    assert view.model().data(index, Qt.FontRole) is None
+
+    view.model().load_data([
+        record('A', None, 'row_npp', '1'),
+        record('A', None, 'font_italic', 'True'),
+        record(None, column, 'column_npp', '1'),
+        record('A', column, 'value', '1'),
+    ])
+    font = view.model().data(view.model().index(0, 0), Qt.FontRole)
+    assert font.italic()
