@@ -8,6 +8,7 @@ from PySide2.QtGui import QIcon, QCloseEvent, Qt, QKeySequence
 from PySide2.QtWidgets import QShortcut, QDockWidget, QProgressBar, QLabel
 from app import app_logger, _menu, basic_funcs
 from app.cache import DataCache
+from app.menu_service import clear_menu_cache, get_menu
 from app.history_manager.history_manager import EventStack
 from app.notifications import StackedNotifications
 from app.ui_font import apply_application_font
@@ -242,7 +243,7 @@ class MainWindow(QtWidgets.QMainWindow):
         :return:
         """
         logger.info('Инициализация меню.')
-        menu_list = sp.get_user_menu_('any', 'main_menu')
+        menu_list = get_menu('any', 'main_menu')
         _menu.init_menu(menu_list, self, self.menuBar())
         logger.info('Инициализация меню прошла успешно.')
 
@@ -652,6 +653,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         success = sp.set_sesion_role(current_role.id_role)
         if success:
+            clear_menu_cache('active role changed')
             self.menuBar().clear()
             self.init_menu()
             self.connect_triggered_funcs()

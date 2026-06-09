@@ -7,7 +7,7 @@ import pyqtgraph as pg
 
 from app import _menu
 from app.history_manager.events import LegendPositionChangeEvent
-from db import sp
+from app.menu_service import get_menu
 
 from .legend_settings_dialog import LegendSettingsDialog
 
@@ -41,7 +41,7 @@ class CustomLegend(pg.LegendItem):
         self.edit_legend(None)
 
     def _load_menu(self, mode, location):
-        menu = sp.get_user_menu_(mode, location)
+        menu = get_menu(mode, location)
         self.available_actions += [action.name for action in menu]
         return menu
 
