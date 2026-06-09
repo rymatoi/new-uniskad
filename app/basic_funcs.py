@@ -1,6 +1,7 @@
 import ast
 import functools
 import os
+import time
 from datetime import datetime
 
 import xlrd
@@ -15,6 +16,10 @@ import re
 from openpyxl.cell.cell import ILLEGAL_CHARACTERS_RE
 from openpyxl.reader.excel import load_workbook
 from openpyxl.workbook import Workbook
+
+from app import app_logger
+
+logger = app_logger.get_logger(__name__)
 
 
 def parse_date(cell_value):
@@ -217,22 +222,17 @@ def excel_to_float(val):
     return str(val).replace(',', '.')
 
 
-import time
-
-
 def timing_decorator(func):
+    @functools.wraps(func)
     def wrapper(*args, **kwargs):
-        start_time = time.time()  # Записываем стартовое время
+        start_time = time.perf_counter()
         result = func(*args, **kwargs)
-        end_time = time.time()  # Записываем конечное время
-        elapsed_time = end_time - start_time
-        print(
-
-                f"Функция '{func.__module__}.{func.__qualname__}' "
-
-                f"выполнена за {elapsed_time:.4f} секунд."
-
-            )
+        logger.debug(
+            "Function %s.%s completed in %.4f seconds",
+            func.__module__,
+            func.__qualname__,
+            time.perf_counter() - start_time,
+        )
         return result
 
     return wrapper

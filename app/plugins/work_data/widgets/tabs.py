@@ -2,6 +2,7 @@ from PySide2.QtCore import QDir, QStandardPaths, QUrl
 from PySide2.QtGui import QDesktopServices, Qt
 from PySide2.QtWidgets import QLabel
 
+from app import app_logger
 from app.basic_funcs import timing_decorator
 from app.plugins.base_state.widgets import Tab
 from app.plugins.project.widgets.pages import ProjectPlotPage
@@ -9,6 +10,8 @@ from app.plugins.work_data.widgets.pages import WorkDataTablePage1
 from db import sp
 from db.schemas import ImportFileData
 from db.tables import IMPORT_FILE_DATA
+
+logger = app_logger.get_logger(__name__)
 
 
 class WorkDataTab(Tab):
@@ -20,8 +23,12 @@ class WorkDataTab(Tab):
         if not datafile:
             main_window.show_notification('Данные для открытия таблицы отсутствуют.')
             return
-        
-        print("DEBUG get_import_file_data_simple args:", datafile.id_datafile, int(self.item.final_version))
+
+        logger.debug(
+            "Loading work data for id_datafile=%s, file_version=%s",
+            datafile.id_datafile,
+            int(self.item.final_version),
+        )
 
         cells = sp.get_import_file_data_simple(datafile.id_datafile, int(self.item.final_version))
         sprav_names = dc.get_sprav_names()
