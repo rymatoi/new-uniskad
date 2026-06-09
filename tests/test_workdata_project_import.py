@@ -44,6 +44,26 @@ def test_db_import_passes_exact_curve_names_and_returns_inserted_count(monkeypat
     assert calls == [(4464, 599, 0, curve_names)]
 
 
+def test_db_import_reraises_database_error_before_comparing_inserted_count(monkeypatch, caplog):
+    class DatabaseRaiseError(Exception):
+        pass
+
+    database_error = DatabaseRaiseError('original database error')
+    monkeypatch.setattr(models, 'RaiseError', DatabaseRaiseError)
+    monkeypatch.setattr(
+        models.sp, 'import_workdata_file_curves_to_project', lambda *args: database_error,
+    )
+    monkeypatch.setattr(
+        models.sp, 'get_project_data_import_stats',
+        lambda project_id: pytest.fail('validation must not run after a database error'),
+    )
+
+    with pytest.raises(DatabaseRaiseError, match='original database error'):
+        models._import_workdata_curves_db(4464, 474, 0, ['A'])
+
+    assert 'original database error' in caplog.text
+
+
 def import_stats(**overrides):
     values = dict(
         row_type_count=2,
