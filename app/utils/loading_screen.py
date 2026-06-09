@@ -3,7 +3,9 @@ from PySide2.QtWidgets import QDialog, QVBoxLayout, QLabel
 
 
 class DatabaseWorker(QThread):
-    finished = Signal(object)
+    # Do not shadow QThread.finished with a result-bearing signal. Consumers
+    # may safely use the inherited signal to dispose of this object.
+    result_ready = Signal(object)
 
     def __init__(self, func, *args, **kwargs):
         super().__init__()
@@ -15,7 +17,7 @@ class DatabaseWorker(QThread):
     def run(self):
         # Выполняем переданную функцию с аргументами
         result = self.func(*self.args, **self.kwargs)
-        self.finished.emit(result)
+        self.result_ready.emit(result)
         self.res = result
 
 
