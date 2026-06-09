@@ -1,3 +1,4 @@
+from PySide2.QtCore import Qt
 from PySide2.QtGui import QIcon, QCursor
 from PySide2.QtWidgets import QAction, QMenu
 
@@ -6,7 +7,7 @@ from app.basic_funcs import timing_decorator
 from app.plugins.base_state.dialogs.column_settings import ColumnSettingsDialog
 from app.plugins.base_state.dialogs.row_settings import RowSettingsDialog
 from app.plugins.base_state.widgets import TablePage1
-from app.plugins.work_data.widgets.table import WorkDataTableWidget
+from app.plugins.work_data.widgets.table import WorkDataTableView, WorkDataTableWidget
 from db import sp
 from db.tables import IMPORT_FILE_DATA
 
@@ -114,3 +115,51 @@ class WorkDataTablePage1(TablePage1):
         success = sp.new_upd_excel_data_record(_record)
         if success:
             self.table.update_column_obj(name, prop_name, record)
+
+
+class WorkDataTableViewPage(WorkDataTablePage1):
+    """Opt-in read-only Work Data page backed by QTableView."""
+
+    TABLE = WorkDataTableView
+
+    @timing_decorator
+    def __init__(self, cells, item, parent=None, main_window=None):
+        super().__init__(cells, item, parent, main_window)
+        self.formula_panel.hide()
+        for action_name in (
+                'saveAction', 'boldAction', 'italicAction', 'sizeAction',
+                'textColorAction', 'bgcolorAction', 'brokenAction'):
+            action = getattr(self, action_name, None)
+            if action is not None:
+                action.setEnabled(False)
+
+    def init_table(self, cells):
+        """Set up model/view signals without QTableWidgetItem-only formula hooks."""
+        self.table.load_table(cells)
+        if hasattr(self.item, 'filters') and self.item.filters and (
+                self.item.use_filters == 'True' or self.item.use_filters is True):
+            self.table.apply_filters(self.item.filters)
+
+        self.table.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.table.customContextMenuRequested.connect(self.show_cell_menu)
+
+        row_headers = self.table.verticalHeader()
+        row_headers.setContextMenuPolicy(Qt.CustomContextMenu)
+        row_headers.customContextMenuRequested.connect(self.show_row_menu)
+
+        column_headers = self.table.horizontalHeader()
+        column_headers.setContextMenuPolicy(Qt.CustomContextMenu)
+        column_headers.customContextMenuRequested.connect(self.show_column_menu)
+
+        self.update_formula_context()
+        self._set_formula_target(None)
+
+    def show_cell_menu(self, point):
+        # Cell actions currently depend on QTableWidgetItem/TableItem. The old
+        # page remains the fallback for those editing-sensitive operations.
+        pass
+
+    def show_column_menu(self, point):
+        # Column settings also depend on TableItem and are intentionally kept
+        # on the old fallback until model/view editing parity is implemented.
+        pass
