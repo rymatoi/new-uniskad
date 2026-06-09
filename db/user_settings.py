@@ -112,6 +112,9 @@ class UserSettings:
         self._store_decoded(name, decoded)
         return decoded
 
+    def contains(self, name: str) -> bool:
+        return self._settings.contains(name)
+
     def get_bytes(self, name: str) -> QByteArray:
         value = self.get(name)
         if isinstance(value, QByteArray):

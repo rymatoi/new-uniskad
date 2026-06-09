@@ -13,7 +13,9 @@ class ProjectDockWidget(DockWidget):
         parent = getattr(self, '_parent', None)
         if parent and hasattr(parent, 'user_settings'):
             try:
-                parent.user_settings.set('active_project', str(project.id))
+                setting = parent._ui_state_setting('active_project') \
+                    if hasattr(parent, '_ui_state_setting') else 'active_project'
+                parent.user_settings.set(setting, str(project.id))
             except Exception:
                 pass
 
