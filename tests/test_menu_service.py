@@ -71,3 +71,44 @@ def test_invalid_results_do_not_poison_cache():
     assert len(service.get_menu('any', 'table')) == 1
     assert len(service.get_menu('any', 'table')) == 1
     assert results == []
+
+
+def test_authorization_context_is_part_of_cache_key_without_logging_secrets(caplog):
+    calls = []
+    context = {'value': ('alice', 'reader')}
+
+    def loader(mode, location):
+        calls.append((mode, location, context['value']))
+        return [SimpleNamespace(name='_open')]
+
+    service = MenuService(loader, context_provider=lambda: context['value'])
+
+    with caplog.at_level('DEBUG'):
+        service.get_menu('any', 'table')
+        service.get_menu('any', 'table')
+        context['value'] = ('alice', 'administrator')
+        service.get_menu('any', 'table')
+
+    assert calls == [
+        ('any', 'table', ('alice', 'reader')),
+        ('any', 'table', ('alice', 'administrator')),
+    ]
+    assert 'Menu cache MISS: mode=any, location=table, key=auth=' in caplog.text
+    assert 'Menu cache HIT: mode=any, location=table, key=auth=' in caplog.text
+    assert 'alice' not in caplog.text
+    assert 'administrator' not in caplog.text
+
+
+def test_application_ui_does_not_call_menu_stored_procedure_directly():
+    from pathlib import Path
+
+    repository = Path(__file__).resolve().parents[1]
+    offenders = []
+    for source_root in ('app', 'widgets', 'dialogs', 'settings'):
+        for source in (repository / source_root).rglob('*.py'):
+            if source.name == 'menu_service.py':
+                continue
+            if 'get_user_menu_' in source.read_text(encoding='utf-8'):
+                offenders.append(str(source.relative_to(repository)))
+
+    assert offenders == []
