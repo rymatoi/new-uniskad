@@ -32,19 +32,23 @@ class WorkDataTab(Tab):
             int(self.item.final_version),
         )
 
+        db_started = time.perf_counter()
         cells = sp.get_import_file_data_simple(datafile.id_datafile, int(self.item.final_version))
         sprav_names = dc.get_sprav_names()
         sprav_eizm = dc.get_sprav_eizm()
+        logger.info('WorkDataTab: DB/cache fetch took %.4f seconds', time.perf_counter() - db_started)
 
         is_secret = sp.get_session_role_secret_grantness()
 
+        enrichment_started = time.perf_counter()
         cells = self.process_data(cells, sprav_names, sprav_eizm, not is_secret)
+        logger.info('WorkDataTab: enrichment took %.4f seconds', time.perf_counter() - enrichment_started)
         cells.sort(
             key=lambda x: (x.id_record, x.excel_param_name, x.param_prop_name, x.date_time_izm))
 
         use_table_view = os.getenv('UNISKAD_WORK_DATA_TABLE_VIEW', '').lower() in {'1', 'true', 'yes', 'on'}
         page_class = WorkDataTableViewPage if use_table_view else WorkDataTablePage1
-        logger.debug("Work Data table implementation: %s", page_class.__name__)
+        logger.info("Work Data table implementation: %s", page_class.__name__)
         self.table_page = page_class(cells, self.item, self, main_window)
         self.setWidget(self.table_page)
 
