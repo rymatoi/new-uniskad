@@ -1,6 +1,15 @@
+import time
+
+from PySide2.QtCore import Qt
+
+from app import app_logger
+from app.plugins.base_state.table_model import (LazyTableModel, LazyTableModelItem,
+                                                ModelViewTable)
 from app.plugins.base_state.widgets import TableWidget, TableItem
 from db import sp
 from db.tables import PROJECT_DATA
+
+logger = app_logger.get_logger(__name__)
 
 
 class ProjectTableItem(TableItem):
@@ -16,18 +25,49 @@ class ProjectTableWidget(TableWidget):
     def set_vertical_headers(self):
         header_names = []
         for row in self.ord_rows:
-            if 'eizm_short' in self.rows[(row, None)].keys() and self.rows[(row, None)][
-                'eizm_short'].prop_value != 'not_set':
-                header_names.append(f'{row}, {self.rows[(row, None)]["eizm_short"].prop_value}')
-            else:
-                header_names.append(row)
+            unit = self.rows[(row, None)].get('eizm_short')
+            header_names.append(f'{row}, {unit.prop_value}' if unit and unit.prop_value != 'not_set' else row)
         self.setVerticalHeaderLabels(header_names)
 
     def get_update_cells(self):
         return [cell.table_fit(PROJECT_DATA) for cell in self.need_update]
 
     def update_table(self):
+        started = time.perf_counter()
         success = sp.new_upd_project_data_array(self.get_update_cells())
+        logger.info("ProjectTableWidget: save/update path completed in %.4f seconds",
+                    time.perf_counter() - started)
         if success:
             self._parent._parent._parent.model().update_external_graphs()
             self.need_update = []
+
+
+class ProjectModelItem(LazyTableModelItem):
+    pass
+
+
+class ProjectTableModel(LazyTableModel):
+    ITEM_CLASS = ProjectModelItem
+
+    def headerData(self, section, orientation, role=None):
+        if role is None:
+            role = Qt.DisplayRole
+        if role == Qt.DisplayRole and orientation == Qt.Vertical and 0 <= section < len(self.ord_rows):
+            row = self.ord_rows[section]
+            unit = self.rows.get((row, None), {}).get('eizm_short')
+            return f'{row}, {unit.prop_value}' if unit and unit.prop_value != 'not_set' else row
+        return super().headerData(section, orientation, role)
+
+
+class ProjectTableView(ModelViewTable):
+    """Opt-in lazy model/view Project table."""
+
+    MODEL_CLASS = ProjectTableModel
+    TABLE_FIT = PROJECT_DATA
+    SAVE_FUNCTION = staticmethod(sp.new_upd_project_data_array)
+
+    def post_save(self):
+        try:
+            self._parent._parent._parent.model().update_external_graphs()
+        except AttributeError:
+            logger.warning('ProjectTableView: external graph update target is unavailable')

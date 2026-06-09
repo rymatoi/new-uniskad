@@ -6,6 +6,7 @@ from app import basic_funcs, _menu
 from app.basic_funcs import timing_decorator
 from app.plugins.base_state.dialogs.column_settings import ColumnSettingsDialog
 from app.plugins.base_state.dialogs.row_settings import RowSettingsDialog
+from app.plugins.base_state.table_model import clone_property_record
 from app.plugins.base_state.widgets import TablePage1
 from app.plugins.work_data.widgets.table import WorkDataTableView, WorkDataTableWidget
 from db import sp
@@ -93,9 +94,7 @@ class WorkDataTablePage1(TablePage1):
             record.prop_value = str(prop_value)
             _record = record.table_fit(IMPORT_FILE_DATA)
         else:
-            record = self.table.rows[(name, None)]['type']
-            record.param_prop_name = str(prop_name)
-            record.prop_value = str(prop_value)
+            record = clone_property_record(self.table.rows[(name, None)]['type'], prop_name, prop_value)
             _record = record.table_fit(IMPORT_FILE_DATA)
         success = sp.new_upd_excel_data_record(_record)
         if success:
@@ -107,10 +106,7 @@ class WorkDataTablePage1(TablePage1):
             record.prop_value = str(prop_value)
             _record = record.table_fit(IMPORT_FILE_DATA)
         else:
-            record = self.table.columns[(None, name)]['type']
-            record.id_record = 0
-            record.param_prop_name = str(prop_name)
-            record.prop_value = str(prop_value)
+            record = clone_property_record(self.table.columns[(None, name)]['type'], prop_name, prop_value)
             _record = record.table_fit(IMPORT_FILE_DATA)
         success = sp.new_upd_excel_data_record(_record)
         if success:

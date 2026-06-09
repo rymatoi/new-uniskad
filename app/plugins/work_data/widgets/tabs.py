@@ -1,4 +1,3 @@
-import os
 import time
 
 from PySide2.QtCore import QDir, QStandardPaths, QUrl
@@ -7,6 +6,7 @@ from PySide2.QtWidgets import QLabel
 
 from app import app_logger
 from app.basic_funcs import timing_decorator
+from app.feature_flags import is_feature_enabled
 from app.plugins.base_state.widgets import Tab
 from app.plugins.project.widgets.pages import ProjectPlotPage
 from app.plugins.work_data.widgets.pages import WorkDataTablePage1, WorkDataTableViewPage
@@ -46,7 +46,7 @@ class WorkDataTab(Tab):
         cells.sort(
             key=lambda x: (x.id_record, x.excel_param_name, x.param_prop_name, x.date_time_izm))
 
-        use_table_view = os.getenv('UNISKAD_WORK_DATA_TABLE_VIEW', '').lower() in {'1', 'true', 'yes', 'on'}
+        use_table_view = is_feature_enabled('UNISKAD_WORK_DATA_TABLE_VIEW')
         page_class = WorkDataTableViewPage if use_table_view else WorkDataTablePage1
         logger.info("Work Data table implementation: %s", page_class.__name__)
         self.table_page = page_class(cells, self.item, self, main_window)
