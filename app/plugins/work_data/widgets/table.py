@@ -17,7 +17,48 @@ class WorkDataTableItem(TableItem):
         self.add_prop(tmp)
 
 
-class WorkDataTableWidget(TableWidget):
+class WorkDataStructuralEditingDisabledMixin:
+    """Reject identity-changing operations for imported Work Data structures."""
+
+    structural_editing_enabled = False
+
+    def _reject_structural_edit(self):
+        logger.warning('Work Data structural editing is disabled')
+        return False
+
+    def update_ord_row(self, new_name, old_name):
+        return self._reject_structural_edit()
+
+    def add_row(self, db_objects, position=None):
+        return self._reject_structural_edit()
+
+    def add_column(self, db_objects):
+        return self._reject_structural_edit()
+
+    def removeRow(self, row):
+        return self._reject_structural_edit()
+
+    def removeColumn(self, column):
+        return self._reject_structural_edit()
+
+    def queue_row_deletion(self, row_key):
+        return self._reject_structural_edit()
+
+    def queue_column_deletion(self, column_key):
+        return self._reject_structural_edit()
+
+    def update_row_obj(self, row, prop_name, obj):
+        if prop_name in {'name', 'row_npp', 'type'}:
+            return self._reject_structural_edit()
+        return super().update_row_obj(row, prop_name, obj)
+
+    def update_column_obj(self, column, prop_name, obj):
+        if prop_name in {'name', 'column_npp', 'type', 'date_time_izm'}:
+            return self._reject_structural_edit()
+        return super().update_column_obj(column, prop_name, obj)
+
+
+class WorkDataTableWidget(WorkDataStructuralEditingDisabledMixin, TableWidget):
     TABLE_ITEM = WorkDataTableItem
 
     def get_update_cells(self):
@@ -43,7 +84,7 @@ class WorkDataTableModel(LazyTableModel):
     ITEM_CLASS = WorkDataModelItem
 
 
-class WorkDataTableView(ModelViewTable):
+class WorkDataTableView(WorkDataStructuralEditingDisabledMixin, ModelViewTable):
     """Opt-in lazy model/view Work Data table."""
 
     MODEL_CLASS = WorkDataTableModel
