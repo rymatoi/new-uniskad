@@ -30,26 +30,13 @@ class InvalidWorkDataDbImport(RuntimeError):
     """DB import committed records that cannot form a Project table."""
 
 
-def _workdata_import_source(source_test, cache=None):
-    source_test_id = int(source_test._data.id)
-    if cache is not None and source_test_id in cache:
-        result = cache[source_test_id]
-        if isinstance(result, Exception):
-            raise result
-        return result
-
-    try:
-        datafile = sp.get_product_uniskad_files(source_test_id, 'input_excel')
-        if not datafile:
-            raise RuntimeError(f'No input Excel datafile found for WorkData test {source_test_id}')
-        result = datafile.id_datafile, int(getattr(source_test, 'final_version', 0))
-    except Exception as exc:
-        if cache is not None:
-            cache[source_test_id] = exc
-        raise
-    if cache is not None:
-        cache[source_test_id] = result
-    return result
+def _workdata_import_source(source_test):
+    datafile = sp.get_product_uniskad_files(source_test._data.id, 'input_excel')
+    if not datafile:
+        raise RuntimeError(
+            f'No input Excel datafile found for WorkData test {source_test._data.id}'
+        )
+    return datafile.id_datafile, int(getattr(source_test, 'final_version', 0))
 
 
 def _import_workdata_curves_db(target_project_id, id_excel_file, file_version, curve_names):
@@ -101,122 +88,6 @@ def _import_workdata_curves_db(target_project_id, id_excel_file, file_version, c
         inserted_rows, elapsed,
     )
     return inserted_rows
-
-
-_SOURCE_RESOLUTION_SLOW_SECONDS = 0.1
-
-
-def _normalize_selected_parents(selected, parent_id):
-    selected_ids = {obj._data.id_prod for obj in selected}
-    for obj in selected:
-        if obj._data.id_up_prod not in selected_ids:
-            obj._data.id_up_prod = parent_id
-
-
-def _resolve_workdata_import_sources(source_tests):
-    started = time.perf_counter()
-    cache = {}
-    for source_test in source_tests:
-        source_test_id = int(source_test._data.id)
-        if source_test_id in cache:
-            continue
-        item_started = time.perf_counter()
-        try:
-            cache[source_test_id] = _workdata_import_source(source_test, cache)
-        except Exception as exc:
-            cache[source_test_id] = exc
-        elapsed = time.perf_counter() - item_started
-        if elapsed >= _SOURCE_RESOLUTION_SLOW_SECONDS:
-            logger.info(
-                'WorkData source-file resolution slow: source_test_id=%s, elapsed=%.4fs',
-                source_test_id, elapsed,
-            )
-    logger.info(
-        'WorkData source-file resolution total: source_tests=%s, elapsed=%.4fs',
-        len(cache), time.perf_counter() - started,
-    )
-    return cache
-
-
-def _import_workdata_tests(test_projects, source_tests, param_list, new_pr_prop, source_cache):
-    loop_started = time.perf_counter()
-    db_elapsed = fallback_elapsed = 0.0
-    db_inserted_rows = fallback_inserted_rows = 0
-    db_tests = fallback_tests = 0
-
-    for test in test_projects:
-        source_test_id = int(test.prop_value)
-        source_test = source_tests.get(source_test_id)
-        id_excel_file = file_version = None
-        db_started = time.perf_counter()
-        try:
-            if source_test is None:
-                raise RuntimeError(f'Selected WorkData test {source_test_id} was not found')
-            id_excel_file, file_version = _workdata_import_source(source_test, source_cache)
-            inserted_count = _import_workdata_curves_db(
-                test.project_id, id_excel_file, file_version, param_list
-            )
-            db_elapsed += time.perf_counter() - db_started
-            db_inserted_rows += inserted_count
-            db_tests += 1
-            continue
-        except InvalidWorkDataDbImport:
-            raise
-        except Exception as exc:
-            db_elapsed += time.perf_counter() - db_started
-            fallback_started = time.perf_counter()
-            logger.warning(
-                'WorkData -> ProjectData DB import failed; using fallback: '
-                'target_project_id=%s, id_excel_file=%s, file_version=%s, '
-                'source_test_id=%s, curves=%s, error=%s, path=fallback',
-                test.project_id, id_excel_file, file_version, source_test_id,
-                len(param_list), exc,
-            )
-
-        fallback_rows = []
-        param_data = sp.get_import_file_data_curves_data(source_test_id, param_list)
-        for param in param_data:
-            param.project_id = test.project_id
-            if param.prop_name == 'type' and param.prop_value == 'row':
-                fallback_rows.append(
-                    new_pr_prop(param, 'name', param.excel_param_name).table_fit(PROJECT_DATA))
-                if param.is_secret:
-                    fallback_rows.append(
-                        new_pr_prop(param, 'is_secret', param.is_secret).table_fit(PROJECT_DATA))
-                if hasattr(param, 'eizm_short'):
-                    fallback_rows.append(
-                        new_pr_prop(param, 'eizm_short', param.eizm_short).table_fit(PROJECT_DATA))
-            fallback_rows.append(param.table_fit(PROJECT_DATA))
-        fallback_rows = sorted(fallback_rows, key=lambda x: x[0])
-        inserted_rows = sp.new_project_data_array(fallback_rows)
-        inserted_count = len(inserted_rows) if inserted_rows is not None else len(fallback_rows)
-        elapsed = time.perf_counter() - fallback_started
-        fallback_elapsed += elapsed
-        fallback_inserted_rows += inserted_count
-        fallback_tests += 1
-        logger.info(
-            'WorkData -> ProjectData fallback import completed: target_project_id=%s, '
-            'id_excel_file=%s, file_version=%s, source_test_id=%s, curves=%s, '
-            'inserted_rows=%s, elapsed=%.4fs, path=fallback',
-            test.project_id, id_excel_file, file_version, source_test_id,
-            len(param_list), inserted_count, elapsed,
-        )
-
-    logger.info(
-        'WorkData -> ProjectData total DB import loop: tests=%s, inserted_rows=%s, '
-        'elapsed=%.4fs, path=db', db_tests, db_inserted_rows, db_elapsed,
-    )
-    logger.info(
-        'WorkData -> ProjectData total fallback import loop: tests=%s, inserted_rows=%s, '
-        'elapsed=%.4fs, path=fallback', fallback_tests, fallback_inserted_rows, fallback_elapsed,
-    )
-    logger.info(
-        'WorkData -> ProjectData total import loop completed: imported_tests=%s, '
-        'db_inserted_rows=%s, fallback_inserted_rows=%s, elapsed=%.4fs',
-        len(test_projects), db_inserted_rows, fallback_inserted_rows,
-        time.perf_counter() - loop_started,
-    )
-    return len(test_projects), db_inserted_rows, fallback_inserted_rows
 
 
 class ProjectRoot(Node):
@@ -691,13 +562,8 @@ class TestNode(ProjectRoot):
 
     @staticmethod
     def add(up_node_id, parent):
-        operation_started = time.perf_counter()
-        imported_tests = db_inserted_rows = fallback_inserted_rows = 0
-        try:
-            dialog = TestSelectionDialog()
-            if not dialog.exec_():
-                return None
-
+        dialog = TestSelectionDialog()
+        if dialog.exec_():
             project_types = {}
             project_types_reversed = {}  # TODO придумать как тут ускорить
             for project_type in sp.get_projecttypes_list():
@@ -711,61 +577,34 @@ class TestNode(ProjectRoot):
                 return prop
 
             class_dict = {
-                'test': TestNode, 'assembly': WDAssemblyNode, 'model': WDModelNode,
-                'product': WDProductNode, 'folder': FolderNode, 'file': FileNode,
+                'test': TestNode,
+                'assembly': WDAssemblyNode,
+                'model': WDModelNode,
+                'product': WDProductNode,
+                'folder': FolderNode,
+                'file': FileNode,
             }
 
-            normalization_started = time.perf_counter()
             selected = dialog.get_result()
             current_item = selected[0]
             while current_item.parent() in selected:
                 current_item = current_item.parent()
-            parent_id = current_item._data.id_up_prod
-            _normalize_selected_parents(selected, parent_id)
-            source_tests = {
-                int(item._data.id): item for item in selected if item.internal_type() == 'test'
-            }
-            logger.info(
-                'ProjectRoot.add selected item normalization completed: selected_items=%s, '
-                'source_tests=%s, elapsed=%.4fs', len(selected), len(source_tests),
-                time.perf_counter() - normalization_started,
-            )
-
-            # This lookup only needs source WorkData ids, so parameter selection can safely
-            # happen before project writes. Cancelling now leaves the project untouched.
-            params_started = time.perf_counter()
-            params = sp.get_param_list_from_test_id_list(list(source_tests))
-            logger.info(
-                'ProjectRoot.add get_param_list_from_test_id_list completed: tests=%s, '
-                'params=%s, elapsed=%.4fs', len(source_tests), len(params) if params else 0,
-                time.perf_counter() - params_started,
-            )
-            if not params:
-                print('Не хватает данных.')
-                return None
-
-            dialog_started = time.perf_counter()
-            data_dialog = TestDataSelectionDialog(params)
-            logger.info(
-                'ProjectRoot.add TestDataSelectionDialog construction completed: params=%s, '
-                'elapsed=%.4fs', len(params), time.perf_counter() - dialog_started,
-            )
-            wait_started = time.perf_counter()
-            accepted = data_dialog.exec_()
-            logger.info(
-                'ProjectRoot.add TestDataSelectionDialog exec/accept wait completed: '
-                'accepted=%s, elapsed=%.4fs', bool(accepted), time.perf_counter() - wait_started,
-            )
-            if not accepted:
-                return None
-            param_list = data_dialog.get_result()
-
-            construction_started = time.perf_counter()
             selected_data = []
             selected_props_data = []
+            parent_id = current_item._data.id_up_prod
+
+            for obj in selected:
+                if not any(obj._data.id_up_prod == other_obj._data.id_prod for other_obj in selected if
+                           obj != other_obj):
+                    obj._data.id_up_prod = parent_id
+
             project_node = parent.parent()
-            next_default_value = (int(project_node.default_test_value) + 1
-                                  if hasattr(project_node, 'default_test_value') else 0)
+
+            if hasattr(project_node, 'default_test_value'):
+                next_default_value = int(project_node.default_test_value) + 1
+            else:
+                next_default_value = 0
+
             for product in selected:
                 product_data = product._data
                 product_data.project_id = product_data.id_prod
@@ -777,6 +616,7 @@ class TestNode(ProjectRoot):
 
                 if product.internal_type() == 'file':
                     pass  # TODO не работает импорт файлов из рабочих данных
+
                 if product.internal_type() == 'test':
                     next_default_value += 1
                     line_style, color, symbol = get_next_default_combination(next_default_value)
@@ -784,33 +624,34 @@ class TestNode(ProjectRoot):
                     test_prop_data.project_prop = 'test_id'
                     test_prop_data.project_prop_value = str(product_data.id)
                     selected_props_data.append(test_prop_data.table_fit(PROJECT_TABLE))
-                    selected_props_data.extend([
-                        new_prop(product_data, 'curve_line_style', int(Qt.NoPen)).table_fit(PROJECT_TABLE),
-                        new_prop(product_data, 'curve_color', color).table_fit(PROJECT_TABLE),
-                        new_prop(product_data, 'curve_symbol_color', 'black').table_fit(PROJECT_TABLE),
-                        new_prop(product_data, 'curve_symbol_fill_color', color).table_fit(PROJECT_TABLE),
-                        new_prop(product_data, 'curve_point_symbol', symbol).table_fit(PROJECT_TABLE),
-                        new_prop(product_data, 'curve_point_size', 10).table_fit(PROJECT_TABLE),
-                        new_prop(product_data, 'curve_width', 1).table_fit(PROJECT_TABLE),
-                    ])
-            logger.info(
-                'ProjectRoot.add selected_data / selected_props_data construction completed: '
-                'selected_data=%s, selected_props_data=%s, elapsed=%.4fs',
-                len(selected_data), len(selected_props_data), time.perf_counter() - construction_started,
-            )
 
-            update_started = time.perf_counter()
+                    selected_props_data.append(
+                        new_prop(product_data, 'curve_line_style', int(Qt.NoPen)).table_fit(PROJECT_TABLE))
+
+                    selected_props_data.append(
+                        new_prop(product_data, 'curve_color', color).table_fit(PROJECT_TABLE))
+
+                    selected_props_data.append(
+                        new_prop(product_data, 'curve_symbol_color', 'black').table_fit(PROJECT_TABLE))
+
+                    selected_props_data.append(
+                        new_prop(product_data, 'curve_symbol_fill_color', color).table_fit(PROJECT_TABLE))
+
+                    selected_props_data.append(
+                        new_prop(product_data, 'curve_point_symbol', symbol).table_fit(PROJECT_TABLE))
+
+                    selected_props_data.append(
+                        new_prop(product_data, 'curve_point_symbol', symbol).table_fit(PROJECT_TABLE))
+
+                    selected_props_data.append(
+                        new_prop(product_data, 'curve_point_size', 10).table_fit(PROJECT_TABLE))
+
+                    selected_props_data.append(
+                        new_prop(product_data, 'curve_width', 1).table_fit(PROJECT_TABLE))
+
             sp.new_update_project_from_record(
                 new_prop(project_node._data, 'default_test_value', next_default_value).table_fit(PROJECT_TABLE))
-            logger.info('ProjectRoot.add new_update_project_from_record completed: elapsed=%.4fs',
-                        time.perf_counter() - update_started)
-
-            copy_started = time.perf_counter()
             result = sp.copy_tree_project_bunch(selected_data + selected_props_data, parent_id, up_node_id)
-            logger.info(
-                'ProjectRoot.add copy_tree_project_bunch completed: records=%s, elapsed=%.4fs',
-                len(selected_data) + len(selected_props_data), time.perf_counter() - copy_started,
-            )
             result_mass = []
             test_projects = []
             for item in result:
@@ -819,24 +660,84 @@ class TestNode(ProjectRoot):
                 if item.type_ == 'test' and item.prop_name == 'test_id':
                     test_projects.append(item)
 
-            source_cache = _resolve_workdata_import_sources(source_tests.values())
+            params = sp.get_param_list_from_test_id_list([int(item.prop_value) for item in test_projects])
+            if not params:
+                print('Не хватает данных.')
+                return
+            dialog = TestDataSelectionDialog(params)
 
-            def new_pr_prop(data, prop_name, prop_value):
-                prop = copy(data)
-                prop.param_prop_name = prop_name
-                prop.prop_value = str(prop_value)
-                return prop
+            if dialog.exec_():
+                param_list = dialog.get_result()
+                source_tests = {
+                    int(item._data.id): item for item in selected
+                    if item.internal_type() == 'test'
+                }
 
-            imported_tests, db_inserted_rows, fallback_inserted_rows = _import_workdata_tests(
-                test_projects, source_tests, param_list, new_pr_prop, source_cache,
-            )
+                def new_pr_prop(data, prop_name, prop_value):
+                    prop = copy(data)
+                    prop.param_prop_name = prop_name
+                    prop.prop_value = str(prop_value)
+                    return prop
+
+                for test in test_projects:
+                    source_test_id = int(test.prop_value)
+                    source_test = source_tests.get(source_test_id)
+                    id_excel_file = None
+                    file_version = None
+                    try:
+                        if source_test is None:
+                            raise RuntimeError(
+                                f'Selected WorkData test {source_test_id} was not found'
+                            )
+                        id_excel_file, file_version = _workdata_import_source(source_test)
+                        _import_workdata_curves_db(
+                            test.project_id, id_excel_file, file_version, param_list
+                        )
+                        continue
+                    except InvalidWorkDataDbImport:
+                        # A successful but malformed legacy DB function may already have
+                        # committed rows.  Do not add fallback rows on top of that data;
+                        # surface a controlled error instead.  The replacement SQL raises
+                        # inside the function and therefore rolls back before returning.
+                        raise
+                    except Exception as exc:
+                        fallback_started = time.perf_counter()
+                        logger.warning(
+                            'WorkData -> ProjectData DB import failed; using fallback: '
+                            'target_project_id=%s, id_excel_file=%s, file_version=%s, '
+                            'source_test_id=%s, curves=%s, error=%s, path=fallback',
+                            test.project_id, id_excel_file, file_version,
+                            source_test_id, len(param_list), exc,
+                        )
+
+                    fallback_rows = []
+                    param_data = sp.get_import_file_data_curves_data(source_test_id, param_list)
+                    for param in param_data:
+                        param.project_id = test.project_id
+                        if param.prop_name == 'type' and param.prop_value == 'row':
+                            fallback_rows.append(
+                                new_pr_prop(param, 'name', param.excel_param_name).table_fit(PROJECT_DATA))
+                            if param.is_secret:
+                                fallback_rows.append(
+                                    new_pr_prop(param, 'is_secret', param.is_secret).table_fit(PROJECT_DATA))
+                            if hasattr(param, 'eizm_short'):
+                                fallback_rows.append(
+                                    new_pr_prop(param, 'eizm_short', param.eizm_short).table_fit(PROJECT_DATA))
+                        fallback_rows.append(param.table_fit(PROJECT_DATA))
+                    fallback_rows = sorted(fallback_rows, key=lambda x: x[0])
+                    inserted_rows = sp.new_project_data_array(fallback_rows)
+                    inserted_count = (len(inserted_rows) if inserted_rows is not None
+                                      else len(fallback_rows))
+                    logger.info(
+                        'WorkData -> ProjectData fallback import completed: '
+                        'target_project_id=%s, id_excel_file=%s, file_version=%s, '
+                        'source_test_id=%s, curves=%s, inserted_rows=%s, '
+                        'elapsed=%.4fs, path=fallback',
+                        test.project_id, id_excel_file, file_version, source_test_id,
+                        len(param_list), inserted_count,
+                        time.perf_counter() - fallback_started,
+                    )
             return tuple(result_mass)
-        finally:
-            logger.info(
-                'ProjectRoot.add operation completed: imported_tests=%s, db_inserted_rows=%s, '
-                'fallback_inserted_rows=%s, elapsed=%.4fs', imported_tests, db_inserted_rows,
-                fallback_inserted_rows, time.perf_counter() - operation_started,
-            )
 
     @staticmethod
     def export(item):
