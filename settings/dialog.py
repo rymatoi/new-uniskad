@@ -10,6 +10,7 @@ from PySide2.QtWidgets import (
     QFontComboBox,
     QFormLayout,
     QGroupBox,
+    QHBoxLayout,
     QMessageBox,
     QPushButton,
     QSpinBox,
@@ -132,6 +133,14 @@ class SettingsDialog(BaseDialog):
         notifications_group.setLayout(notifications_layout)
 
         container_layout = QVBoxLayout(self.general_tab)
+
+        role_switcher_factory = getattr(self.parent(), "create_role_switcher", None)
+        if callable(role_switcher_factory):
+            role_group = QGroupBox("Роль пользователя", self.general_tab)
+            role_layout = QHBoxLayout(role_group)
+            role_layout.addWidget(role_switcher_factory(role_group))
+            container_layout.addWidget(role_group)
+
         container_layout.addWidget(session_group)
         container_layout.addWidget(notifications_group)
         container_layout.addStretch()
