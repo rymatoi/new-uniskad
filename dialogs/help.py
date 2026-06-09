@@ -1,9 +1,9 @@
 import os
 import re
 
-from PySide2.QtWidgets import QApplication, QMainWindow, QTextBrowser, QTreeWidget, QTreeWidgetItem, QVBoxLayout, \
+from PySide6.QtWidgets import QApplication, QMainWindow, QTextBrowser, QTreeWidget, QTreeWidgetItem, QVBoxLayout, \
     QWidget, QSplitter
-from PySide2.QtCore import Qt, QUrl
+from PySide6.QtCore import Qt, QUrl
 from bs4 import BeautifulSoup
 
 from dialogs.base import BaseDialog
@@ -39,7 +39,7 @@ class HelpApp(BaseDialog):
         self.show()
 
     def create_splitter(self):
-        splitter = QSplitter(Qt.Horizontal)
+        splitter = QSplitter(Qt.Orientation.Horizontal)
         splitter.addWidget(self.tree_widget)
         splitter.addWidget(self.browser)
         return splitter
@@ -69,12 +69,12 @@ class HelpApp(BaseDialog):
             parent = self.tree_widget
         item = QTreeWidgetItem(parent)
         item.setText(0, title)
-        item.setData(0, Qt.UserRole, file_path)  # Store file path as user data
+        item.setData(0, Qt.ItemDataRole.UserRole, file_path)  # Store file path as user data
         return item
 
     def tree_item_clicked(self, item):
         # Get the file path from user data
-        file_path = item.data(0, Qt.UserRole)
+        file_path = item.data(0, Qt.ItemDataRole.UserRole)
         if file_path:
             self.load_html_file(file_path)
 
@@ -88,4 +88,4 @@ class HelpApp(BaseDialog):
 if __name__ == "__main__":
     app = QApplication([])
     window = HelpApp('resources/docs')
-    app.exec_()
+    app.exec()

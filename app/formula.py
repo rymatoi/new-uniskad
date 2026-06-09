@@ -1,9 +1,10 @@
 import re
 from functools import cached_property
 
-from PySide2 import QtCore, QtGui, QtWidgets
-from PySide2.QtGui import QStandardItemModel, QFont, QStandardItem, Qt
-from PySide2.QtWidgets import QCompleter, QStyledItemDelegate
+from PySide6 import QtCore, QtGui, QtWidgets
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QStandardItemModel, QFont, QStandardItem
+from PySide6.QtWidgets import QCompleter, QStyledItemDelegate
 
 
 class FormulaDelegate(QStyledItemDelegate):
@@ -41,12 +42,12 @@ class FormulaDelegate(QStyledItemDelegate):
         return editor
 
     def setEditorData(self, editor, index):
-        text = index.model().data(index, Qt.EditRole)
+        text = index.model().data(index, Qt.ItemDataRole.EditRole)
         editor.setText(text)
 
     def setModelData(self, editor, model, index):
         text = editor.text()
-        model.setData(index, text, Qt.EditRole)
+        model.setData(index, text, Qt.ItemDataRole.EditRole)
 
 
 class FormulaLineEdit(QtWidgets.QLineEdit):
@@ -67,9 +68,9 @@ class FormulaLineEdit(QtWidgets.QLineEdit):
 
         self.completer.setWidget(self)
         self.completer.setModel(self.model)
-        self.completer.setCaseSensitivity(Qt.CaseInsensitive)
-        self.completer.setCompletionMode(QCompleter.PopupCompletion)
-        self.completer.setFilterMode(Qt.MatchContains)
+        self.completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
+        self.completer.setCompletionMode(QCompleter.CompletionMode.PopupCompletion)
+        self.completer.setFilterMode(Qt.MatchFlag.MatchContains)
 
         self.textChanged.connect(self._handle_text_changed)
         self.textEdited.connect(self._handle_text_edited)

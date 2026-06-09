@@ -1,4 +1,4 @@
-from PySide2 import QtWidgets
+from PySide6 import QtWidgets
 
 from app.basic_funcs import info, error
 from db import sp
@@ -19,7 +19,7 @@ class CreateRoleDialog(BaseDialog):
         form_layout.addRow("Название роли:", self.rolename_line_edit)
         form_layout.addRow("Описание:", self.description_line_edit)
         # Create button box
-        button_box = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
+        button_box = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.StandardButton.Ok | QtWidgets.QDialogButtonBox.StandardButton.Cancel)
         button_box.accepted.connect(self.create_role)
         button_box.rejected.connect(self.close)
 

@@ -1,4 +1,4 @@
-from PySide2.QtWidgets import QTreeWidgetItem, QDialog, QTreeWidgetItemIterator, QTreeWidget
+from PySide6.QtWidgets import QTreeWidgetItem, QDialog, QTreeWidgetItemIterator, QTreeWidget, QAbstractItemView
 from app import basic_funcs
 from app.plugins.base_state.dialogs.test_data_selection import TestDataSelectionDialog
 from app.plugins.project import utils
@@ -53,7 +53,7 @@ class EditUserFormulaDialog(BaseDialog):
         parameters = utils.collect_project_params(
             sp.get_project_test_params(self._parent._parent.item._parent._data.id))
         dialog = TestDataSelectionDialog(list(parameters.keys()), self.mw)
-        if dialog.exec_():
+        if dialog.exec():
             for param in dialog.res:
                 self.x_count += 1
                 new_param = param.data()
@@ -72,9 +72,9 @@ class EditUserFormulaDialog(BaseDialog):
             parameters = utils.collect_project_params(
                 sp.get_project_test_params(self._parent._parent.item._parent._data.id))
             dialog = TestDataSelectionDialog(list(parameters.keys()), self.mw)
-            dialog.ui.treeView.setSelectionMode(QTreeWidget.SingleSelection)
+            dialog.ui.treeView.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
             dialog.model.CHECKABLE = False
-            if dialog.exec_():
+            if dialog.exec():
                 param = dialog.res
                 param_name = param.data()
                 self.arg_list[self.ui.treeWidget.indexOfTopLevelItem(item)] = param_name
@@ -119,4 +119,4 @@ class EditUserFormulaDialog(BaseDialog):
     @classmethod
     def modal(cls, parent=None):
         wnd = cls(parent)
-        return wnd.exec_()
+        return wnd.exec()

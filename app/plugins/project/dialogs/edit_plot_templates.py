@@ -1,6 +1,6 @@
 import json
 
-from PySide2.QtWidgets import QTreeWidgetItem
+from PySide6.QtWidgets import QTreeWidgetItem
 
 from db import sp
 from dialogs.base import BaseDialog

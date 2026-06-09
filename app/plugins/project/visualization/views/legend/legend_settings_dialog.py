@@ -1,8 +1,8 @@
 from typing import Dict
 
-from PySide2.QtCore import Qt
-from PySide2.QtGui import QColor
-from PySide2.QtWidgets import (
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QColor
+from PySide6.QtWidgets import (
     QDialogButtonBox,
     QFormLayout,
     QHBoxLayout,
@@ -59,7 +59,7 @@ class LegendSettingsDialog(BaseDialog):
         form_layout.addRow(QLabel("Цвет контура"), self._border_button)
 
         opacity_container = QHBoxLayout()
-        self._opacity_slider = QSlider(Qt.Horizontal)
+        self._opacity_slider = QSlider(Qt.Orientation.Horizontal)
         self._opacity_slider.setRange(0, 100)
         self._opacity_slider.setValue(int(round(self._background_opacity * 100)))
         self._opacity_slider.valueChanged.connect(self._on_opacity_changed)
@@ -77,7 +77,7 @@ class LegendSettingsDialog(BaseDialog):
         opacity_container.addWidget(self._opacity_spinbox)
         form_layout.addRow(QLabel("Непрозрачность фона"), opacity_container)
 
-        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)

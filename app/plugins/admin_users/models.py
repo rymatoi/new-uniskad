@@ -1,4 +1,4 @@
-from PySide2.QtGui import QIcon
+from PySide6.QtGui import QIcon
 
 from app.basic_funcs import error
 from app.plugins.admin_users.dialogs.create_user import CreateUserDialog
@@ -102,7 +102,7 @@ class UserNode(Node):
     @staticmethod
     def add(up_node_id, parent):
         dialog = CreateUserDialog()
-        if dialog.exec_():
+        if dialog.exec():
             data = dialog.get_result()
             result = sp.new_uniskaduser(*data)
             if result == -2 or (isinstance(result, User) and result.id is None):

@@ -8,9 +8,9 @@
 ## WARNING! All changes made in this file will be lost when recompiling UI file!
 ################################################################################
 
-from PySide2.QtCore import *
-from PySide2.QtGui import *
-from PySide2.QtWidgets import *
+from PySide6.QtCore import *
+from PySide6.QtGui import *
+from PySide6.QtWidgets import *
 
 
 class Ui_EditPlaneDialog(object):
@@ -34,7 +34,7 @@ class Ui_EditPlaneDialog(object):
 
         self.horizontalLayout_4.addWidget(self.plotName)
 
-        self.horizontalSpacer_2 = QSpacerItem(40, 20, QSizePolicy.Expanding, QSizePolicy.Minimum)
+        self.horizontalSpacer_2 = QSpacerItem(40, 20, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
 
         self.horizontalLayout_4.addItem(self.horizontalSpacer_2)
 
@@ -96,14 +96,14 @@ class Ui_EditPlaneDialog(object):
 
         self.label_12 = QLabel(self.xAxisGroup)
         self.label_12.setObjectName(u"label_12")
-        self.label_12.setAlignment(Qt.AlignLeading|Qt.AlignLeft|Qt.AlignTop)
+        self.label_12.setAlignment(Qt.AlignmentFlag.AlignLeading|Qt.AlignmentFlag.AlignLeft|Qt.AlignmentFlag.AlignTop)
 
         self.gridLayout.addWidget(self.label_12, 5, 0, 1, 1)
 
         self.line = QFrame(self.xAxisGroup)
         self.line.setObjectName(u"line")
-        self.line.setFrameShape(QFrame.HLine)
-        self.line.setFrameShadow(QFrame.Sunken)
+        self.line.setFrameShape(QFrame.Shape.HLine)
+        self.line.setFrameShadow(QFrame.Shadow.Sunken)
 
         self.gridLayout.addWidget(self.line, 4, 0, 1, 2)
 
@@ -134,7 +134,7 @@ class Ui_EditPlaneDialog(object):
         self.gridLayout_3.setVerticalSpacing(2)
         self.xMajor = QDoubleSpinBox(self.xAxisGroup)
         self.xMajor.setObjectName(u"xMajor")
-        self.xMajor.setButtonSymbols(QAbstractSpinBox.NoButtons)
+        self.xMajor.setButtonSymbols(QAbstractSpinBox.ButtonSymbols.NoButtons)
         self.xMajor.setDecimals(4)
         self.xMajor.setMaximum(1000.000000000000000)
 
@@ -152,7 +152,7 @@ class Ui_EditPlaneDialog(object):
 
         self.xMinor = QDoubleSpinBox(self.xAxisGroup)
         self.xMinor.setObjectName(u"xMinor")
-        self.xMinor.setButtonSymbols(QAbstractSpinBox.NoButtons)
+        self.xMinor.setButtonSymbols(QAbstractSpinBox.ButtonSymbols.NoButtons)
         self.xMinor.setDecimals(4)
         self.xMinor.setMaximum(1000.000000000000000)
 
@@ -189,7 +189,7 @@ class Ui_EditPlaneDialog(object):
         self.verticalLayout_10.setObjectName(u"verticalLayout_10")
         self.label_23 = QLabel(EditPlaneDialog)
         self.label_23.setObjectName(u"label_23")
-        self.label_23.setAlignment(Qt.AlignLeading|Qt.AlignLeft|Qt.AlignVCenter)
+        self.label_23.setAlignment(Qt.AlignmentFlag.AlignLeading|Qt.AlignmentFlag.AlignLeft|Qt.AlignmentFlag.AlignVCenter)
         self.label_23.setWordWrap(True)
 
         self.verticalLayout_10.addWidget(self.label_23)
@@ -224,22 +224,22 @@ class Ui_EditPlaneDialog(object):
         self.label_25 = QLabel(self.groupBox)
         self.label_25.setObjectName(u"label_25")
 
-        self.formLayout_2.setWidget(0, QFormLayout.LabelRole, self.label_25)
+        self.formLayout_2.setWidget(0, QFormLayout.ItemRole.LabelRole, self.label_25)
 
         self.label_26 = QLabel(self.groupBox)
         self.label_26.setObjectName(u"label_26")
 
-        self.formLayout_2.setWidget(1, QFormLayout.LabelRole, self.label_26)
+        self.formLayout_2.setWidget(1, QFormLayout.ItemRole.LabelRole, self.label_26)
 
         self.xMultiplier = QDoubleSpinBox(self.groupBox)
         self.xMultiplier.setObjectName(u"xMultiplier")
 
-        self.formLayout_2.setWidget(0, QFormLayout.FieldRole, self.xMultiplier)
+        self.formLayout_2.setWidget(0, QFormLayout.ItemRole.FieldRole, self.xMultiplier)
 
         self.yMultiplier = QDoubleSpinBox(self.groupBox)
         self.yMultiplier.setObjectName(u"yMultiplier")
 
-        self.formLayout_2.setWidget(1, QFormLayout.FieldRole, self.yMultiplier)
+        self.formLayout_2.setWidget(1, QFormLayout.ItemRole.FieldRole, self.yMultiplier)
 
 
         self.gridLayout_4.addLayout(self.formLayout_2, 0, 0, 1, 1)
@@ -249,22 +249,22 @@ class Ui_EditPlaneDialog(object):
         self.label_28 = QLabel(self.groupBox)
         self.label_28.setObjectName(u"label_28")
 
-        self.formLayout_4.setWidget(0, QFormLayout.LabelRole, self.label_28)
+        self.formLayout_4.setWidget(0, QFormLayout.ItemRole.LabelRole, self.label_28)
 
         self.label_29 = QLabel(self.groupBox)
         self.label_29.setObjectName(u"label_29")
 
-        self.formLayout_4.setWidget(1, QFormLayout.LabelRole, self.label_29)
+        self.formLayout_4.setWidget(1, QFormLayout.ItemRole.LabelRole, self.label_29)
 
         self.xD = QDoubleSpinBox(self.groupBox)
         self.xD.setObjectName(u"xD")
 
-        self.formLayout_4.setWidget(0, QFormLayout.FieldRole, self.xD)
+        self.formLayout_4.setWidget(0, QFormLayout.ItemRole.FieldRole, self.xD)
 
         self.yD = QDoubleSpinBox(self.groupBox)
         self.yD.setObjectName(u"yD")
 
-        self.formLayout_4.setWidget(1, QFormLayout.FieldRole, self.yD)
+        self.formLayout_4.setWidget(1, QFormLayout.ItemRole.FieldRole, self.yD)
 
 
         self.gridLayout_4.addLayout(self.formLayout_4, 1, 0, 1, 1)
@@ -272,7 +272,7 @@ class Ui_EditPlaneDialog(object):
 
         self.verticalLayout_10.addWidget(self.groupBox)
 
-        self.verticalSpacer = QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding)
+        self.verticalSpacer = QSpacerItem(20, 40, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding)
 
         self.verticalLayout_10.addItem(self.verticalSpacer)
 
@@ -292,14 +292,14 @@ class Ui_EditPlaneDialog(object):
         self.gridLayout_2.setObjectName(u"gridLayout_2")
         self.label_13 = QLabel(self.yAxisGroup)
         self.label_13.setObjectName(u"label_13")
-        self.label_13.setAlignment(Qt.AlignLeading|Qt.AlignLeft|Qt.AlignTop)
+        self.label_13.setAlignment(Qt.AlignmentFlag.AlignLeading|Qt.AlignmentFlag.AlignLeft|Qt.AlignmentFlag.AlignTop)
 
         self.gridLayout_2.addWidget(self.label_13, 5, 0, 1, 1)
 
         self.line_2 = QFrame(self.yAxisGroup)
         self.line_2.setObjectName(u"line_2")
-        self.line_2.setFrameShape(QFrame.HLine)
-        self.line_2.setFrameShadow(QFrame.Sunken)
+        self.line_2.setFrameShape(QFrame.Shape.HLine)
+        self.line_2.setFrameShadow(QFrame.Shadow.Sunken)
 
         self.gridLayout_2.addWidget(self.line_2, 4, 0, 1, 2)
 
@@ -353,9 +353,9 @@ class Ui_EditPlaneDialog(object):
         font.setKerning(True)
         self.yMajor.setFont(font)
         self.yMajor.setWrapping(False)
-        self.yMajor.setButtonSymbols(QAbstractSpinBox.NoButtons)
+        self.yMajor.setButtonSymbols(QAbstractSpinBox.ButtonSymbols.NoButtons)
         self.yMajor.setAccelerated(False)
-        self.yMajor.setCorrectionMode(QAbstractSpinBox.CorrectToPreviousValue)
+        self.yMajor.setCorrectionMode(QAbstractSpinBox.CorrectionMode.CorrectToPreviousValue)
         self.yMajor.setKeyboardTracking(True)
         self.yMajor.setProperty("showGroupSeparator", False)
         self.yMajor.setDecimals(4)
@@ -366,7 +366,7 @@ class Ui_EditPlaneDialog(object):
 
         self.yMinor = QDoubleSpinBox(self.yAxisGroup)
         self.yMinor.setObjectName(u"yMinor")
-        self.yMinor.setButtonSymbols(QAbstractSpinBox.NoButtons)
+        self.yMinor.setButtonSymbols(QAbstractSpinBox.ButtonSymbols.NoButtons)
         self.yMinor.setDecimals(4)
         self.yMinor.setMaximum(1000.000000000000000)
 
@@ -445,12 +445,12 @@ class Ui_EditPlaneDialog(object):
         self.label_19 = QLabel(EditPlaneDialog)
         self.label_19.setObjectName(u"label_19")
 
-        self.formLayout_5.setWidget(0, QFormLayout.LabelRole, self.label_19)
+        self.formLayout_5.setWidget(0, QFormLayout.ItemRole.LabelRole, self.label_19)
 
         self.comboBox = QComboBox(EditPlaneDialog)
         self.comboBox.setObjectName(u"comboBox")
 
-        self.formLayout_5.setWidget(0, QFormLayout.FieldRole, self.comboBox)
+        self.formLayout_5.setWidget(0, QFormLayout.ItemRole.FieldRole, self.comboBox)
 
 
         self.verticalLayout_6.addLayout(self.formLayout_5)
@@ -462,22 +462,22 @@ class Ui_EditPlaneDialog(object):
         self.label_20 = QLabel(EditPlaneDialog)
         self.label_20.setObjectName(u"label_20")
 
-        self.formLayout_3.setWidget(0, QFormLayout.LabelRole, self.label_20)
+        self.formLayout_3.setWidget(0, QFormLayout.ItemRole.LabelRole, self.label_20)
 
         self.fromDoubleSpinBox = QDoubleSpinBox(EditPlaneDialog)
         self.fromDoubleSpinBox.setObjectName(u"fromDoubleSpinBox")
 
-        self.formLayout_3.setWidget(0, QFormLayout.FieldRole, self.fromDoubleSpinBox)
+        self.formLayout_3.setWidget(0, QFormLayout.ItemRole.FieldRole, self.fromDoubleSpinBox)
 
         self.label_21 = QLabel(EditPlaneDialog)
         self.label_21.setObjectName(u"label_21")
 
-        self.formLayout_3.setWidget(1, QFormLayout.LabelRole, self.label_21)
+        self.formLayout_3.setWidget(1, QFormLayout.ItemRole.LabelRole, self.label_21)
 
         self.toDoubleSpinBox = QDoubleSpinBox(EditPlaneDialog)
         self.toDoubleSpinBox.setObjectName(u"toDoubleSpinBox")
 
-        self.formLayout_3.setWidget(1, QFormLayout.FieldRole, self.toDoubleSpinBox)
+        self.formLayout_3.setWidget(1, QFormLayout.ItemRole.FieldRole, self.toDoubleSpinBox)
 
 
         self.verticalLayout_7.addLayout(self.formLayout_3)
@@ -531,8 +531,8 @@ class Ui_EditPlaneDialog(object):
         self.buttonLayout = QHBoxLayout()
         self.buttonLayout.setSpacing(10)
         self.buttonLayout.setObjectName(u"buttonLayout")
-        self.buttonLayout.setSizeConstraint(QLayout.SetMinimumSize)
-        self.horizontalSpacer = QSpacerItem(40, 20, QSizePolicy.Expanding, QSizePolicy.Minimum)
+        self.buttonLayout.setSizeConstraint(QLayout.SizeConstraint.SetMinimumSize)
+        self.horizontalSpacer = QSpacerItem(40, 20, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
 
         self.buttonLayout.addItem(self.horizontalSpacer)
 

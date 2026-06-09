@@ -2,8 +2,8 @@ from app.basic_funcs import to_float
 from app.formula import FormulaLineEdit
 from db import sp
 from dialogs.base import BaseDialog
-from PySide2.QtCore import Qt
-from PySide2.QtWidgets import QLabel
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QLabel
 from resources.ui.ui_py.ui_row_settings import Ui_RowSettingsDialog
 
 
@@ -120,7 +120,7 @@ class RowSettingsDialog(BaseDialog):
                     cell.update_dependencies()
                 if model is not None:
                     index = model.index(row_index, column_index)
-                    model.dataChanged.emit(index, index, [Qt.DisplayRole])
+                    model.dataChanged.emit(index, index, [Qt.ItemDataRole.DisplayRole])
 
         if getattr(self.table_page, 'refresh_formula_result', None) is not None:
             self.table_page.refresh_formula_result()

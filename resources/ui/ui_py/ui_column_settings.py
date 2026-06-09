@@ -8,9 +8,9 @@
 ## WARNING! All changes made in this file will be lost when recompiling UI file!
 ################################################################################
 
-from PySide2.QtCore import *
-from PySide2.QtGui import *
-from PySide2.QtWidgets import *
+from PySide6.QtCore import *
+from PySide6.QtGui import *
+from PySide6.QtWidgets import *
 
 
 class Ui_ColumnSettingsDialog(object):
@@ -27,7 +27,7 @@ class Ui_ColumnSettingsDialog(object):
         self.label = QLabel(ColumnSettingsDialog)
         self.label.setObjectName(u"label")
 
-        self.formLayout.setWidget(0, QFormLayout.LabelRole, self.label)
+        self.formLayout.setWidget(0, QFormLayout.ItemRole.LabelRole, self.label)
 
         self.alignComboBox = QComboBox(ColumnSettingsDialog)
         self.alignComboBox.addItem("")
@@ -35,7 +35,7 @@ class Ui_ColumnSettingsDialog(object):
         self.alignComboBox.addItem("")
         self.alignComboBox.setObjectName(u"alignComboBox")
 
-        self.formLayout.setWidget(0, QFormLayout.FieldRole, self.alignComboBox)
+        self.formLayout.setWidget(0, QFormLayout.ItemRole.FieldRole, self.alignComboBox)
 
         self.verticalLayout.addLayout(self.formLayout)
 

@@ -2,7 +2,8 @@ import json
 from copy import copy
 from datetime import datetime
 
-from PySide2.QtGui import QIcon, Qt
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QIcon
 
 from app import basic_funcs
 from app.plugins.base_state.models import TreeModel, Node, ANY_CHILD_TYPE
@@ -13,7 +14,7 @@ from app.plugins.project.dialogs.edit_epure import EditEpureDialog
 from app.plugins.project.dialogs.select_test import TestSelectionDialog
 from app.plugins.project.dialogs.select_test_data import TestDataSelectionDialog
 from app.plugins.project.dialogs.test_edit import EditProjectItemDialog
-from app.plugins.project.utils_ import get_next_default_combination
+from app.plugins.project.utils_ import get_next_default_combination, qt_enum_value
 from app.plugins.work_data.models import ProductNode, ModelNode, AssemblyNode
 from db import sp
 from db.tables import PROJECT_TABLE, PROJECT_DATA
@@ -311,7 +312,7 @@ class WDAssemblyNode(AssemblyNode, ProjectRoot):
 
     def customize(self, ):
         dialog = EditProjectItemDialog(self)
-        if dialog.exec_():
+        if dialog.exec():
             parent = self.parent()
             while parent.internal_type() != 'product_folder':
                 parent = parent.parent()
@@ -370,7 +371,7 @@ class WDModelNode(ModelNode, ProjectRoot):
 
     def customize(self, ):
         dialog = EditProjectItemDialog(self)
-        if dialog.exec_():
+        if dialog.exec():
             parent = self.parent()
             while parent.internal_type() != 'product_folder':
                 parent = parent.parent()
@@ -422,7 +423,7 @@ class WDProductNode(ProductNode, ProjectRoot):
 
     def customize(self, ):
         dialog = EditProjectItemDialog(self)
-        if dialog.exec_():
+        if dialog.exec():
             parent = self.parent()
             while parent.internal_type() != 'product_folder':
                 parent = parent.parent()
@@ -475,7 +476,7 @@ class TestNode(ProjectRoot):
 
     def customize(self, ):
         dialog = EditProjectItemDialog(self)
-        if dialog.exec_():
+        if dialog.exec():
             parent = self.parent()
             while parent.internal_type() != 'product_folder':
                 parent = parent.parent()
@@ -494,7 +495,7 @@ class TestNode(ProjectRoot):
     @staticmethod
     def add(up_node_id, parent):
         dialog = TestSelectionDialog()
-        if dialog.exec_():
+        if dialog.exec():
             project_types = {}
             project_types_reversed = {}  # TODO придумать как тут ускорить
             for project_type in sp.get_projecttypes_list():
@@ -557,7 +558,7 @@ class TestNode(ProjectRoot):
                     selected_props_data.append(test_prop_data.table_fit(PROJECT_TABLE))
 
                     selected_props_data.append(
-                        new_prop(product_data, 'curve_line_style', int(Qt.NoPen)).table_fit(PROJECT_TABLE))
+                        new_prop(product_data, 'curve_line_style', qt_enum_value(Qt.PenStyle.NoPen)).table_fit(PROJECT_TABLE))
 
                     selected_props_data.append(
                         new_prop(product_data, 'curve_color', color).table_fit(PROJECT_TABLE))
@@ -597,7 +598,7 @@ class TestNode(ProjectRoot):
                 return
             dialog = TestDataSelectionDialog(params)
 
-            if dialog.exec_():
+            if dialog.exec():
                 res_data_rows = []
                 param_list = dialog.get_result()
 
@@ -691,7 +692,7 @@ class GraphNode(ProjectRoot):
     def add(up_node_id, parent):
         project_item = parent.parent()
         dialog = CreateGraphDialog(project_item._data.id)
-        if dialog.exec_():  # Если произошло изменение данных
+        if dialog.exec():  # Если произошло изменение данных
             res = dialog.get_result()
             return GraphNode._add_graph(up_node_id, 'xy', f'{res["graph_name"]}', res["x_curve"], res["y_curve"],
                                         res["group_by"], res['constraints'])
@@ -783,14 +784,14 @@ class EpureNode(ProjectRoot):
     def customize(self, ):
         project_item = self.parent().parent()
         dialog = EditEpureDialog(self, project_item, project_item._data.id, self.parent()._data.project_id)
-        if dialog.exec_():
+        if dialog.exec():
             return self
 
     @staticmethod
     def add(up_node_id, parent):
         project_item = parent.parent()
         dialog = CreateEpureDialog(project_item, project_item._data.id, up_node_id)
-        if dialog.exec_():  # Если произошло изменение данных
+        if dialog.exec():  # Если произошло изменение данных
             result = dialog.get_result()
             for item in result:
                 item.type_ = 'epure'

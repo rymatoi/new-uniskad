@@ -8,9 +8,9 @@
 ## WARNING! All changes made in this file will be lost when recompiling UI file!
 ################################################################################
 
-from PySide2.QtCore import *
-from PySide2.QtGui import *
-from PySide2.QtWidgets import *
+from PySide6.QtCore import *
+from PySide6.QtGui import *
+from PySide6.QtWidgets import *
 
 
 class Ui_EditUser(object):
@@ -27,104 +27,104 @@ class Ui_EditUser(object):
         self.label_3 = QLabel(EditUser)
         self.label_3.setObjectName(u"label_3")
 
-        self.formLayout_2.setWidget(0, QFormLayout.LabelRole, self.label_3)
+        self.formLayout_2.setWidget(0, QFormLayout.ItemRole.LabelRole, self.label_3)
 
         self.usernameLineEdit_2 = QLineEdit(EditUser)
         self.usernameLineEdit_2.setObjectName(u"usernameLineEdit_2")
 
-        self.formLayout_2.setWidget(0, QFormLayout.FieldRole, self.usernameLineEdit_2)
+        self.formLayout_2.setWidget(0, QFormLayout.ItemRole.FieldRole, self.usernameLineEdit_2)
 
         self.label_2 = QLabel(EditUser)
         self.label_2.setObjectName(u"label_2")
 
-        self.formLayout_2.setWidget(1, QFormLayout.LabelRole, self.label_2)
+        self.formLayout_2.setWidget(1, QFormLayout.ItemRole.LabelRole, self.label_2)
 
         self.nameLineEdit = QLineEdit(EditUser)
         self.nameLineEdit.setObjectName(u"nameLineEdit")
 
-        self.formLayout_2.setWidget(1, QFormLayout.FieldRole, self.nameLineEdit)
+        self.formLayout_2.setWidget(1, QFormLayout.ItemRole.FieldRole, self.nameLineEdit)
 
         self.label_4 = QLabel(EditUser)
         self.label_4.setObjectName(u"label_4")
 
-        self.formLayout_2.setWidget(2, QFormLayout.LabelRole, self.label_4)
+        self.formLayout_2.setWidget(2, QFormLayout.ItemRole.LabelRole, self.label_4)
 
         self.surnameLineEdit = QLineEdit(EditUser)
         self.surnameLineEdit.setObjectName(u"surnameLineEdit")
 
-        self.formLayout_2.setWidget(2, QFormLayout.FieldRole, self.surnameLineEdit)
+        self.formLayout_2.setWidget(2, QFormLayout.ItemRole.FieldRole, self.surnameLineEdit)
 
         self.label_5 = QLabel(EditUser)
         self.label_5.setObjectName(u"label_5")
 
-        self.formLayout_2.setWidget(3, QFormLayout.LabelRole, self.label_5)
+        self.formLayout_2.setWidget(3, QFormLayout.ItemRole.LabelRole, self.label_5)
 
         self.activeCheckBox = QCheckBox(EditUser)
         self.activeCheckBox.setObjectName(u"activeCheckBox")
 
-        self.formLayout_2.setWidget(3, QFormLayout.FieldRole, self.activeCheckBox)
+        self.formLayout_2.setWidget(3, QFormLayout.ItemRole.FieldRole, self.activeCheckBox)
 
         self.label_6 = QLabel(EditUser)
         self.label_6.setObjectName(u"label_6")
 
-        self.formLayout_2.setWidget(5, QFormLayout.LabelRole, self.label_6)
+        self.formLayout_2.setWidget(5, QFormLayout.ItemRole.LabelRole, self.label_6)
 
         self.lastLoginLineEdit = QLineEdit(EditUser)
         self.lastLoginLineEdit.setObjectName(u"lastLoginLineEdit")
         self.lastLoginLineEdit.setReadOnly(True)
 
-        self.formLayout_2.setWidget(5, QFormLayout.FieldRole, self.lastLoginLineEdit)
+        self.formLayout_2.setWidget(5, QFormLayout.ItemRole.FieldRole, self.lastLoginLineEdit)
 
         self.label_7 = QLabel(EditUser)
         self.label_7.setObjectName(u"label_7")
 
-        self.formLayout_2.setWidget(6, QFormLayout.LabelRole, self.label_7)
+        self.formLayout_2.setWidget(6, QFormLayout.ItemRole.LabelRole, self.label_7)
 
         self.lastLogoutLineEdit = QLineEdit(EditUser)
         self.lastLogoutLineEdit.setObjectName(u"lastLogoutLineEdit")
         self.lastLogoutLineEdit.setReadOnly(True)
 
-        self.formLayout_2.setWidget(6, QFormLayout.FieldRole, self.lastLogoutLineEdit)
+        self.formLayout_2.setWidget(6, QFormLayout.ItemRole.FieldRole, self.lastLogoutLineEdit)
 
         self.label_9 = QLabel(EditUser)
         self.label_9.setObjectName(u"label_9")
 
-        self.formLayout_2.setWidget(7, QFormLayout.LabelRole, self.label_9)
+        self.formLayout_2.setWidget(7, QFormLayout.ItemRole.LabelRole, self.label_9)
 
         self.spinBox_2 = QSpinBox(EditUser)
         self.spinBox_2.setObjectName(u"spinBox_2")
 
-        self.formLayout_2.setWidget(7, QFormLayout.FieldRole, self.spinBox_2)
+        self.formLayout_2.setWidget(7, QFormLayout.ItemRole.FieldRole, self.spinBox_2)
 
         self.label_8 = QLabel(EditUser)
         self.label_8.setObjectName(u"label_8")
 
-        self.formLayout_2.setWidget(8, QFormLayout.LabelRole, self.label_8)
+        self.formLayout_2.setWidget(8, QFormLayout.ItemRole.LabelRole, self.label_8)
 
         self.spinBox = QSpinBox(EditUser)
         self.spinBox.setObjectName(u"spinBox")
 
-        self.formLayout_2.setWidget(8, QFormLayout.FieldRole, self.spinBox)
+        self.formLayout_2.setWidget(8, QFormLayout.ItemRole.FieldRole, self.spinBox)
 
         self.label_11 = QLabel(EditUser)
         self.label_11.setObjectName(u"label_11")
 
-        self.formLayout_2.setWidget(9, QFormLayout.LabelRole, self.label_11)
+        self.formLayout_2.setWidget(9, QFormLayout.ItemRole.LabelRole, self.label_11)
 
         self.leftSpinBox = QSpinBox(EditUser)
         self.leftSpinBox.setObjectName(u"leftSpinBox")
 
-        self.formLayout_2.setWidget(9, QFormLayout.FieldRole, self.leftSpinBox)
+        self.formLayout_2.setWidget(9, QFormLayout.ItemRole.FieldRole, self.leftSpinBox)
 
         self.label_10 = QLabel(EditUser)
         self.label_10.setObjectName(u"label_10")
 
-        self.formLayout_2.setWidget(4, QFormLayout.LabelRole, self.label_10)
+        self.formLayout_2.setWidget(4, QFormLayout.ItemRole.LabelRole, self.label_10)
 
         self.deletedCheckBox = QCheckBox(EditUser)
         self.deletedCheckBox.setObjectName(u"deletedCheckBox")
 
-        self.formLayout_2.setWidget(4, QFormLayout.FieldRole, self.deletedCheckBox)
+        self.formLayout_2.setWidget(4, QFormLayout.ItemRole.FieldRole, self.deletedCheckBox)
 
         self.verticalLayout.addLayout(self.formLayout_2)
 
@@ -132,8 +132,8 @@ class Ui_EditUser(object):
         self.verticalLayout_3.setObjectName(u"verticalLayout_3")
         self.line = QFrame(EditUser)
         self.line.setObjectName(u"line")
-        self.line.setFrameShape(QFrame.HLine)
-        self.line.setFrameShadow(QFrame.Sunken)
+        self.line.setFrameShape(QFrame.Shape.HLine)
+        self.line.setFrameShadow(QFrame.Shadow.Sunken)
 
         self.verticalLayout_3.addWidget(self.line)
 
@@ -161,7 +161,7 @@ class Ui_EditUser(object):
 
         self.verticalLayout_2.addWidget(self.removeButton)
 
-        self.verticalSpacer_2 = QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding)
+        self.verticalSpacer_2 = QSpacerItem(20, 40, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding)
 
         self.verticalLayout_2.addItem(self.verticalSpacer_2)
 
@@ -171,14 +171,14 @@ class Ui_EditUser(object):
 
         self.verticalLayout.addLayout(self.verticalLayout_3)
 
-        self.verticalSpacer = QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding)
+        self.verticalSpacer = QSpacerItem(20, 40, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding)
 
         self.verticalLayout.addItem(self.verticalSpacer)
 
         self.buttonBox_2 = QDialogButtonBox(EditUser)
         self.buttonBox_2.setObjectName(u"buttonBox_2")
-        self.buttonBox_2.setOrientation(Qt.Horizontal)
-        self.buttonBox_2.setStandardButtons(QDialogButtonBox.Cancel | QDialogButtonBox.Ok)
+        self.buttonBox_2.setOrientation(Qt.Orientation.Horizontal)
+        self.buttonBox_2.setStandardButtons(QDialogButtonBox.StandardButton.Cancel | QDialogButtonBox.StandardButton.Ok)
 
         self.verticalLayout.addWidget(self.buttonBox_2)
 

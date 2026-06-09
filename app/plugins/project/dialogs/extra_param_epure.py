@@ -1,5 +1,5 @@
-from PySide2.QtCore import Qt
-from PySide2.QtWidgets import QTreeWidgetItem
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QTreeWidgetItem
 
 from app.plugins.base_state.widgets import ExtendedComboBox
 from app.plugins.project import utils
@@ -68,8 +68,8 @@ class ExtraParamEpureDialog(BaseDialog):
         self.ui.treeWidget.clear()
         for val in values:
             child = QTreeWidgetItem(self.ui.treeWidget)
-            child.setFlags(child.flags() | Qt.ItemIsUserCheckable)
-            child.setCheckState(0, Qt.Unchecked if val.prop_value not in self.selected else Qt.Checked)
+            child.setFlags(child.flags() | Qt.ItemFlag.ItemIsUserCheckable)
+            child.setCheckState(0, Qt.CheckState.Unchecked if val.prop_value not in self.selected else Qt.CheckState.Checked)
             child.setText(0, val.prop_value)
 
     def accept(self) -> None:

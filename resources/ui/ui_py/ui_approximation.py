@@ -8,9 +8,9 @@
 ## WARNING! All changes made in this file will be lost when recompiling UI file!
 ################################################################################
 
-from PySide2.QtCore import *
-from PySide2.QtGui import *
-from PySide2.QtWidgets import *
+from PySide6.QtCore import *
+from PySide6.QtGui import *
+from PySide6.QtWidgets import *
 
 
 class Ui_ApproxDialog(object):
@@ -22,26 +22,26 @@ class Ui_ApproxDialog(object):
         self.verticalLayout.setObjectName(u"verticalLayout")
         self.formLayout = QFormLayout()
         self.formLayout.setObjectName(u"formLayout")
-        self.formLayout.setFieldGrowthPolicy(QFormLayout.ExpandingFieldsGrow)
+        self.formLayout.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
         self.polyTypeLabel = QLabel(ApproxDialog)
         self.polyTypeLabel.setObjectName(u"polyTypeLabel")
 
-        self.formLayout.setWidget(1, QFormLayout.LabelRole, self.polyTypeLabel)
+        self.formLayout.setWidget(1, QFormLayout.ItemRole.LabelRole, self.polyTypeLabel)
 
         self.polyTypeComboBox = QComboBox(ApproxDialog)
         self.polyTypeComboBox.setObjectName(u"polyTypeComboBox")
-        sizePolicy = QSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        sizePolicy = QSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(self.polyTypeComboBox.sizePolicy().hasHeightForWidth())
         self.polyTypeComboBox.setSizePolicy(sizePolicy)
 
-        self.formLayout.setWidget(1, QFormLayout.FieldRole, self.polyTypeComboBox)
+        self.formLayout.setWidget(1, QFormLayout.ItemRole.FieldRole, self.polyTypeComboBox)
 
         self.degLabel = QLabel(ApproxDialog)
         self.degLabel.setObjectName(u"degLabel")
 
-        self.formLayout.setWidget(2, QFormLayout.LabelRole, self.degLabel)
+        self.formLayout.setWidget(2, QFormLayout.ItemRole.LabelRole, self.degLabel)
 
         self.degSpinBox = QSpinBox(ApproxDialog)
         self.degSpinBox.setObjectName(u"degSpinBox")
@@ -50,25 +50,25 @@ class Ui_ApproxDialog(object):
         self.degSpinBox.setMaximum(20)
         self.degSpinBox.setValue(3)
 
-        self.formLayout.setWidget(2, QFormLayout.FieldRole, self.degSpinBox)
+        self.formLayout.setWidget(2, QFormLayout.ItemRole.FieldRole, self.degSpinBox)
 
         self.label = QLabel(ApproxDialog)
         self.label.setObjectName(u"label")
 
-        self.formLayout.setWidget(0, QFormLayout.LabelRole, self.label)
+        self.formLayout.setWidget(0, QFormLayout.ItemRole.LabelRole, self.label)
 
         self.nameLineEdit = QLineEdit(ApproxDialog)
         self.nameLineEdit.setObjectName(u"nameLineEdit")
 
-        self.formLayout.setWidget(0, QFormLayout.FieldRole, self.nameLineEdit)
+        self.formLayout.setWidget(0, QFormLayout.ItemRole.FieldRole, self.nameLineEdit)
 
 
         self.verticalLayout.addLayout(self.formLayout)
 
         self.buttonBox = QDialogButtonBox(ApproxDialog)
         self.buttonBox.setObjectName(u"buttonBox")
-        self.buttonBox.setOrientation(Qt.Horizontal)
-        self.buttonBox.setStandardButtons(QDialogButtonBox.Cancel|QDialogButtonBox.Ok)
+        self.buttonBox.setOrientation(Qt.Orientation.Horizontal)
+        self.buttonBox.setStandardButtons(QDialogButtonBox.StandardButton.Cancel|QDialogButtonBox.StandardButton.Ok)
 
         self.verticalLayout.addWidget(self.buttonBox)
 

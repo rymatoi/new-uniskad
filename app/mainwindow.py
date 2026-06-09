@@ -2,11 +2,10 @@ import ast
 import json
 from typing import Any, Dict, Optional
 
-from PySide2 import QtWidgets
-from PySide2.QtCore import QEventLoop, QSize, Slot
-from PySide2.QtGui import QIcon, QCloseEvent, Qt, QKeySequence, QFont
-from PySide2.QtWidgets import QMenu, QToolBar, QHBoxLayout, QToolButton, QWidget, QDialog, QShortcut, QDockWidget, \
-    QAction, QProgressBar, QLabel
+from PySide6 import QtWidgets
+from PySide6.QtCore import QEventLoop, QSize, Slot, Qt
+from PySide6.QtGui import QIcon, QCloseEvent, QKeySequence, QAction, QShortcut
+from PySide6.QtWidgets import QDialog, QDockWidget, QProgressBar, QLabel
 from app import app_logger, _menu, basic_funcs
 from app.cache import DataCache
 from app.history_manager.history_manager import EventStack
@@ -71,10 +70,12 @@ class MainWindow(QtWidgets.QMainWindow):
         self.version = '250425'
         self.script_version = '2025'
 
+        self.user_settings = UserSettings()
+        self._default_app_font = config.config.app.default_font()
+        self._apply_saved_font_settings()
+
         super(MainWindow, self).__init__()
 
-        self.user_settings = UserSettings()
-        self._default_app_font = QFont(config.config.app.font())
         self._tree_states_to_restore = {}
         self._pending_window_state_bytes = None
         self._pending_central_window_state_bytes = None
@@ -108,13 +109,13 @@ class MainWindow(QtWidgets.QMainWindow):
         }
 
         self.dock_widgets = {
-            self.ADMIN_ROLES: Dock_('Роли', self.ADMIN_ROLES_TREE, Qt.LeftDockWidgetArea),
-            self.ADMIN_USERS: Dock_('Пользователи', self.ADMIN_USERS_TREE, Qt.LeftDockWidgetArea, AdminUsersDockWidget),
-            self.WORK_DATA: Dock_('Изделия', self.WORK_DATA_TREE, Qt.RightDockWidgetArea),
-            self.SYNONYM_DICTIONARY: Dock_('Словарь синонимов', self.SYNONYM_DICTIONARY_TREE, Qt.RightDockWidgetArea),
+            self.ADMIN_ROLES: Dock_('Роли', self.ADMIN_ROLES_TREE, Qt.DockWidgetArea.LeftDockWidgetArea),
+            self.ADMIN_USERS: Dock_('Пользователи', self.ADMIN_USERS_TREE, Qt.DockWidgetArea.LeftDockWidgetArea, AdminUsersDockWidget),
+            self.WORK_DATA: Dock_('Изделия', self.WORK_DATA_TREE, Qt.DockWidgetArea.RightDockWidgetArea),
+            self.SYNONYM_DICTIONARY: Dock_('Словарь синонимов', self.SYNONYM_DICTIONARY_TREE, Qt.DockWidgetArea.RightDockWidgetArea),
             self.EIZM_DICTIONARY: Dock_('Словарь единиц измерения', self.EIZM_DICTIONARY_TREE,
-                                        Qt.RightDockWidgetArea),
-            self.PROJECT: Dock_('Дерево проекта', self.PROJECT_TREE, Qt.LeftDockWidgetArea, ProjectDockWidget)
+                                        Qt.DockWidgetArea.RightDockWidgetArea),
+            self.PROJECT: Dock_('Дерево проекта', self.PROJECT_TREE, Qt.DockWidgetArea.LeftDockWidgetArea, ProjectDockWidget)
         }
 
         self.progress_bar = QProgressBar()
@@ -143,12 +144,9 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # self.setWindowTitle('UNISKAD')
 
-        self.toolbar_layout = QHBoxLayout(self)
-
         self.init_modes()
+        self.init_roles()
         self.init_menu()
-        self.init_toolbar()
-        # self.init_role_buttons_toolbar()
         self.init_dock_widgets()
 
         self.connect_triggered_funcs()
@@ -207,83 +205,13 @@ class MainWindow(QtWidgets.QMainWindow):
         self.user = next(
             user for user in sp.get_full_users_list() if user.login == current_user_name['get_sesion_user'])
 
-    def init_toolbar(self):
-        toolbar = QToolBar(self)
-        toolbar.setWindowTitle('Панель инструментов')
-        toolbar.setObjectName('main_window_toolbar')
-
-        # self._move_up = QAction(QIcon(":up.png"), 'Переместить вверх', self, )
-        # self._move_down = QAction(QIcon(":down.png"), 'Переместить вниз', self, )
-        #
-        # toolbar.addAction(self._move_up)
-        # toolbar.addAction(self._move_down)
-
-        self.toolbar = toolbar
-
-        self.role_button = QToolButton(self)
-        self.role_button.setPopupMode(QToolButton.MenuButtonPopup)
-        self.role_button.setMenu(self._init_role_button_menu())
-
-        default_user_role = self._get_default_user_role()
-        self.role_button.setText(default_user_role.rolename)
-
-        self.current_role = default_user_role
-
-        self.toolbar_layout.addStretch()
-        self.toolbar_layout.addWidget(self.role_button)
-
-        widget = QWidget()
-        widget.setLayout(self.toolbar_layout)
-        toolbar.addWidget(widget)
-        self.addToolBar(Qt.TopToolBarArea, toolbar)
-
-    def init_role_buttons_toolbar(self):
-        """
-        Создает и инициализирует панель инструментов
-        :return:
-        """
-        toolbar = QToolBar(self)
-        toolbar.setWindowTitle('Панель инструментов')
-
-        layout = QHBoxLayout(self)
-        layout.addStretch()
-
-        self.role_button = QToolButton(self)
-        self.role_button.setPopupMode(QToolButton.MenuButtonPopup)
-        self.role_button.setMenu(self._init_role_button_menu())
-
-        default_user_role = self._get_default_user_role()
-        self.role_button.setText(default_user_role.rolename)
-        layout.addWidget(self.role_button)
-
-        widget = QWidget()
-        widget.setLayout(layout)
-        toolbar.addWidget(widget)
-        self.addToolBar(Qt.TopToolBarArea, toolbar)
-
-    def _init_role_button_menu(self):
-        """
-        Инициализирует кнопку переключения ролей (будет переделано, ибо обращается к пунктам меню, а нужно к списку ролей
-        # TODO
-        :return:
-        """
+    def init_roles(self):
+        """Загружает доступные пользователю роли и выбирает роль по умолчанию."""
         self.roles = sp.get_user_role_list_()
         for role in self.roles:
-            role.children = None
             role.name = f'_role_{role.id}'
-            role.is_root = True
-            role.translation = role.rolename
-            role.is_menu = None
-            role.is_checkable = False
-            role.init_order = 0
 
-        # role_button_menu = sp.get_user_menu_('any', 'role_button')
-
-        # user_rolenames = [role.rolename for role in self.roles]
-        # role_button_menu = [role for role in role_button_menu if role.translation in user_rolenames]
-        menu = QMenu(self)
-        _menu.init_menu(self.roles, self, menu)
-        return menu
+        self.current_role = self._get_default_user_role()
 
     def _get_default_user_role(self):
         """
@@ -378,7 +306,7 @@ class MainWindow(QtWidgets.QMainWindow):
             return
         window = HelpApp('resources/docs', self)
         self.help_shown = True
-        if window.exec_():
+        if window.exec():
             pass
         self.help_shown = False
 
@@ -461,7 +389,7 @@ class MainWindow(QtWidgets.QMainWindow):
         event_loop = QEventLoop()
         worker.finished.connect(event_loop.quit)
         worker.start()
-        event_loop.exec_()
+        event_loop.exec()
 
         # self.status_label.clear()
         self.progress_bar.setVisible(False)
@@ -728,7 +656,6 @@ class MainWindow(QtWidgets.QMainWindow):
             self.menuBar().clear()
             self.init_menu()
             self.connect_triggered_funcs()
-            self.role_button.setText(getattr(self, role).text())
             self.current_role = current_role
 
             self.clear_interface()
@@ -769,7 +696,8 @@ class MainWindow(QtWidgets.QMainWindow):
     def show_settings(self):
         settings = SettingsDialog(self)
         settings.settings_applied.connect(self.apply_runtime_settings)
-        settings.exec_()
+        settings.role_changed.connect(self.change_role)
+        settings.exec()
 
     def apply_runtime_settings(self, values: Optional[Dict[str, Any]] = None):
         """Применяет настройки интерфейса и поведения без перезапуска."""
@@ -804,16 +732,20 @@ class MainWindow(QtWidgets.QMainWindow):
         )
         self._apply_notification_settings(notifications_enabled, notifications_timeout)
 
+    def _apply_saved_font_settings(self) -> None:
+        default_point_size = self._default_app_font.pointSize() if self._default_app_font.pointSize() > 0 else 10
+        config.config.app.apply_interface_font(
+            self._coerce_bool(self.user_settings.get('use_custom_font', False), default=False),
+            self.user_settings.get('font_name', self._default_app_font.family()),
+            self._coerce_int(
+                self.user_settings.get('font_size', default_point_size),
+                default=default_point_size,
+                minimum=6,
+            ),
+        )
+
     def _apply_font_settings(self, use_custom_font: bool, font_name: Any, font_size: int) -> None:
-        if use_custom_font:
-            font = QFont(self._default_app_font)
-            if font_name:
-                font.setFamily(str(font_name))
-            if font_size and font_size > 0:
-                font.setPointSize(int(font_size))
-            config.config.app.setFont(font)
-        else:
-            config.config.app.setFont(QFont(self._default_app_font))
+        config.config.app.apply_interface_font(use_custom_font, font_name, font_size)
 
     def _apply_notification_settings(self, enabled: bool, timeout_seconds: int) -> None:
         self.notifications_enabled = enabled

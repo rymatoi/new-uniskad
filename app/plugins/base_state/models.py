@@ -1,11 +1,11 @@
 from collections import defaultdict
 from copy import copy
 from typing import List
-import PySide2
-from PySide2.QtCore import QAbstractItemModel, QPointF, Signal, QPersistentModelIndex
-from PySide2.QtGui import QIcon, QFont, QColor, QPainter, QPen, QPixmap
+import PySide6
+from PySide6.QtCore import QAbstractItemModel, QPointF, Signal, QPersistentModelIndex
+from PySide6.QtGui import QIcon, QFont, QColor, QPainter, QPen, QPixmap
 
-from PySide2.QtCore import Qt, QModelIndex
+from PySide6.QtCore import Qt, QModelIndex
 
 replace_dict = {
     'True': True,
@@ -44,7 +44,7 @@ class Node(object):
         self.font_text_color = None
         self.icon = None
 
-        self.checked = False
+        self.checked = Qt.CheckState.Unchecked
         self._checked_count = 0
 
         self.name = None
@@ -77,11 +77,18 @@ class Node(object):
 
     def is_checked(self):
         """Условие наличия галочки"""
-        return self.checked
+        return self._check_state(self.checked)
 
     def check(self, state):
         """Установка галочки/снятие галочки"""
-        self.checked = state
+        self.checked = self._check_state(state)
+
+    @staticmethod
+    def _check_state(state):
+        """Normalize legacy boolean values to the PySide6 check-state enum."""
+        if isinstance(state, Qt.CheckState):
+            return state
+        return Qt.CheckState.Checked if state else Qt.CheckState.Unchecked
 
     @staticmethod
     def internal_actions() -> List[str]:
@@ -118,7 +125,10 @@ class Node(object):
         return len(self._children)
 
     def checked_children_count(self):
-        return [child for child in self._children if child.is_checked()]
+        return [
+            child for child in self._children
+            if child.is_checked() != Qt.CheckState.Unchecked
+        ]
 
     def child(self, row):
         if 0 <= row < self.childCount():
@@ -238,8 +248,8 @@ class TreeModel(QAbstractItemModel):
         self.checked_list = []
         self._prop_dict = {}
 
-        self.font_name = 'Times New Roman'
-        self.font_size = 14
+        self.font_name = None
+        self.font_size = None
 
         # self.register_nodes()
 
@@ -306,18 +316,8 @@ class TreeModel(QAbstractItemModel):
         return self._node_matches_allowed(child_node, allowed_children)
 
     def get_root_elements(self):
-        root_elements = []
-
-        # Iterate over all rows in the model
-        for row in range(self.rowCount()):
-            # Get the index of each item in the first column
-            index = self.index(row, 0)
-
-            # Use the parent() method to check if it has a valid parent
-            if index.parent().isValid():
-                root_elements.append(index)
-
-        return root_elements
+        """Return indexes of every top-level item in the model."""
+        return [self.index(row, 0) for row in range(self.rowCount())]
 
     def set_view(self, view):
         self.view = view
@@ -465,12 +465,24 @@ class TreeModel(QAbstractItemModel):
             self._prop_dict[node.id].append(node)
 
     def rowCount(self, parent=QModelIndex(), *args, **kwargs):
-        return self.nodeFromIndex(parent).childCount()
+        try:
+            if parent is None:
+                parent = QModelIndex()
+            if parent.isValid() and parent.column() > 0:
+                return 0
+            node = self.nodeFromIndex(parent)
+            return node.childCount() if node is not None else 0
+        except (AttributeError, RuntimeError, TypeError):
+            return 0
 
-    def columnCount(self, parent=None, *args, **kwargs):
-        if parent.isValid():
-            return parent.internalPointer().columnCount()
-        return self._root.columnCount()
+    def columnCount(self, parent=QModelIndex(), *args, **kwargs):
+        try:
+            if parent is not None and parent.isValid():
+                node = parent.internalPointer()
+                return node.columnCount() if node is not None else 0
+            return self._root.columnCount() if self._root is not None else 0
+        except (AttributeError, RuntimeError, TypeError):
+            return 0
 
     def addChild(self, node, _parent):
         if not node._data.prop_name == self.display_prop:
@@ -501,41 +513,64 @@ class TreeModel(QAbstractItemModel):
         return QModelIndex()
 
     def index(self, row, column, _parent=QModelIndex()):
-        parent = self.nodeFromIndex(_parent)
-        if not self.hasIndex(row, column, _parent):
-            return QModelIndex()
-
-        child = parent.child(row)
-        if child:
-            return self.createIndex(row, column, child)
-        else:
-            return QModelIndex()
-
-    def parent(self, index):
-        if index.isValid():
-            try:
-                _parent = index.internalPointer().parent()
-            except:
-                print()
-            if _parent:
-                return self.createIndex(_parent.row(), 0, _parent)
+        try:
+            if _parent is None:
+                _parent = QModelIndex()
+            parent = self.nodeFromIndex(_parent)
+            if parent is None or not self.hasIndex(row, column, _parent):
+                return QModelIndex()
+            child = parent.child(row)
+            if child:
+                return self.createIndex(row, column, child)
+        except (AttributeError, IndexError, RuntimeError, TypeError, ValueError):
+            pass
         return QModelIndex()
 
-    def headerData(self, section: int, orientation: PySide2.QtCore.Qt.Orientation, role: int = ...):
-        if orientation == Qt.Horizontal and role == Qt.DisplayRole:
-            return self.headers[section]
+    def parent(self, index):
+        try:
+            if index is None or not index.isValid():
+                return QModelIndex()
+            node = index.internalPointer()
+            if node is None:
+                return QModelIndex()
+            parent = node.parent()
+            if parent is not None and parent is not self._root:
+                return self.createIndex(parent.row(), 0, parent)
+        except (AttributeError, IndexError, RuntimeError, TypeError, ValueError):
+            pass
+        return QModelIndex()
 
-    def data(self, index: QModelIndex, role: int = ...):
-        if not index.isValid():
+    def headerData(self, section: int, orientation: PySide6.QtCore.Qt.Orientation,
+                   role: int = Qt.ItemDataRole.DisplayRole):
+        try:
+            if orientation == Qt.Orientation.Horizontal and role == Qt.ItemDataRole.DisplayRole:
+                if 0 <= section < len(self.headers):
+                    return self.headers[section]
+        except (AttributeError, IndexError, RuntimeError, TypeError):
+            pass
+        return None
+
+    def data(self, index: QModelIndex, role: int = Qt.ItemDataRole.DisplayRole):
+        try:
+            if index is None or not index.isValid():
+                return None
+            node = index.internalPointer()
+            if node is None:
+                return None
+            return self._data_for_node(index, node, role)
+        except Exception:
+            # Qt may request data while a model update invalidates a Python-side node.
+            # Never let an exception cross the Shiboken model callback boundary.
             return None
-        node = index.internalPointer()
-        if role == Qt.DisplayRole:
+
+    def _data_for_node(self, index: QModelIndex, node, role: int):
+        if role == Qt.ItemDataRole.DisplayRole:
             return node.data(index.column())
 
-        if role == Qt.ToolTipRole:
+        if role == Qt.ItemDataRole.ToolTipRole:
             return node.data()
 
-        if role == Qt.BackgroundColorRole:
+        if role == Qt.ItemDataRole.BackgroundRole:
             if getattr(node, 'search_highlight', False):
                 highlight = QColor('#fff59d')
                 if node.font_bgcolor:
@@ -552,10 +587,10 @@ class TreeModel(QAbstractItemModel):
             else:
                 return None
 
-        if role == Qt.TextColorRole:
+        if role == Qt.ItemDataRole.ForegroundRole:
             return QColor(node.font_text_color)
 
-        if role == Qt.DecorationRole:
+        if role == Qt.ItemDataRole.DecorationRole:
             icon = node.get_icon(index.column())
 
             if hasattr(node._data, 'deleted') and node._data.deleted is True:
@@ -564,7 +599,7 @@ class TreeModel(QAbstractItemModel):
 
                 # Create a new pixmap for the modified icon
                 pixmap_modified = QPixmap(pixmap.size())
-                pixmap_modified.fill(Qt.transparent)
+                pixmap_modified.fill(Qt.GlobalColor.transparent)
 
                 # Draw the modified pixmap
                 painter = QPainter(pixmap_modified)
@@ -576,7 +611,7 @@ class TreeModel(QAbstractItemModel):
                 # Draw a red horizontal line on the modified pixmap
                 pixmap_modified_rect = pixmap_modified.rect().adjusted(0, 0, -1, -1)
                 painter = QPainter(pixmap_modified)
-                pen = QPen(Qt.red, 2)
+                pen = QPen(Qt.GlobalColor.red, 2)
                 painter.setPen(pen)
                 painter.drawLine(QPointF(pixmap_modified_rect.left(), pixmap_modified_rect.center().y()),
                                  QPointF(pixmap_modified_rect.right(), pixmap_modified_rect.center().y()))
@@ -585,34 +620,37 @@ class TreeModel(QAbstractItemModel):
 
             return icon
 
-        if role == Qt.FontRole:
+        if role == Qt.ItemDataRole.FontRole:
             font = QFont()
-            if self.font_name:
-                if not node.font_name:
-                    font.setFamily(self.font_name)
-                else:
-                    font.setFamily(node.font_name)
-            if self.font_size:
-                if not node.font_size:
-                    font.setPointSize(float(self.font_size))
-                else:
-                    font.setPointSize(float(node.font_size))
-            else:
-                font.setPixelSize(float(node.font_size))
-            font.setBold(replace_dict.get(node.font_bold, node.font_bold))
-            font.setUnderline(replace_dict.get(node.font_underline, node.font_underline))
-            font.setItalic(replace_dict.get(node.font_italic, node.font_italic))
-            font.setStrikeOut(replace_dict.get(node.font_strikeout, node.font_strikeout))
-            return font
+            has_custom_font = False
+            if node.font_name:
+                font.setFamily(node.font_name)
+                has_custom_font = True
+            if node.font_size:
+                font.setPointSizeF(float(node.font_size))
+                has_custom_font = True
+            if replace_dict.get(node.font_bold, node.font_bold):
+                font.setBold(True)
+                has_custom_font = True
+            if replace_dict.get(node.font_underline, node.font_underline):
+                font.setUnderline(True)
+                has_custom_font = True
+            if replace_dict.get(node.font_italic, node.font_italic):
+                font.setItalic(True)
+                has_custom_font = True
+            if replace_dict.get(node.font_strikeout, node.font_strikeout):
+                font.setStrikeOut(True)
+                has_custom_font = True
+            return font if has_custom_font else None
 
-        if role == Qt.UserRole:
+        if role == Qt.ItemDataRole.UserRole:
             if hasattr(node._data, 'deleted'):
                 return node._data.deleted
             else:
                 return False
 
         if self.CHECKABLE:
-            if role == Qt.CheckStateRole and index.column() == 0:
+            if role == Qt.ItemDataRole.CheckStateRole and index.column() == 0:
                 return node.is_checked()
 
     def moveItem(self, sourceIndex, destinationIndex):
@@ -727,12 +765,25 @@ class TreeModel(QAbstractItemModel):
 
         return new_indexes
 
-    def setData(self, index: "QModelIndex", value: "Any", role: int = ...) -> bool:
+    def setData(self, index: "QModelIndex", value: "Any",
+                role: int = Qt.ItemDataRole.EditRole) -> bool:
         """Изменяет данные на интерфейсе"""
-        if index.column() == 0 and role == Qt.CheckStateRole:
-            self._check(index, Qt.CheckState(value))
-            self.itemChecked.emit(self.nodeFromIndex(index))
+        try:
+            if index is None or not index.isValid() or index.internalPointer() is None:
+                return False
+        except (AttributeError, RuntimeError, TypeError):
+            return False
+        if index.column() == 0 and role == Qt.ItemDataRole.CheckStateRole:
+            try:
+                self._check(index, Qt.CheckState(value))
+            except (AttributeError, RuntimeError, TypeError, ValueError):
+                return False
+            try:
+                self.itemChecked.emit(self.nodeFromIndex(index))
+            except (RuntimeError, TypeError):
+                return False
             return True
+        return False
 
     def checkMultipleItems(self, index_list, state):
         self.beginResetModel()
@@ -742,7 +793,7 @@ class TreeModel(QAbstractItemModel):
 
     def _check(self, index, state):
         item = self.nodeFromIndex(index)
-        if state == Qt.Checked:
+        if state == Qt.CheckState.Checked:
             if item not in self.checked_list:
                 self.checked_list.append(item)
         else:
@@ -756,32 +807,45 @@ class TreeModel(QAbstractItemModel):
                 self._check(child_index, state)
 
     def nodeFromIndex(self, index):
-        if index is not None and index.isValid():
-            return index.internalPointer()
+        try:
+            if index is not None and index.isValid():
+                return index.internalPointer()
+        except (AttributeError, RuntimeError, TypeError):
+            return None
         return self._root
 
     def insertRows(self, position, items, parent=QModelIndex()):
         if parent is None:
             parent = QModelIndex()
         parentItem = self.nodeFromIndex(parent)
+        if parentItem is None or not items or position < 0 or position > parentItem.childCount():
+            return False
         self.beginInsertRows(parent, position, position + len(items) - 1)
         parentItem.insertChildren(position, items)
         self.endInsertRows()
         return True
 
-    def flags(self, index: PySide2.QtCore.QModelIndex) -> PySide2.QtCore.Qt.ItemFlags:
-        defaultFlags = super().flags(index)
-        if self.CHECKABLE:
-            defaultFlags |= Qt.ItemIsUserCheckable
-        if index.isValid():
-            return Qt.ItemIsDragEnabled | Qt.ItemIsDropEnabled | Qt.ItemIsSelectable | Qt.ItemIsEnabled | defaultFlags
-        else:
-            return Qt.ItemIsDropEnabled | defaultFlags
+    def flags(self, index: PySide6.QtCore.QModelIndex) -> PySide6.QtCore.Qt.ItemFlags:
+        try:
+            if index is None:
+                index = QModelIndex()
+            defaultFlags = super().flags(index)
+            if self.CHECKABLE:
+                defaultFlags |= Qt.ItemFlag.ItemIsUserCheckable
+            if index.isValid():
+                return Qt.ItemFlag.ItemIsDragEnabled | Qt.ItemFlag.ItemIsDropEnabled | Qt.ItemFlag.ItemIsSelectable | Qt.ItemFlag.ItemIsEnabled | defaultFlags
+            return Qt.ItemFlag.ItemIsDropEnabled | defaultFlags
+        except (AttributeError, RuntimeError, TypeError):
+            return Qt.ItemFlag.NoItemFlags
 
-    def removeRows(self, row: int, count: int, parent: PySide2.QtCore.QModelIndex = ...) -> bool:
+    def removeRows(self, row: int, count: int, parent: PySide6.QtCore.QModelIndex = QModelIndex()) -> bool:
+        if parent is None:
+            parent = QModelIndex()
         parent_ = self.nodeFromIndex(parent)
+        if parent_ is None or row < 0 or count <= 0 or row + count > parent_.childCount():
+            return False
         self.beginRemoveRows(parent, row, row + count - 1)
-        for i in range(count):
+        for _ in range(count):
             parent_.removeChild(row)
         self.endRemoveRows()
         return True

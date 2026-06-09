@@ -4,12 +4,12 @@ from collections.abc import Iterable
 from copy import copy
 from datetime import datetime
 
-from PySide2 import QtCore, QtWidgets
-from PySide2.QtCore import Qt, QSortFilterProxyModel, QSize, QLocale, QTimer, QPersistentModelIndex, QModelIndex, \
+from PySide6 import QtCore, QtWidgets
+from PySide6.QtCore import Qt, QSortFilterProxyModel, QSize, QLocale, QTimer, QPersistentModelIndex, QModelIndex, \
     QItemSelectionModel
-from PySide2.QtGui import QIcon, QCursor, QColor, QFont, QBrush, QKeySequence
-from PySide2.QtWidgets import QTreeView, QMenu, QColorDialog, QInputDialog, QDockWidget, \
-    QHBoxLayout, QToolButton, QWidget, QLabel, QAbstractItemView, QAction, QLineEdit, QShortcut, \
+from PySide6.QtGui import QIcon, QCursor, QColor, QFont, QBrush, QKeySequence, QAction, QShortcut
+from PySide6.QtWidgets import QTreeView, QMenu, QColorDialog, QInputDialog, QDockWidget, \
+    QHBoxLayout, QToolButton, QWidget, QLabel, QAbstractItemView, QLineEdit, \
     QFontDialog, QComboBox, QCompleter, QTableWidget, QTableWidgetItem, QVBoxLayout, QTreeWidget, QTreeWidgetItem, \
     QApplication, QStyle, QSizePolicy, QDialog, QDialogButtonBox, QTextBrowser
 from openpyxl.workbook import Workbook
@@ -92,10 +92,10 @@ class TreeView(QTreeView):
         self.dock_widget = None
         self._pending_save = False
 
-        self.setSelectionMode(QTreeView.ExtendedSelection)  # Позволяет выделять несколько элементов
-        self.setSelectionBehavior(QTreeView.SelectItems)  # Выделение элементов, а не строк
-        # self.setSelectionMode(self.ExtendedSelection)  # разрешаем множественное выделение элементов
-        self.setDragDropMode(QAbstractItemView.DragDrop)  # разрешили drag'n'drop
+        self.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)  # Позволяет выделять несколько элементов
+        self.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectItems)  # Выделение элементов, а не строк
+        # self.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)  # разрешаем множественное выделение элементов
+        self.setDragDropMode(QAbstractItemView.DragDropMode.DragDrop)  # разрешили drag'n'drop
         self.setDragEnabled(True)  # включаем Drag
         self.setAcceptDrops(True)  # включаем Drop
         self.setDropIndicatorShown(True)  # включаем индикатор, указывающий допустимость перемещения элемента
@@ -131,7 +131,7 @@ class TreeView(QTreeView):
         self._is_sorted = False
         self._sort_order = None
 
-        self.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.__create_connections()
         icon_size = QSize(16, 16)
         self.setIconSize(icon_size)
@@ -157,13 +157,6 @@ class TreeView(QTreeView):
         super(TreeView, self).setModel(model)
         self.clear_pending_save()
         model.set_view(self)
-        self.model().font_name = 'Times New Roman'
-        self.model().font_size = 14
-        if self.main_window:
-            if font_name := self.main_window.user_settings.get('font_name'):
-                self.model().font_name = font_name
-            if font_size := self.main_window.user_settings.get('font_size'):
-                self.model().font_size = font_size
         self.resizeColumnToContents(0)
         self.refresh()
         self._reset_tree_state()
@@ -288,7 +281,7 @@ class TreeView(QTreeView):
 
         if self.has_active_sort():
             order = self.current_sort_order()
-            if order == Qt.DescendingOrder:
+            if order == Qt.SortOrder.DescendingOrder:
                 state['sort'] = 'desc'
             else:
                 state['sort'] = 'asc'
@@ -318,9 +311,9 @@ class TreeView(QTreeView):
 
         sort_order = state.get('sort')
         if sort_order == 'asc':
-            self.sort_items(Qt.AscendingOrder)
+            self.sort_items(Qt.SortOrder.AscendingOrder)
         elif sort_order == 'desc':
-            self.sort_items(Qt.DescendingOrder)
+            self.sort_items(Qt.SortOrder.DescendingOrder)
 
         index_map = self._build_index_map()
 
@@ -337,7 +330,7 @@ class TreeView(QTreeView):
             for identifier in selected:
                 index = index_map.get(str(identifier))
                 if index is not None:
-                    selection_model.select(index, QItemSelectionModel.Select | QItemSelectionModel.Rows)
+                    selection_model.select(index, QItemSelectionModel.SelectionFlag.Select | QItemSelectionModel.SelectionFlag.Rows)
 
         current = state.get('current')
         if current:
@@ -413,7 +406,7 @@ class TreeView(QTreeView):
     def refresh(self):
         for row in range(self.model().rowCount()):
             index = self.model().index(row, 0)
-            hidden = self.model().data(index, Qt.UserRole)
+            hidden = self.model().data(index, Qt.ItemDataRole.UserRole)
             if not self.HIDE_REMOVED_ITEMS:
                 self.setItemVisibility(self.model(), index, False)
             else:
@@ -423,7 +416,7 @@ class TreeView(QTreeView):
         self.setRowHidden(index.row(), index.parent(), hidden)
         for i in range(model.rowCount(index)):
             childIndex = model.index(i, 0, index)
-            hidden = model.data(childIndex, Qt.UserRole)
+            hidden = model.data(childIndex, Qt.ItemDataRole.UserRole)
             if not self.HIDE_REMOVED_ITEMS:
                 self.setItemVisibility(model, childIndex, False)
             else:
@@ -468,19 +461,19 @@ class TreeView(QTreeView):
 
     def _drop_target_info(self, target_index, drop_position):
         model = self.model()
-        if drop_position == QAbstractItemView.OnViewport or not target_index.isValid():
+        if drop_position == QAbstractItemView.DropIndicatorPosition.OnViewport or not target_index.isValid():
             parent_index = QModelIndex()
             row = model.rowCount(parent_index)
             return parent_index, row
-        if drop_position == QAbstractItemView.OnItem:
+        if drop_position == QAbstractItemView.DropIndicatorPosition.OnItem:
             parent_index = target_index
             row = model.rowCount(target_index)
             return parent_index, row
-        if drop_position == QAbstractItemView.AboveItem:
+        if drop_position == QAbstractItemView.DropIndicatorPosition.AboveItem:
             parent_index = target_index.parent()
             row = target_index.row()
             return parent_index, row
-        if drop_position == QAbstractItemView.BelowItem:
+        if drop_position == QAbstractItemView.DropIndicatorPosition.BelowItem:
             parent_index = target_index.parent()
             row = target_index.row() + 1
             return parent_index, row
@@ -526,7 +519,7 @@ class TreeView(QTreeView):
             if not persistent.isValid():
                 continue
             index = QModelIndex(persistent)
-            selection_model.select(index, QtCore.QItemSelectionModel.Select | QtCore.QItemSelectionModel.Rows)
+            selection_model.select(index, QtCore.QItemSelectionModel.SelectionFlag.Select | QtCore.QItemSelectionModel.SelectionFlag.Rows)
             last_index = index
         if last_index:
             self.setCurrentIndex(last_index)
@@ -571,11 +564,11 @@ class TreeView(QTreeView):
             event.ignore()
             return
 
-        event.setDropAction(Qt.MoveAction)
+        event.setDropAction(Qt.DropAction.MoveAction)
         event.accept()
 
         self._select_persistent_indexes(new_indexes)
-        if parent_index.isValid() and drop_position == QAbstractItemView.OnItem:
+        if parent_index.isValid() and drop_position == QAbstractItemView.DropIndicatorPosition.OnItem:
             self.expand(parent_index)
         self.mark_pending_save()
 
@@ -700,7 +693,7 @@ class TreeView(QTreeView):
             if selection_model:
                 selection_model.setCurrentIndex(
                     index,
-                    QtCore.QItemSelectionModel.ClearAndSelect | QtCore.QItemSelectionModel.Rows
+                    QtCore.QItemSelectionModel.SelectionFlag.ClearAndSelect | QtCore.QItemSelectionModel.SelectionFlag.Rows
                 )
             self.scrollTo(index)
             self._search_current_index = idx
@@ -759,7 +752,7 @@ class TreeView(QTreeView):
         if not node or getattr(node, 'search_highlight', False) == highlight:
             return
         node.search_highlight = highlight
-        self.model().dataChanged.emit(index, index, [Qt.BackgroundRole])
+        self.model().dataChanged.emit(index, index, [Qt.ItemDataRole.BackgroundRole])
 
     def _clear_highlight(self):
         model = self.model()
@@ -803,7 +796,7 @@ class TreeView(QTreeView):
                 self.expand(persistent)
         self._search_expanded_state = None
 
-    def sort_items(self, order=Qt.AscendingOrder):
+    def sort_items(self, order=Qt.SortOrder.AscendingOrder):
         model = self.model()
         if model is None:
             return
@@ -812,7 +805,7 @@ class TreeView(QTreeView):
         self._is_sorted = True
         self._sort_order = order
         model.layoutAboutToBeChanged.emit()
-        self._sort_node(model._root, order == Qt.AscendingOrder)
+        self._sort_node(model._root, order == Qt.SortOrder.AscendingOrder)
         model.layoutChanged.emit()
         self.refresh()
 
@@ -961,7 +954,7 @@ class TreeView(QTreeView):
         if not self.DISABLE_MENU:
             index = self.indexAt(pos)
             menu = self.menu(index)
-            menu.exec_(self.viewport().mapToGlobal(pos))
+            menu.exec(self.viewport().mapToGlobal(pos))
 
     def _load_menu(self, mode='base_state', location='treeview'):
         menu = sp.get_user_menu_(mode, location)
@@ -1041,7 +1034,7 @@ class TreeView(QTreeView):
             row = index.row()
             if row > 0 and index.parent().isValid():
                 destination_index = self.model().index(row - 1, index.column(), index.parent())
-                hidden_state = self.model().data(destination_index, Qt.UserRole)
+                hidden_state = self.model().data(destination_index, Qt.ItemDataRole.UserRole)
                 new_index = self.model().moveItem(index, destination_index)
                 if new_index:
                     self.setItemVisibility(self.model(), new_index, hidden_state)
@@ -1052,7 +1045,7 @@ class TreeView(QTreeView):
             parent_index = index.parent()
             if row < self.model().rowCount(parent_index) - 1 and parent_index.isValid():
                 destination_index = self.model().index(row + 1, index.column(), parent_index)
-                hidden_state = self.model().data(destination_index, Qt.UserRole)
+                hidden_state = self.model().data(destination_index, Qt.ItemDataRole.UserRole)
                 new_index = self.model().moveItem(index, destination_index)
                 if new_index:
                     self.setItemVisibility(self.model(), new_index, hidden_state)
@@ -1207,7 +1200,7 @@ class TreeView(QTreeView):
         if children:
             self._parent.ui.centralWidget.tabifyDockWidget(children[0], tab)
         else:
-            self._parent.ui.centralWidget.addDockWidget(Qt.TopDockWidgetArea, tab)
+            self._parent.ui.centralWidget.addDockWidget(Qt.DockWidgetArea.TopDockWidgetArea, tab)
         tab.show()
         tab.raise_()
 
@@ -1218,18 +1211,14 @@ class TreeView(QTreeView):
 
         if prop == 'font':
 
-            curr_font = QFont()
+            curr_font = QFont(self.font())
             curr_font.setBold(True if item.font_bold == 'True' else False)
             curr_font.setUnderline(True if item.font_underline == 'True' else False)
             curr_font.setItalic(True if item.font_italic == 'True' else False)
             if item.font_name:
                 curr_font.setFamily(item.font_name)
-            else:
-                curr_font.setFamily(self.main_window.user_settings.get('font_name'))
             if item.font_size:
                 curr_font.setPointSize(int(item.font_size))
-            else:
-                curr_font.setPointSize(int(self.main_window.user_settings.get('font_size')))
             curr_font.setStrikeOut(True if item.font_strikeout == 'True' else False)
 
             ok, font = QFontDialog.getFont(curr_font)
@@ -1310,12 +1299,16 @@ class DockWidget(QDockWidget):
         self.available_actions = []
         self._parent = parent
         main_layout = QVBoxLayout()
-        main_layout.setContentsMargins(4, 2, 4, 2)
-        main_layout.setSpacing(2)
+        main_layout.setContentsMargins(8, 6, 8, 6)
+        main_layout.setSpacing(6)
         self.menu_name = menu_name
 
         self.title_label = QLabel()
         self.title_label.setText(title)
+        title_font = self.title_label.font()
+        title_font.setBold(True)
+        self.title_label.setFont(title_font)
+        self.title_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
 
         self.settings_menu = []
 
@@ -1323,17 +1316,17 @@ class DockWidget(QDockWidget):
         self.search_line.setPlaceholderText('Поиск...')
         self.search_line.setClearButtonEnabled(True)
         self.search_line.setToolTip('Поиск по дереву')
-        self.search_line.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        self.search_line.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
 
         self.search_prev_button = QToolButton()
-        self.search_prev_button.setIcon(self.style().standardIcon(QStyle.SP_ArrowBack))
+        self.search_prev_button.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_ArrowBack))
         self.search_prev_button.setAutoRaise(True)
         self.search_prev_button.setToolTip('Предыдущее совпадение')
         self.search_prev_button.clicked.connect(self._on_search_prev)
         self.search_prev_button.setEnabled(False)
 
         self.search_next_button = QToolButton()
-        self.search_next_button.setIcon(self.style().standardIcon(QStyle.SP_ArrowForward))
+        self.search_next_button.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_ArrowForward))
         self.search_next_button.setAutoRaise(True)
         self.search_next_button.setToolTip('Следующее совпадение')
         self.search_next_button.clicked.connect(self._on_search_next)
@@ -1346,7 +1339,7 @@ class DockWidget(QDockWidget):
         self.search_line.returnPressed.connect(self._run_search)
         self._search_timer.timeout.connect(self._run_search)
 
-        self._search_shortcut = QShortcut(QKeySequence.Find, self)
+        self._search_shortcut = QShortcut(QKeySequence.StandardKey.Find, self)
         self._search_shortcut.activated.connect(self._focus_search)
 
         self.dock_button = QToolButton()
@@ -1358,7 +1351,7 @@ class DockWidget(QDockWidget):
         self.sort_button = QToolButton()
         self.sort_button.setIcon(QIcon(':/sorting.png'))
         self.sort_button.setToolTip('Сортировка')
-        self.sort_button.setPopupMode(QToolButton.InstantPopup)
+        self.sort_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         self.sort_button.setAutoRaise(True)
 
         self.sort_menu = QMenu(self)
@@ -1367,8 +1360,8 @@ class DockWidget(QDockWidget):
         self.sort_menu.addSeparator()
         self.sort_reset_action = self.sort_menu.addAction('Без сортировки')
         self.sort_button.setMenu(self.sort_menu)
-        self.sort_by_asc_action.triggered.connect(lambda: self._sort_tree(Qt.AscendingOrder))
-        self.sort_by_desc_action.triggered.connect(lambda: self._sort_tree(Qt.DescendingOrder))
+        self.sort_by_asc_action.triggered.connect(lambda: self._sort_tree(Qt.SortOrder.AscendingOrder))
+        self.sort_by_desc_action.triggered.connect(lambda: self._sort_tree(Qt.SortOrder.DescendingOrder))
         self.sort_reset_action.triggered.connect(self._reset_sort)
         self.sort_reset_action.setEnabled(False)
 
@@ -1397,9 +1390,13 @@ class DockWidget(QDockWidget):
         hide_button.setText('Закрыть')
         hide_button.clicked.connect(self.hide_)
 
+        for button in (save_button, up_button, down_button, self.dock_button, settings_button, hide_button):
+            button.setAutoRaise(True)
+            button.setToolTip(button.text())
+
         header_layout = QHBoxLayout()
         header_layout.setContentsMargins(0, 0, 0, 0)
-        header_layout.setSpacing(2)
+        header_layout.setSpacing(4)
         header_layout.addWidget(self.title_label)
         header_layout.addStretch()
         header_layout.addWidget(save_button)
@@ -1411,7 +1408,7 @@ class DockWidget(QDockWidget):
 
         controls_layout = QHBoxLayout()
         controls_layout.setContentsMargins(0, 0, 0, 0)
-        controls_layout.setSpacing(2)
+        controls_layout.setSpacing(4)
         controls_layout.addWidget(self.search_line, 1)
         controls_layout.addWidget(self.search_prev_button)
         controls_layout.addWidget(self.search_next_button)
@@ -1421,11 +1418,8 @@ class DockWidget(QDockWidget):
         main_layout.addLayout(controls_layout)
 
         widget = QWidget()
+        widget.setObjectName('dockTitleBar')
         widget.setLayout(main_layout)
-
-        objectName = widget.objectName() if widget.objectName() != "" else str(id(widget))
-        widget.setObjectName(objectName)
-        widget.setStyleSheet("#%s {%s}" % (objectName, 'border: 1px solid grey;'))
 
         self.setTitleBarWidget(widget)
         self.topLevelChanged.connect(lambda: self.dock_button.setHidden(not self.isFloating()))
@@ -1654,18 +1648,18 @@ class ExtendedComboBox(QComboBox):
     def __init__(self, parent=None):
         super(ExtendedComboBox, self).__init__(parent)
 
-        self.setFocusPolicy(Qt.StrongFocus)
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.setEditable(True)
 
         # add a filter model to filter matching items
         self.pFilterModel = QSortFilterProxyModel(self)
-        self.pFilterModel.setFilterCaseSensitivity(Qt.CaseInsensitive)
+        self.pFilterModel.setFilterCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
         self.pFilterModel.setSourceModel(self.model())
 
         # add a completer, which uses the filter model
         self.completer = QCompleter(self.pFilterModel, self)
         # always show all (filtered) completions
-        self.completer.setCompletionMode(QCompleter.UnfilteredPopupCompletion)
+        self.completer.setCompletionMode(QCompleter.CompletionMode.UnfilteredPopupCompletion)
         self.setCompleter(self.completer)
 
         # connect signals
@@ -1759,7 +1753,7 @@ class TableItem(QTableWidgetItem):
     def data(self, role: int):
         tw = self.tableWidget()
 
-        if role == Qt.DisplayRole:
+        if role == Qt.ItemDataRole.DisplayRole:
 
             if not self.dep_inited:
                 self.init_dependencies()
@@ -1768,38 +1762,44 @@ class TableItem(QTableWidgetItem):
 
             return self.value()
 
-        if role == Qt.EditRole:
+        if role == Qt.ItemDataRole.EditRole:
             return self.get('formula', str, '')
 
-        if role == Qt.BackgroundColorRole:
+        if role == Qt.ItemDataRole.BackgroundRole:
             if self.highlighted:
                 if self.get('broken', bool, False):
                     return QColor('#d7d7d7')
                 return QColor('#fff4ce')
             if self.get('broken', bool, False):
-                return QBrush(Qt.lightGray)
+                return QBrush(Qt.GlobalColor.lightGray)
             else:
                 if bg_color := self.get('font_bgcolor', str, None):
                     return QColor(bg_color)
 
-        if role == Qt.TextColorRole:
+        if role == Qt.ItemDataRole.ForegroundRole:
             return QColor(self.get('font_text_color', str))
 
-        if role == Qt.FontRole:
+        if role == Qt.ItemDataRole.FontRole:
             font = QFont()
-            # font.setFamily(self.get('font_name', 'Times'))
-            font.setBold(self.get('font_bold', bool, False))
-            font.setItalic(self.get('font_italic', bool, False))
-            font.setPixelSize(self.get('font_size', int, 14))
-            return font
+            has_custom_font = False
+            if self.get('font_bold', bool, False):
+                font.setBold(True)
+                has_custom_font = True
+            if self.get('font_italic', bool, False):
+                font.setItalic(True)
+                has_custom_font = True
+            if font_size := self.get('font_size', int, None):
+                font.setPixelSize(font_size)
+                has_custom_font = True
+            return font if has_custom_font else None
 
-        if role == Qt.TextAlignmentRole:
+        if role == Qt.ItemDataRole.TextAlignmentRole:
             return tw.get_column_prop(self.key[1], 'alignment', int, 4)
 
         return super().data(role)
 
     def setData(self, role: int, value) -> None:
-        if role == Qt.EditRole:
+        if role == Qt.ItemDataRole.EditRole:
             if isinstance(value, str):
                 current_formula = self.get('formula', str, '')
                 if value == current_formula:
@@ -1818,7 +1818,7 @@ class TableItem(QTableWidgetItem):
                 if table is not None and table.model() is not None:
                     index = table.indexFromItem(self)
                     if index.isValid():
-                        table.model().dataChanged.emit(index, index, [Qt.DisplayRole])
+                        table.model().dataChanged.emit(index, index, [Qt.ItemDataRole.DisplayRole])
 
     def update_dependencies(self):
         for cell_key in self.dependencies:
@@ -2158,7 +2158,7 @@ class TableItem(QTableWidgetItem):
         table = self.tableWidget()
         if table is not None and table.model() is not None:
             index = table.model().index(self.row(), self.column())
-            table.model().dataChanged.emit(index, index, [Qt.BackgroundColorRole])
+            table.model().dataChanged.emit(index, index, [Qt.ItemDataRole.BackgroundRole])
 
     def get(self, prop, cast_type=None, default=None):
         if prop not in self.cell:
@@ -2269,7 +2269,7 @@ class TablePage1(QtWidgets.QWidget):
         icon_font = self.formula_icon.font()
         icon_font.setBold(True)
         self.formula_icon.setFont(icon_font)
-        self.formula_icon.setAlignment(Qt.AlignCenter)
+        self.formula_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.formula_icon.setFixedWidth(26)
         self.formula_icon.setStyleSheet('color: #555555;')
 
@@ -2281,20 +2281,20 @@ class TablePage1(QtWidgets.QWidget):
         self.formula_result_label = QLabel('Значение: —', panel)
         self.formula_result_label.setObjectName('formulaResultLabel')
         self.formula_result_label.setStyleSheet('color: #666666;')
-        self.formula_result_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
-        self.formula_result_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        self.formula_result_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        self.formula_result_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
 
         self.formula_help_button = QToolButton(panel)
         self.formula_help_button.setObjectName('formulaHelpButton')
         self.formula_help_button.setAutoRaise(True)
-        self.formula_help_button.setIcon(panel.style().standardIcon(QStyle.SP_MessageBoxQuestion))
+        self.formula_help_button.setIcon(panel.style().standardIcon(QStyle.StandardPixmap.SP_MessageBoxQuestion))
         self.formula_help_button.setToolTip('Показать инструкцию по формулам')
         self.formula_help_button.clicked.connect(self.show_formula_help)
 
         layout.addWidget(self.formula_icon)
         layout.addWidget(self.formula_edit, 1)
         layout.addWidget(self.formula_result_label)
-        layout.addWidget(self.formula_help_button, 0, Qt.AlignRight)
+        layout.addWidget(self.formula_help_button, 0, Qt.AlignmentFlag.AlignRight)
 
         return panel
 
@@ -2349,14 +2349,14 @@ class TablePage1(QtWidgets.QWidget):
         text_browser = QTextBrowser(help_dialog)
         text_browser.setHtml(help_text)
         text_browser.setOpenExternalLinks(True)
-        text_browser.setTextInteractionFlags(Qt.TextBrowserInteraction)
+        text_browser.setTextInteractionFlags(Qt.TextInteractionFlag.TextBrowserInteraction)
         layout.addWidget(text_browser)
 
-        button_box = QDialogButtonBox(QDialogButtonBox.Close, Qt.Horizontal, help_dialog)
+        button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Close, Qt.Orientation.Horizontal, help_dialog)
         button_box.rejected.connect(help_dialog.reject)
         layout.addWidget(button_box)
 
-        help_dialog.exec_()
+        help_dialog.exec()
 
     def update_formula_context(self):
         if not hasattr(self, 'formula_edit'):
@@ -2431,7 +2431,7 @@ class TablePage1(QtWidgets.QWidget):
         text = self.formula_edit.text()
         self._applying_formula = True
         try:
-            self.table.model().setData(index, text, Qt.EditRole)
+            self.table.model().setData(index, text, Qt.ItemDataRole.EditRole)
         finally:
             self._applying_formula = False
         self.refresh_formula_result(item)
@@ -2447,15 +2447,15 @@ class TablePage1(QtWidgets.QWidget):
         self._formula_delegate = delegate
         self._formula_functions = delegate.funcs
         self.table.setItemDelegate(delegate)
-        self.table.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.table.customContextMenuRequested.connect(self.show_cell_menu)
 
         row_headers = self.table.verticalHeader()
-        row_headers.setContextMenuPolicy(Qt.CustomContextMenu)
+        row_headers.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         row_headers.customContextMenuRequested.connect(self.show_row_menu)
 
         column_headers = self.table.horizontalHeader()
-        column_headers.setContextMenuPolicy(Qt.CustomContextMenu)
+        column_headers.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         column_headers.customContextMenuRequested.connect(self.show_column_menu)
 
         if self.table.selectionModel() is not None:
@@ -2639,7 +2639,7 @@ class TableWidget(QTableWidget):
 
     def __init__(self, parent, main_window):
         super().__init__()
-        self.setLocale(QLocale(QLocale.English, QLocale.UnitedKingdom))
+        self.setLocale(QLocale(QLocale.Language.English, QLocale.Country.UnitedKingdom))
         self.columns = {}
         self.ord_columns = []
         self.rows = {}
@@ -2665,12 +2665,12 @@ class TableWidget(QTableWidget):
         pass
 
     def keyPressEvent(self, event):
-        if event.key() == Qt.Key_F:
+        if event.key() == Qt.Key.Key_F:
             search_string, ok = QInputDialog.getText(self, "Поиск", "Введите строку для поиска:")
             if ok:
                 self.search_string = search_string
                 self.filter_table()
-        elif event == QKeySequence.Copy:  # Проверяем, нажата ли комбинация Ctrl+C
+        elif event == QKeySequence.StandardKey.Copy:  # Проверяем, нажата ли комбинация Ctrl+C
             self.copy_to_clipboard()
         else:
             super().keyPressEvent(event)

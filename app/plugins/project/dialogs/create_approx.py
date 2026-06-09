@@ -1,7 +1,7 @@
 from dialogs.base import BaseDialog
 from resources.ui.ui_py.ui_approximation import Ui_ApproxDialog
-from PySide2.QtWidgets import QColorDialog, QSpinBox, QLabel, QHBoxLayout, QPushButton
-from PySide2.QtGui import QColor
+from PySide6.QtWidgets import QColorDialog, QSpinBox, QLabel, QHBoxLayout, QPushButton
+from PySide6.QtGui import QColor
 import json
 
 

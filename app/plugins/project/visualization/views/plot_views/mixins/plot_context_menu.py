@@ -1,6 +1,6 @@
-from PySide2.QtCore import Qt, QPointF
-from PySide2.QtWidgets import QMenu
-from PySide2.QtGui import QCursor
+from PySide6.QtCore import Qt, QPointF
+from PySide6.QtWidgets import QMenu
+from PySide6.QtGui import QCursor
 import pyqtgraph as pg
 from typing import Any, List, Tuple, Optional
 from functools import partial
@@ -83,7 +83,7 @@ class PlotContextMenuMixin:
 
     def onContextMenuRequested(self, evt):
         """Обрабатывает запрос на показ контекстного меню"""
-        if evt[0].button() != Qt.RightButton:
+        if evt[0].button() != Qt.MouseButton.RightButton:
             return
 
         # Проверяем, не произошел ли клик по легенде
@@ -105,7 +105,7 @@ class PlotContextMenuMixin:
         # Создаем меню в зависимости от места клика
         menu = self.create_context_menu(mouse_point)
         if menu:
-            menu.exec_(QCursor.pos())
+            menu.exec(QCursor.pos())
 
     def create_context_menu(self, pos: QPointF) -> Optional[QMenu]:
         """Создает контекстное меню в зависимости от позиции"""
@@ -269,7 +269,7 @@ class PlotContextMenuMixin:
             # Получаем test_id для кривой
             test_id = self.data_processor.get_test_id_for_curve(curve)
             dialog = ApproxDialog(f"Approximation_{curve.name()}", self, test_id=test_id)
-            if dialog.exec_():
+            if dialog.exec():
                 data = dialog.get_result()
                 result = json.loads(data)
                 self.add_approximated_curve(
@@ -284,7 +284,7 @@ class PlotContextMenuMixin:
             # Получаем test_id для кривой
             test_id = self.data_processor.get_test_id_for_curve(curve)
             dialog = InterpDialog(f"Interpolation_{curve.name()}", self, test_id=test_id)
-            if dialog.exec_():
+            if dialog.exec():
                 data = dialog.get_result()
                 result = json.loads(data)
                 self.add_interpolated_curve(
@@ -305,7 +305,7 @@ class PlotContextMenuMixin:
                 off=False,
                 parent=self
             )
-            if dialog.exec_():
+            if dialog.exec():
                 forward, backward, is_enabled = dialog.get_result()
                 if is_enabled:
                     sorted_x = np.sort(np.asarray(x_data))
@@ -374,7 +374,7 @@ class PlotContextMenuMixin:
                 if hasattr(self, 'set_ruler_mark'):
                     # Устанавливаем метку линейки
                     # Если зажат Ctrl, создаем новую линейку
-                    #new_ruler = action.modifiers() & Qt.ControlModifier
+                    #new_ruler = action.modifiers() & Qt.KeyboardModifier.ControlModifier
                     new_ruler = False
                     if new_ruler:
                         # Для нового формата с несколькими линейками
@@ -526,7 +526,7 @@ class PlotContextMenuMixin:
 
     def _handle_legend_click(self, event):
         """Обработчик клика по легенде"""
-        if event.button() != Qt.RightButton:
+        if event.button() != Qt.MouseButton.RightButton:
             return
 
         # Получаем элемент легенды, по которому кликнули
@@ -540,7 +540,7 @@ class PlotContextMenuMixin:
                 curve = next((c for c in self.curve_items if c.name() == label.text), None)
                 if curve:
                     menu = self._create_legend_context_menu(curve)
-                    menu.exec_(QCursor.pos())
+                    menu.exec(QCursor.pos())
                     event.accept()
                 return
 
@@ -551,7 +551,7 @@ class PlotContextMenuMixin:
         # Если клик по фону легенды, показываем меню настроек легенды
         menu = self._create_legend_context_menu()
         if not menu.isEmpty():
-            menu.exec_(QCursor.pos())
+            menu.exec(QCursor.pos())
             event.accept()
 
     def _create_legend_context_menu(self, curve=None) -> QMenu:

@@ -1,14 +1,14 @@
 from collections import OrderedDict
 
-from PySide2.QtCore import Qt
+from PySide6.QtCore import Qt
 
 LINE_STYLES = [
-    (Qt.NoPen, 'Прозрачная'),
-    (Qt.SolidLine, 'Линия'),
-    (Qt.DashLine, 'Пунктирная линия'),
-    (Qt.DotLine, 'Линия из точек'),
-    (Qt.DashDotLine, 'Линия точка-тире'),
-    (Qt.DashDotDotLine, 'Линия точка-точка-тире'),
+    (Qt.PenStyle.NoPen, 'Прозрачная'),
+    (Qt.PenStyle.SolidLine, 'Линия'),
+    (Qt.PenStyle.DashLine, 'Пунктирная линия'),
+    (Qt.PenStyle.DotLine, 'Линия из точек'),
+    (Qt.PenStyle.DashDotLine, 'Линия точка-тире'),
+    (Qt.PenStyle.DashDotDotLine, 'Линия точка-точка-тире'),
 ]
 
 COLORS = [
@@ -29,6 +29,13 @@ COLORS = [
     'LightGray',  # c0c0c0
 
 ]
+
+
+def qt_enum_value(value):
+    """Return the integer representation of a Qt enum or integer value."""
+    enum_value = getattr(value, 'value', value)
+    return int(enum_value)
+
 
 SYMBOLS = [
     ('o', 'Круг'),  # Default symbol, round circle symbol

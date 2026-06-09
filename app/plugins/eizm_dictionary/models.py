@@ -1,4 +1,4 @@
-from PySide2.QtWidgets import QDialog
+from PySide6.QtWidgets import QDialog
 from app.plugins.base_state.models import Node, TreeModel
 from app.plugins.eizm_dictionary.dialogs.create_eizm import CreateEizmDialog
 from db import sp
@@ -55,7 +55,7 @@ class EizmNode(EizmRootNode):
     @staticmethod
     def add(up_node_id, parent):
         dialog = CreateEizmDialog()
-        if dialog.exec_() == QDialog.Accepted:
+        if dialog.exec() == QDialog.DialogCode.Accepted:
             eizm = dialog.get_result()
             node = EizmNode(eizm)
             return node

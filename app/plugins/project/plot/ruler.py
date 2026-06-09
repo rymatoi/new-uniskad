@@ -2,8 +2,8 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 import pyqtgraph as pg
-from PySide2.QtCore import Qt
-from PySide2.QtCore import QPointF
+from PySide6.QtCore import Qt
+from PySide6.QtCore import QPointF
 
 if TYPE_CHECKING:
     from typing import Optional
@@ -19,7 +19,7 @@ class Ruler:
         self._line = pg.InfiniteLine(
             angle=90,
             movable=True,
-            pen=pg.mkPen((0, 0, 0), width=1, style=Qt.SolidLine),
+            pen=pg.mkPen((0, 0, 0), width=1, style=Qt.PenStyle.SolidLine),
         )
 
         self._label = pg.InfLineLabel(

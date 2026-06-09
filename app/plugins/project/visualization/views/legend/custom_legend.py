@@ -1,7 +1,7 @@
-import PySide2
-from PySide2.QtCore import QEvent, Qt
-from PySide2.QtGui import QColor
-from PySide2.QtWidgets import QDialog, QMenu
+import PySide6
+from PySide6.QtCore import QEvent, Qt
+from PySide6.QtGui import QColor
+from PySide6.QtWidgets import QDialog, QMenu
 from pyqtgraph import Point
 import pyqtgraph as pg
 
@@ -29,7 +29,7 @@ class CustomLegend(pg.LegendItem):
         self.available_actions = []
         self.legend_menu = self._load_menu('any', 'legend')
 
-        self._background_color = QColor(Qt.white)
+        self._background_color = QColor(Qt.GlobalColor.white)
         self._border_color = QColor(100, 100, 100)
         self._background_opacity = 1.0
 
@@ -50,8 +50,8 @@ class CustomLegend(pg.LegendItem):
         self.last_pos_offset = Point(offset)
         self.calculate_pos()
 
-    def event(self, event: PySide2.QtCore.QEvent) -> bool:
-        if event.type() == QEvent.UngrabMouse:
+    def event(self, event: PySide6.QtCore.QEvent) -> bool:
+        if event.type() == QEvent.Type.UngrabMouse:
             self._parent.main_window.event_stack.add_event(
                 LegendPositionChangeEvent(self, self.old_pos, self.current_pos))
         return super().event(event)
@@ -86,7 +86,7 @@ class CustomLegend(pg.LegendItem):
     def on_context_menu(self, pos):
         pass
         # menu = self.menu(pos)
-        # menu.exec_(QCursor.pos())
+        # menu.exec(QCursor.pos())
 
     def menu(self, pos):
         menu = QMenu(self.getViewWidget())
@@ -115,7 +115,7 @@ class CustomLegend(pg.LegendItem):
             parent=self._parent
         )
 
-        if dialog.exec_() == QDialog.Accepted:
+        if dialog.exec() == QDialog.DialogCode.Accepted:
             result = dialog.get_result()
             if not result:
                 return

@@ -1,6 +1,6 @@
-from PySide2.QtWidgets import QApplication, QLabel, QVBoxLayout, QWidget, QPushButton, QSizePolicy, QScrollArea, \
+from PySide6.QtWidgets import QApplication, QLabel, QVBoxLayout, QWidget, QPushButton, QSizePolicy, QScrollArea, \
     QHBoxLayout, QFrame
-from PySide2.QtCore import Qt, QTimer, QPoint
+from PySide6.QtCore import Qt, QTimer, QPoint
 
 
 class Notification(QWidget):
@@ -10,7 +10,7 @@ class Notification(QWidget):
         # Set background color and rounded corners on frame
         self.frame = QFrame(self)
         self.frame.setStyleSheet("background-color: #3c3f41; border-radius: 5px;")
-        self.frame.setFrameShape(QFrame.StyledPanel)
+        self.frame.setFrameShape(QFrame.Shape.StyledPanel)
 
         # Set label
         self.label = QLabel(self._get_short_text(text), self.frame)
@@ -72,16 +72,16 @@ class Notification(QWidget):
 
 class StackedNotifications(QWidget):
     def __init__(self, parent=None, max_notifications=10):
-        super().__init__(parent, Qt.WindowStaysOnTopHint | Qt.FramelessWindowHint)
+        super().__init__(parent, Qt.WindowType.WindowStaysOnTopHint | Qt.WindowType.FramelessWindowHint)
 
         self.max_notifications = max_notifications
 
         # Set background color to transparent
-        self.setAttribute(Qt.WA_TranslucentBackground)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
 
         # Set layout
         self.layout = QVBoxLayout(self)
-        self.layout.setAlignment(Qt.AlignTop)
+        self.layout.setAlignment(Qt.AlignmentFlag.AlignTop)
         self.layout.setContentsMargins(10, 10, 10, 10)
         self.spacing = 10
         self.layout.setSpacing(self.spacing)
@@ -133,7 +133,7 @@ class StackedNotifications(QWidget):
 
     def update_position(self):
         # Get screen geometry and widget size
-        screen = QApplication.desktop().screenGeometry(self)
+        screen = self.screen().availableGeometry()
         widget_rect = self.geometry()
 
         # Calculate position of the notification widget

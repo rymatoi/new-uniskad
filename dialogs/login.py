@@ -1,7 +1,7 @@
 import asyncio
 
-from PySide2.QtCore import Qt
-from PySide2.QtGui import QIcon
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QIcon
 from asyncpg import RaiseError
 
 from app import app_logger
@@ -28,7 +28,7 @@ class LoginDialog(BaseDialog):
         self.ui.messageBox.hide()  # Скрываем расширенные поля для регистрации пользователя
         self.ui.errorBox.hide()  # Скрываем расширенные поля для регистрации пользователя
         self.create_connections()  # Созадем привязки к виджетам
-        self.setWindowFlag(Qt.WindowStaysOnTopHint)
+        self.setWindowFlag(Qt.WindowType.WindowStaysOnTopHint)
 
     def create_connections(self):
         """Функция создания привязок"""

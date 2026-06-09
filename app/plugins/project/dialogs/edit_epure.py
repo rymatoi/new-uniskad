@@ -1,8 +1,8 @@
 import ast
 from copy import copy
 
-from PySide2.QtCore import QSortFilterProxyModel
-from PySide2.QtGui import QIcon
+from PySide6.QtCore import QSortFilterProxyModel
+from PySide6.QtGui import QIcon
 
 from app import basic_funcs
 from app.plugins.base_state.models import TreeModel, Node
@@ -122,7 +122,7 @@ class EditEpureDialog(BaseDialog):
 
     def select_extra_param(self):
         dialog = ExtraParamEpureDialog(self.test_nodes, self.project_id, self.extra_param, self.extra_param_values)
-        if dialog.exec_():
+        if dialog.exec():
             self.extra_param, self.extra_param_values = dialog.get_result()
             if self.extra_param is None:
                 self.ui.selectParam.setText('Выбрать параметр')
@@ -154,7 +154,7 @@ class EditEpureDialog(BaseDialog):
 
     def setup_oy(self):
         dialog = OYSetupDialog(self.selected_params)
-        if dialog.exec_():
+        if dialog.exec():
             self.oy_list = dialog.get_result()
 
     def check_name(self):
@@ -192,7 +192,7 @@ class EditEpureDialog(BaseDialog):
     def add_parameters(self):
         self.parameters = utils.collect_project_params(sp.get_project_test_params(self.project_id))
         dialog = TestDataSelectionDialog(list(self.parameters.keys()))
-        if dialog.exec_():
+        if dialog.exec():
             params = [RowParam(param) for param in dialog.res]
             self.model.beginResetModel()
             self.model.ini_tree(params)

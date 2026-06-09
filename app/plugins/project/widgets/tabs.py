@@ -1,6 +1,7 @@
-from PySide2.QtCore import QUrl, QStandardPaths, QDir
-from PySide2.QtGui import QDesktopServices, Qt
-from PySide2.QtWidgets import QLabel
+from PySide6.QtCore import QUrl, QStandardPaths, QDir
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QDesktopServices
+from PySide6.QtWidgets import QLabel
 from app.plugins.base_state.widgets import Tab
 from app.plugins.project.widgets.pages import ProjectPlotPage, ProjectTablePage1
 from db import sp
@@ -49,7 +50,7 @@ class FileTab(Tab):
     def __init__(self, index, parent, main_window=None):
         super().__init__(index, parent, main_window)
         self.label = QLabel('Файл открыт в стороннем приложении.')
-        self.label.setAlignment(Qt.AlignCenter)
+        self.label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.setWidget(self.label)
 
         self.open_file()
@@ -62,7 +63,7 @@ class FileTab(Tab):
         QDesktopServices.openUrl(QUrl.fromLocalFile(filepath))
 
     def download_file(self):
-        download_folder = QDir(QStandardPaths.writableLocation(QStandardPaths.DownloadLocation))
+        download_folder = QDir(QStandardPaths.writableLocation(QStandardPaths.StandardLocation.DownloadLocation))
         filepath = download_folder.filePath(self.item.data())
 
         with open(filepath, "wb") as file:

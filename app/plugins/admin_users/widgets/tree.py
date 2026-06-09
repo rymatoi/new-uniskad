@@ -1,4 +1,4 @@
-from PySide2.QtCore import Qt, QModelIndex
+from PySide6.QtCore import Qt, QModelIndex
 
 from app import app_logger
 from app.plugins.admin_users.models import UserNode, ActiveFolder, InactiveFolder
@@ -28,7 +28,7 @@ class AdminUsersTreeView(TreeView):
     #         index = self.model().index(row, 0)
     #         if not index.internalPointer():
     #             continue
-    #         hidden = self.model().data(index, Qt.UserRole)
+    #         hidden = self.model().data(index, Qt.ItemDataRole.UserRole)
     #         if not self.HIDE_REMOVED_ITEMS:
     #             self.setItemVisibility(self.model(), index, False)
     #         else:

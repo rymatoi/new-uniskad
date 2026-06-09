@@ -1,8 +1,12 @@
 from typing import Any, Union, List, Dict, Set, Callable
+import warnings
 
 from app.plugins.project.visualization.widgets.curve import CurveItem
 import numpy as np
 import pyqtgraph as pg
+
+
+_UNSET = object()
 
 
 class PlotDataMixin:
@@ -20,7 +24,17 @@ class PlotDataMixin:
     constraints: dict
     param_constraints: list
 
-    def __init__(self, item, main_window):
+    def __init__(self, item=_UNSET, main_window=_UNSET):
+        # PySide6 may call the next Python class in the MRO while constructing
+        # the underlying Qt widget.  BasePlotView performs explicit mixin
+        # initialization with the real item/main_window immediately after the
+        # PlotWidget is created, so this cooperative no-argument call must not
+        # initialize data state or fail with a TypeError.
+        if item is _UNSET and main_window is _UNSET:
+            return
+        if item is _UNSET or main_window is _UNSET:
+            raise TypeError("PlotDataMixin requires both item and main_window")
+
         self._curve_items: List[CurveItem] = []
         self._item = item
         self.data_processor: Any = self.init_data_processor()
@@ -62,8 +76,32 @@ class PlotDataMixin:
         return curve
 
     def clear(self):
-        self.plotItem.clear()
-        self.plotItem.legend.clear()
+        """Clear plotted items and the application-side curve registries.
+
+        pyqtgraph 0.13.3 tries to disconnect a few already-disconnected Qt
+        signals while removing PlotDataItem children.  PySide6 reports those
+        harmless disconnect attempts as RuntimeWarning instead of raising the
+        exceptions pyqtgraph expects, so suppress only that known warning
+        during the clear operation.
+        """
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                message=r"Failed to disconnect .*",
+                category=RuntimeWarning,
+                module=r"pyqtgraph\.graphicsItems\.GraphicsItem",
+            )
+            self.plotItem.clear()
+
+        if self.plotItem.legend is not None:
+            self.plotItem.legend.clear()
+
+        self.curve_items.clear()
+        self.selected_points.clear()
+
+        curve_map = getattr(self.data_processor, 'curve_map', None)
+        if curve_map is not None:
+            curve_map.clear()
 
     def prepare_curves(self):
         pass

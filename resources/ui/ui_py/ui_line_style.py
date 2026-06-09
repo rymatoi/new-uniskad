@@ -8,9 +8,9 @@
 ## WARNING! All changes made in this file will be lost when recompiling UI file!
 ################################################################################
 
-from PySide2.QtCore import *
-from PySide2.QtGui import *
-from PySide2.QtWidgets import *
+from PySide6.QtCore import *
+from PySide6.QtGui import *
+from PySide6.QtWidgets import *
 
 from pyqtgraph import ColorButton
 from pyqtgraph import PlotWidget
@@ -28,11 +28,11 @@ class Ui_LineStyleDialog(object):
         self.horizontalLayout_3.setObjectName(u"horizontalLayout_3")
         self.form = QFormLayout()
         self.form.setObjectName(u"form")
-        self.form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
+        self.form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
         self.colorLabel = QLabel(LineStyleDialog)
         self.colorLabel.setObjectName(u"colorLabel")
 
-        self.form.setWidget(0, QFormLayout.LabelRole, self.colorLabel)
+        self.form.setWidget(0, QFormLayout.ItemRole.LabelRole, self.colorLabel)
 
         self.colorButton = ColorButton(LineStyleDialog)
         self.colorButton.setObjectName(u"colorButton")
@@ -40,50 +40,50 @@ class Ui_LineStyleDialog(object):
         self.colorButton.setStyleSheet(u"background-color: transparent;")
         self.colorButton.setAutoDefault(False)
 
-        self.form.setWidget(0, QFormLayout.FieldRole, self.colorButton)
+        self.form.setWidget(0, QFormLayout.ItemRole.FieldRole, self.colorButton)
 
         self.lineTypeLabel = QLabel(LineStyleDialog)
         self.lineTypeLabel.setObjectName(u"lineTypeLabel")
 
-        self.form.setWidget(1, QFormLayout.LabelRole, self.lineTypeLabel)
+        self.form.setWidget(1, QFormLayout.ItemRole.LabelRole, self.lineTypeLabel)
 
         self.lineType = QComboBox(LineStyleDialog)
         self.lineType.setObjectName(u"lineType")
         self.lineType.setMinimumSize(QSize(200, 0))
 
-        self.form.setWidget(1, QFormLayout.FieldRole, self.lineType)
+        self.form.setWidget(1, QFormLayout.ItemRole.FieldRole, self.lineType)
 
         self.thicknessLabel = QLabel(LineStyleDialog)
         self.thicknessLabel.setObjectName(u"thicknessLabel")
 
-        self.form.setWidget(2, QFormLayout.LabelRole, self.thicknessLabel)
+        self.form.setWidget(2, QFormLayout.ItemRole.LabelRole, self.thicknessLabel)
 
         self.thickness = QSpinBox(LineStyleDialog)
         self.thickness.setObjectName(u"thickness")
         self.thickness.setValue(1)
 
-        self.form.setWidget(2, QFormLayout.FieldRole, self.thickness)
+        self.form.setWidget(2, QFormLayout.ItemRole.FieldRole, self.thickness)
 
         self.pointTypeLabel = QLabel(LineStyleDialog)
         self.pointTypeLabel.setObjectName(u"pointTypeLabel")
 
-        self.form.setWidget(3, QFormLayout.LabelRole, self.pointTypeLabel)
+        self.form.setWidget(3, QFormLayout.ItemRole.LabelRole, self.pointTypeLabel)
 
         self.pointType = QComboBox(LineStyleDialog)
         self.pointType.setObjectName(u"pointType")
 
-        self.form.setWidget(3, QFormLayout.FieldRole, self.pointType)
+        self.form.setWidget(3, QFormLayout.ItemRole.FieldRole, self.pointType)
 
         self.pointSizeLabel = QLabel(LineStyleDialog)
         self.pointSizeLabel.setObjectName(u"pointSizeLabel")
 
-        self.form.setWidget(4, QFormLayout.LabelRole, self.pointSizeLabel)
+        self.form.setWidget(4, QFormLayout.ItemRole.LabelRole, self.pointSizeLabel)
 
         self.pointSizeSpinBox = QSpinBox(LineStyleDialog)
         self.pointSizeSpinBox.setObjectName(u"pointSizeSpinBox")
         self.pointSizeSpinBox.setValue(10)
 
-        self.form.setWidget(4, QFormLayout.FieldRole, self.pointSizeSpinBox)
+        self.form.setWidget(4, QFormLayout.ItemRole.FieldRole, self.pointSizeSpinBox)
 
         self.horizontalLayout_3.addLayout(self.form)
 
@@ -97,7 +97,7 @@ class Ui_LineStyleDialog(object):
 
         self.horizontalLayout_4 = QHBoxLayout()
         self.horizontalLayout_4.setObjectName(u"horizontalLayout_4")
-        self.horizontalSpacer = QSpacerItem(40, 20, QSizePolicy.Expanding, QSizePolicy.Minimum)
+        self.horizontalSpacer = QSpacerItem(40, 20, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
 
         self.horizontalLayout_4.addItem(self.horizontalSpacer)
 
@@ -107,7 +107,7 @@ class Ui_LineStyleDialog(object):
 
         self.horizontalLayout_4.addWidget(self.okButton)
 
-        self.horizontalSpacer_2 = QSpacerItem(40, 20, QSizePolicy.Expanding, QSizePolicy.Minimum)
+        self.horizontalSpacer_2 = QSpacerItem(40, 20, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
 
         self.horizontalLayout_4.addItem(self.horizontalSpacer_2)
 

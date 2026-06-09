@@ -1,5 +1,5 @@
-from PySide2.QtGui import QIcon
-from PySide2.QtCore import Qt
+from PySide6.QtGui import QIcon
+from PySide6.QtCore import Qt
 
 from db import sp
 from db.tables import PRODUCT

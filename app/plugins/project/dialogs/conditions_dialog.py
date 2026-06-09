@@ -1,14 +1,15 @@
-from PySide2.QtWidgets import *
+from PySide6.QtWidgets import *
 
 from app.basic_funcs import to_float
+from app.plugins.project.utils_ import qt_enum_value
 from app.plugins.base_state.widgets import ExtendedComboBox
 from db import sp
 from dialogs.base import BaseDialog
 from resources.ui.ui_py.ui_conditions_dialog import Ui_AddConditionsDialog
 
-from PySide2.QtCore import QSortFilterProxyModel, QModelIndex, QRegExp, Qt, QItemSelection
-from PySide2.QtGui import QColor
-from PySide2.QtWidgets import QDialogButtonBox
+from PySide6.QtCore import QSortFilterProxyModel, QModelIndex, QRegularExpression, Qt, QItemSelection
+from PySide6.QtGui import QColor
+from PySide6.QtWidgets import QDialogButtonBox
 
 from app.plugins.work_data.models import WorkDataTreeModel
 from db import sp
@@ -20,12 +21,12 @@ from resources.ui.ui_py.ui_select_test_dialog import Ui_SelectTestDialog
 
 class EditProjectItemDialog(BaseDialog):
     LINE_STYLES = [
-        (Qt.NoPen, 'Прозрачная'),
-        (Qt.SolidLine, 'Линия'),
-        (Qt.DashLine, 'Пунктирная линия'),
-        (Qt.DotLine, 'Линия из точек'),
-        (Qt.DashDotLine, 'Линия точка-тире'),
-        (Qt.DashDotDotLine, 'Линия точка-точка-тире'),
+        (Qt.PenStyle.NoPen, 'Прозрачная'),
+        (Qt.PenStyle.SolidLine, 'Линия'),
+        (Qt.PenStyle.DashLine, 'Пунктирная линия'),
+        (Qt.PenStyle.DotLine, 'Линия из точек'),
+        (Qt.PenStyle.DashDotLine, 'Линия точка-тире'),
+        (Qt.PenStyle.DashDotDotLine, 'Линия точка-точка-тире'),
     ]
 
     # Символьные константы, которые определяют тип отображения точки на графике
@@ -45,7 +46,7 @@ class EditProjectItemDialog(BaseDialog):
 
         self.example_plot = pg.PlotDataItem([0, 1], [0, 1])
 
-        self.setFocus(Qt.OtherFocusReason)
+        self.setFocus(Qt.FocusReason.OtherFocusReason)
         self.type_line_combo_box()  # вызов функций с инициаизаций полей выбора параметров линии
         self.type_point_combo_box()
         self.init_values(self.styles)  # задание отображаемого графика-примера
@@ -63,8 +64,8 @@ class EditProjectItemDialog(BaseDialog):
 
     def create_connections(self):
         """Создание привязок для обработки кнопок"""
-        self.ui.buttonBox.button(QDialogButtonBox.Ok).clicked.connect(self.accept)
-        self.ui.buttonBox.button(QDialogButtonBox.Ok).clicked.connect(self.close)
+        self.ui.buttonBox.button(QDialogButtonBox.StandardButton.Ok).clicked.connect(self.accept)
+        self.ui.buttonBox.button(QDialogButtonBox.StandardButton.Ok).clicked.connect(self.close)
         self.ui.colorButton.sigColorChanged.connect(self.refresh)
         self.ui.lineType.currentIndexChanged.connect(self.refresh)
         self.ui.thickness.valueChanged.connect(self.refresh)
@@ -75,7 +76,9 @@ class EditProjectItemDialog(BaseDialog):
         # TODO может быть сделать выгрузку значений по умолчанию здесь?
         self.ui.curveNameLineEdit.setText(self.styles.get('curve_name', ''))
         line_type_index = next(
-            i for i, (k, v) in enumerate(self.LINE_STYLES) if k == int(self.styles.get('curve_line_style', 1)))
+            i for i, (k, v) in enumerate(self.LINE_STYLES)
+            if qt_enum_value(k) == qt_enum_value(self.styles.get('curve_line_style', 1))
+        )
         point_type_index = next(
             i for i, (k, v) in enumerate(self.POINT_SYMBOLS) if k == self.styles.get('curve_point_symbol', 'o'))
         self.ui.colorButton.setColor(QColor(self.styles.get('curve_color', 'black')))  # Задаем цвет кривой
@@ -166,7 +169,7 @@ class ConditionWidget(QWidget):
 
     def edit_condition(self, num):
         dialog = EditProjectItemDialog(self)
-        if dialog.exec_():
+        if dialog.exec():
             pass
 
     def update(self):

@@ -4,10 +4,10 @@ import os
 from datetime import datetime
 
 import xlrd
-from PySide2.QtGui import QIcon
-from PySide2.QtWidgets import QInputDialog, QLineEdit, QMessageBox
-from PySide2.QtCore import QDir, Qt
-from PySide2.QtWidgets import QFileDialog
+from PySide6.QtGui import QIcon
+from PySide6.QtWidgets import QInputDialog, QLineEdit, QMessageBox
+from PySide6.QtCore import QDir, Qt
+from PySide6.QtWidgets import QFileDialog
 
 from dateutil import parser
 import re
@@ -74,16 +74,16 @@ def extract_date(cell_value):
 def get_text(title, label_text, default_text='', icon=":/uniskad.ico"):
     dialog = QInputDialog()
     dialog.setWindowIcon(QIcon(icon))
-    dialog.setInputMode(QInputDialog.TextInput)
+    dialog.setInputMode(QInputDialog.InputMode.TextInput)
     dialog.setOkButtonText("Ок")
     dialog.setCancelButtonText("Отмена")
     dialog.setWindowTitle(title)
     dialog.setLabelText(label_text)
     dialog.setTextValue(default_text)
-    dialog.setTextEchoMode(QLineEdit.Normal)
-    dialog.setWindowFlags(dialog.windowFlags() & ~Qt.WindowContextHelpButtonHint)
+    dialog.setTextEchoMode(QLineEdit.EchoMode.Normal)
+    dialog.setWindowFlags(dialog.windowFlags() & ~Qt.WindowType.WindowContextHelpButtonHint)
     dialog.resize(300, 100)
-    ok = dialog.exec_()
+    ok = dialog.exec()
     name = dialog.textValue()
     if ok and name:
         return name
@@ -106,27 +106,27 @@ def get_files(caption, filter, single_selection=False):
 
 def get_answer(title, text):
     msg = QMessageBox(None)
-    msg.setWindowFlags(msg.windowFlags() & ~Qt.WindowContextHelpButtonHint)
-    msg.setWindowFlag(Qt.WindowStaysOnTopHint)
+    msg.setWindowFlags(msg.windowFlags() & ~Qt.WindowType.WindowContextHelpButtonHint)
+    msg.setWindowFlag(Qt.WindowType.WindowStaysOnTopHint)
     msg.setWindowIcon(QIcon(":/uniskad.ico"))
-    reply = msg.warning(None, title, text, QMessageBox.Yes | QMessageBox.No, )
-    if reply == QMessageBox.Yes:
+    reply = msg.warning(None, title, text, QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, )
+    if reply == QMessageBox.StandardButton.Yes:
         return True
     return False
 
 
 def error(title, text):
     msg = QMessageBox(None)
-    msg.setWindowFlags(msg.windowFlags() & ~Qt.WindowContextHelpButtonHint)
-    msg.setWindowFlag(Qt.WindowStaysOnTopHint)
+    msg.setWindowFlags(msg.windowFlags() & ~Qt.WindowType.WindowContextHelpButtonHint)
+    msg.setWindowFlag(Qt.WindowType.WindowStaysOnTopHint)
     msg.setWindowIcon(QIcon(":/uniskad.ico"))
     reply = msg.critical(None, title, text)
 
 
 def info(title, text):
     msg = QMessageBox(None)
-    msg.setWindowFlags(msg.windowFlags() & ~Qt.WindowContextHelpButtonHint)
-    msg.setWindowFlag(Qt.WindowStaysOnTopHint)
+    msg.setWindowFlags(msg.windowFlags() & ~Qt.WindowType.WindowContextHelpButtonHint)
+    msg.setWindowFlag(Qt.WindowType.WindowStaysOnTopHint)
     msg.setWindowIcon(QIcon(":/uniskad.ico"))
     reply = msg.information(None, title, text)
 

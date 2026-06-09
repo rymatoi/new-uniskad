@@ -1,11 +1,12 @@
 import ast
 import json
 
-from PySide2.QtCore import Qt
-from PySide2.QtGui import QColor
-from PySide2.QtWidgets import *
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QColor
+from PySide6.QtWidgets import *
 
 from app.plugins.project import utils
+from app.plugins.project.utils_ import qt_enum_value
 from db import sp
 from dialogs.base import BaseDialog
 from resources.ui.ui_py.ui_edit_line import Ui_EditLineDialog
@@ -14,12 +15,12 @@ import pyqtgraph as pg
 
 class EditLineDialog(BaseDialog):
     LINE_STYLES = [
-        (Qt.NoPen, 'Прозрачная'),
-        (Qt.SolidLine, 'Линия'),
-        (Qt.DashLine, 'Пунктирная линия'),
-        (Qt.DotLine, 'Линия из точек'),
-        (Qt.DashDotLine, 'Линия точка-тире'),
-        (Qt.DashDotDotLine, 'Линия точка-точка-тире'),
+        (Qt.PenStyle.NoPen, 'Прозрачная'),
+        (Qt.PenStyle.SolidLine, 'Линия'),
+        (Qt.PenStyle.DashLine, 'Пунктирная линия'),
+        (Qt.PenStyle.DotLine, 'Линия из точек'),
+        (Qt.PenStyle.DashDotLine, 'Линия точка-тире'),
+        (Qt.PenStyle.DashDotDotLine, 'Линия точка-точка-тире'),
     ]
 
     def __init__(self, item, flags=None, *args, **kwargs):
@@ -30,7 +31,7 @@ class EditLineDialog(BaseDialog):
 
         self.example_plot = pg.PlotDataItem([0, 1], [0, 1])
 
-        self.setFocus(Qt.OtherFocusReason)
+        self.setFocus(Qt.FocusReason.OtherFocusReason)
         self.type_line_combo_box()  # вызов функций с инициаизаций полей выбора параметров линии
         self.type_point_combo_box()
         self.init_values(self.item)  # задание отображаемого графика-примера
@@ -48,8 +49,8 @@ class EditLineDialog(BaseDialog):
 
     def create_connections(self):
         """Создание привязок для обработки кнопок"""
-        self.ui.buttonBox.button(QDialogButtonBox.Ok).clicked.connect(self.accept_)
-        self.ui.buttonBox.button(QDialogButtonBox.Ok).clicked.connect(self.close)
+        self.ui.buttonBox.button(QDialogButtonBox.StandardButton.Ok).clicked.connect(self.accept_)
+        self.ui.buttonBox.button(QDialogButtonBox.StandardButton.Ok).clicked.connect(self.close)
         self.ui.colorButton.sigColorChanged.connect(self.refresh)
         self.ui.lineType.currentIndexChanged.connect(self.refresh)
         self.ui.thickness.valueChanged.connect(self.refresh)
@@ -91,7 +92,10 @@ class EditLineDialog(BaseDialog):
 
         # TODO может быть сделать выгрузку значений по умолчанию здесь?
         self.ui.curveNameLineEdit.setText(curve_name)
-        line_type_index = next(i for i, (k, v) in enumerate(utils.LINE_STYLES) if k == int(curve_line_style))
+        line_type_index = next(
+            i for i, (k, v) in enumerate(utils.LINE_STYLES)
+            if qt_enum_value(k) == qt_enum_value(curve_line_style)
+        )
         point_type_index = next(i for i, (k, v) in enumerate(utils.SYMBOLS) if k == curve_point_symbol)
         self.ui.colorButton.setColor(QColor(curve_color))  # Задаем цвет кривой
         self.ui.colorButton_3.setColor(QColor(curve_symbol_color))  # Задаем цвет кривой
@@ -145,7 +149,7 @@ class EditLineDialog(BaseDialog):
             ('curve_color', curve_color),
             ('curve_symbol_color', curve_symbol_color),
             ('curve_symbol_fill_color', curve_symbol_fill_color),
-            ('curve_line_style', int(curve_line_style)),
+            ('curve_line_style', qt_enum_value(curve_line_style)),
             ('curve_point_symbol', curve_point_symbol),
             ('curve_point_size', curve_point_size),
             ('curve_name', curve_name),

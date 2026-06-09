@@ -2,7 +2,7 @@ from typing import TYPE_CHECKING, cast, Any, Tuple, Dict, Callable, Optional
 
 import numpy as np
 import pyqtgraph as pg
-from PySide2.QtGui import QSurfaceFormat
+from PySide6.QtGui import QSurfaceFormat
 from pyqtgraph import PlotWidget
 
 from app.basic_funcs import to_bool

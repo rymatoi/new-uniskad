@@ -1,6 +1,6 @@
-from PySide2.QtCore import QSortFilterProxyModel, QModelIndex, QRegExp, Qt, QItemSelection
-from PySide2.QtGui import QIcon
-from PySide2.QtWidgets import QHeaderView
+from PySide6.QtCore import QSortFilterProxyModel, QModelIndex, QRegularExpression, Qt, QItemSelection
+from PySide6.QtGui import QIcon
+from PySide6.QtWidgets import QHeaderView
 
 from app.plugins.base_state.models import TreeModel, Node
 from db import sp
@@ -69,11 +69,9 @@ class TestDataSelectionDialog(BaseDialog):
         self.proxy = QSortFilterProxyModel(self)  # Выставление фильтрации
         self.proxy.setSourceModel(self.model)
         self.ui.treeView.setModel(self.proxy)  # загрузка полученного списка в виджет
-        self.model.font_name = self.mw.user_settings.get('font_name')
-        self.model.font_size = self.mw.user_settings.get('font_size')
         # self.ui.selectButton.setEnabled(
         #    False)  # делаем кнопку применения недоступной пока не выбран проект
-        # self.ui.treeView.header().setResizeMode(QHeaderView.ResizeToContents)  # Подгоняем колонки под контент
+        # self.ui.treeView.header().setResizeMode(QHeaderView.ResizeMode.ResizeToContents)  # Подгоняем колонки под контент
         self.create_connections()  # создаем привязки
 
     def create_connections(self):
@@ -99,16 +97,16 @@ class TestDataSelectionDialog(BaseDialog):
 
         self.accept()
 
-    def select_all(self):  # TODO проблема
+    def select_all(self):
         if not len(self.model.checked_list) == self.model.rowCount():
-            self.model.checkMultipleItems(self.model.get_root_elements(), Qt.Checked)
+            self.model.checkMultipleItems(self.model.get_root_elements(), Qt.CheckState.Checked)
         else:
-            self.model.checkMultipleItems(self.model.get_root_elements(), Qt.Unchecked)
+            self.model.checkMultipleItems(self.model.get_root_elements(), Qt.CheckState.Unchecked)
 
     def search_line_changed(self, text):
         """Изменение содержимого поисковой строки"""
-        search = QRegExp(text, Qt.CaseInsensitive, QRegExp.RegExp)
-        self.proxy.setFilterRegExp(search)  # Применяем регулярное выражение для фильтрации пользователей
+        search = QRegularExpression(text, QRegularExpression.PatternOption.CaseInsensitiveOption)
+        self.proxy.setFilterRegularExpression(search)  # Применяем регулярное выражение для фильтрации пользователей
 
     def cancel(self):
         """Обработка кнопки отмены """

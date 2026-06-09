@@ -1,4 +1,4 @@
-from PySide2.QtCore import QSortFilterProxyModel, QModelIndex, QRegExp, Qt, QItemSelection
+from PySide6.QtCore import QSortFilterProxyModel, QModelIndex, QRegularExpression, Qt, QItemSelection
 
 from app.plugins.admin_users.models import AdminUsersTreeModel
 from db import sp
@@ -24,7 +24,7 @@ class UserSelectionDialog(BaseDialog):
         self.ui.treeView.setModel(self.proxy)  # загрузка полученного списка в виджет
         self.ui.selectButton.setEnabled(
             False)  # делаем кнопку применения недоступной пока не выбран проект
-        # self.ui.treeView.header().setResizeMode(QHeaderView.ResizeToContents)  # Подгоняем колонки под контент
+        # self.ui.treeView.header().setResizeMode(QHeaderView.ResizeMode.ResizeToContents)  # Подгоняем колонки под контент
         self.create_connections()  # создаем привязки
 
     def create_connections(self):
@@ -47,8 +47,8 @@ class UserSelectionDialog(BaseDialog):
 
     def search_line_changed(self, text):
         """Изменение содержимого поисковой строки"""
-        search = QRegExp(text, Qt.CaseInsensitive, QRegExp.RegExp)
-        self.proxy.setFilterRegExp(search)  # Применяем регулярное выражение для фильтрации пользователей
+        search = QRegularExpression(text, QRegularExpression.PatternOption.CaseInsensitiveOption)
+        self.proxy.setFilterRegularExpression(search)  # Применяем регулярное выражение для фильтрации пользователей
 
     def cancel(self):
         """Обработка кнопки отмены """

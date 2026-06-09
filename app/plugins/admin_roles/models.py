@@ -1,4 +1,5 @@
-from PySide2.QtGui import QIcon, Qt
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QIcon
 
 from app.basic_funcs import info, error
 from app.plugins.admin_roles.dialogs.create_role import CreateRoleDialog
@@ -52,7 +53,7 @@ class RoleNode(RoleRootNode):
     @staticmethod
     def add(up_node_id, parent):
         dialog = CreateRoleDialog()
-        if dialog.exec_():
+        if dialog.exec():
             rolename, description = dialog.get_result()
             result = sp.new_upd_uniskadrole((PROG_ID, None, up_node_id, rolename, description, False, False))
             if result:
@@ -82,11 +83,15 @@ class ActionNode(Node):
         return 'action'
 
     def check(self, state):
-        self.checked = state
-        sp.grant_remove_role_menu_link(self._data.id_role, self._data.id, True if state else False)
+        super().check(state)
+        sp.grant_remove_role_menu_link(
+            self._data.id_role,
+            self._data.id,
+            self.checked == Qt.CheckState.Checked,
+        )
 
     def is_checked(self):
-        return self.checked
+        return super().is_checked()
 
     def data(self, column=0):
         return self._data.translation
@@ -106,15 +111,15 @@ class ModeNode(Node):
         return 'mode'
 
     def check(self, state):
-        self.checked = state
+        super().check(state)
 
     def is_checked(self):
         if len(self.checked_children_count()) == 0:
-            return Qt.Unchecked
+            return Qt.CheckState.Unchecked
         if len(self.checked_children_count()) == self.childCount():
-            return Qt.Checked
+            return Qt.CheckState.Checked
         else:
-            return Qt.PartiallyChecked
+            return Qt.CheckState.PartiallyChecked
 
     def data(self, column=0):
         return self._data.rejim_name_rus
@@ -131,15 +136,15 @@ class LocationNode(Node):
         return 'location'
 
     def check(self, state):
-        self.checked = state
+        super().check(state)
 
     def is_checked(self):
         if len(self.checked_children_count()) == 0:
-            return Qt.Unchecked
+            return Qt.CheckState.Unchecked
         if len(self.checked_children_count()) == self.childCount():
-            return Qt.Checked
+            return Qt.CheckState.Checked
         else:
-            return Qt.PartiallyChecked
+            return Qt.CheckState.PartiallyChecked
 
     def data(self, column=0):
         return self._data.translation

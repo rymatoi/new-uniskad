@@ -1,7 +1,7 @@
-from PySide2.QtWidgets import (
+from PySide6.QtWidgets import (
     QApplication, QDialog, QVBoxLayout, QFormLayout, QLineEdit, QPushButton, QHBoxLayout, QMessageBox, QCheckBox
 )
-from PySide2.QtGui import QDoubleValidator
+from PySide6.QtGui import QDoubleValidator
 
 
 class ExtrapolationDialog(QDialog):
@@ -27,7 +27,7 @@ class ExtrapolationDialog(QDialog):
 
         # Добавляем валидаторы
         double_validator = QDoubleValidator(self)
-        double_validator.setNotation(QDoubleValidator.StandardNotation)
+        double_validator.setNotation(QDoubleValidator.Notation.StandardNotation)
         double_validator.setDecimals(6)
         self.forward_input.setValidator(double_validator)
         self.backward_input.setValidator(double_validator)

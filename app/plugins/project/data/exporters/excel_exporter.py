@@ -8,8 +8,8 @@ from openpyxl.drawing.colors import ColorChoice
 from openpyxl.chart.marker import Marker
 from openpyxl.chart.shapes import GraphicalProperties
 from openpyxl.drawing.line import LineProperties
-from PySide2.QtGui import QColor
-from PySide2.QtCore import Qt
+from PySide6.QtGui import QColor
+from PySide6.QtCore import Qt
 
 from openpyxl.chart.axis import ChartLines
 from app.plugins.project.core.constants import GraphConstants
@@ -20,12 +20,12 @@ class PlotExcelExporter:
 
     # Маппинг типов линий Qt в типы линий Excel
     LINE_STYLE_MAP = {
-        Qt.NoPen: 'none',
-        Qt.SolidLine: 'solid',
-        Qt.DashLine: 'dash',
-        Qt.DotLine: 'dot',
-        Qt.DashDotLine: 'dashDot',
-        Qt.DashDotDotLine: 'sysDashDotDot',
+        Qt.PenStyle.NoPen: 'none',
+        Qt.PenStyle.SolidLine: 'solid',
+        Qt.PenStyle.DashLine: 'dash',
+        Qt.PenStyle.DotLine: 'dot',
+        Qt.PenStyle.DashDotLine: 'dashDot',
+        Qt.PenStyle.DashDotDotLine: 'sysDashDotDot',
     }
 
     def __init__(self):

@@ -1,6 +1,6 @@
 from copy import copy
 
-from PySide2.QtCore import QModelIndex
+from PySide6.QtCore import QModelIndex
 
 from app.basic_funcs import error
 from app.plugins.base_state.widgets import TreeView, Tab
@@ -62,7 +62,7 @@ class ParameterTab(Tab):
 
     def link_eizm(self):
         dialog = LinkEizmDialog(self.item, exclude=[item.id_eizm for item in self.tree_items])
-        if dialog.exec_():  # Если произошло изменение данных
+        if dialog.exec():  # Если произошло изменение данных
             success = sp.add_link_name_eizm_array(self.item._data.id_name,
                                                   [item._data.id_eizm for item in dialog.get_result()])
             if success:
@@ -106,7 +106,7 @@ class SynonymDictionaryTreeView(TreeView):
     def confirm(self, index):
         item = index.internalPointer()
         dialog = ParameterConfirmDialog(item)
-        if dialog.exec_():  # Если произошло изменение данных
+        if dialog.exec():  # Если произошло изменение данных
             self.model().confirm_parameter(dialog.current)
             self.model().remove_parameter(item)
 

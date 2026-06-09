@@ -1,5 +1,5 @@
 import numpy as np
-from PySide2.QtCore import Qt
+from PySide6.QtCore import Qt
 
 from app.plugins.project.core.constants import GraphConstants
 from app.plugins.project.visualization.widgets.legend_proxy import LegendProxyPlotDataItem
@@ -69,7 +69,7 @@ class EpureItem(pg.ItemGroup):
         }
 
         # Тип линии всегда сплошной и непрозрачный для читаемости
-        normalized['line_style'] = Qt.SolidLine
+        normalized['line_style'] = Qt.PenStyle.SolidLine
 
         return normalized
 
@@ -78,7 +78,7 @@ class EpureItem(pg.ItemGroup):
         legend_proxy.setVisible(True)
         legend_proxy.opts.update({
             'size': self._style_config.get('symbol_size', GraphConstants.DEFAULT_STYLE['symbol_size']),
-            'pen': pg.mkPen(color=self._style_config['color'], style=Qt.SolidLine,
+            'pen': pg.mkPen(color=self._style_config['color'], style=Qt.PenStyle.SolidLine,
                             width=self._style_config.get('width', GraphConstants.DEFAULT_STYLE['width'])),
             'brush': pg.mkBrush(self._style_config['fill_color']),
             'symbolPen': pg.mkPen(self._style_config.get('symbol_color', self._style_config['color']))
@@ -94,7 +94,7 @@ class EpureItem(pg.ItemGroup):
             pen=pg.mkPen(
                 color=self._style_config['color'],
                 width=self._style_config.get('width', 2),
-                style=Qt.SolidLine
+                style=Qt.PenStyle.SolidLine
             )
         )
         curve.setShadowPen(None)
@@ -159,7 +159,7 @@ class EpureItem(pg.ItemGroup):
         pen = pg.mkPen(
             color=self._style_config['color'],
             width=self._style_config.get('width', GraphConstants.DEFAULT_STYLE['width']),
-            style=Qt.SolidLine
+            style=Qt.PenStyle.SolidLine
         )
         self.curve.setPen(pen)
 
@@ -168,7 +168,7 @@ class EpureItem(pg.ItemGroup):
         self.legend_proxy.apply_style()
         self.legend_proxy.opts.update({
             'size': self._style_config.get('symbol_size', GraphConstants.DEFAULT_STYLE['symbol_size']),
-            'pen': pg.mkPen(color=self._style_config['color'], style=Qt.SolidLine,
+            'pen': pg.mkPen(color=self._style_config['color'], style=Qt.PenStyle.SolidLine,
                             width=self._style_config.get('width', GraphConstants.DEFAULT_STYLE['width'])),
             'brush': pg.mkBrush(self._style_config['fill_color']),
             'symbolPen': pg.mkPen(self._style_config.get('symbol_color', self._style_config['color']))

@@ -1,4 +1,4 @@
-from PySide2.QtCore import QModelIndex
+from PySide6.QtCore import QModelIndex
 
 from app.basic_funcs import error
 from app.plugins.admin_roles.models import AdminRolesTreeModel
@@ -79,7 +79,7 @@ class UserTab(Tab):
 
     def link_new_role(self):
         dialog = LinkRoleDialog(self.item, exclude=[item.rolename for item in self.user_roles])
-        if dialog.exec_():  # Если произошло изменение данных
+        if dialog.exec():  # Если произошло изменение данных
             if res := dialog.get_result():
                 self.ui.treeView_.insertRows(res, QModelIndex())
 

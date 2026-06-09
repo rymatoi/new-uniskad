@@ -1,8 +1,8 @@
 from typing import Any
 
-from PySide2 import QtWidgets
-from PySide2.QtCore import Qt
-from PySide2.QtGui import QIcon
+from PySide6 import QtWidgets
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QIcon
 
 
 class BaseDialog(QtWidgets.QDialog):
@@ -11,7 +11,7 @@ class BaseDialog(QtWidgets.QDialog):
         self.res = None  # Данные, возвращаемые из диалога
         self.setWindowIcon(QIcon(":/uniskad.ico"))
         if not flags:
-            flags = self.windowFlags() & ~Qt.WindowContextHelpButtonHint
+            flags = self.windowFlags() & ~Qt.WindowType.WindowContextHelpButtonHint
             self.setWindowFlags(flags)
 
     def get_result(self) -> Any:

@@ -1,7 +1,7 @@
 from typing import Any, Optional, TypeVar, List, Dict, Set, Callable
 import numpy as np
 import pyqtgraph as pg
-from PySide2.QtCore import Qt, QPointF
+from PySide6.QtCore import Qt, QPointF
 
 PlotWidgetType = TypeVar('PlotWidgetType', bound='pg.PlotWidget')
 
@@ -15,7 +15,7 @@ class RulerInstance:
         self.line = pg.InfiniteLine(
             angle=90,
             movable=True,
-            pen=pg.mkPen((255, 0, 0), width=2, style=Qt.SolidLine),
+            pen=pg.mkPen((255, 0, 0), width=2, style=Qt.PenStyle.SolidLine),
         )
 
         self.label = pg.InfLineLabel(
@@ -113,8 +113,8 @@ class PlotRulerMixin:
             ruler.delta_line.setZValue(100)
             
             # Явно устанавливаем цвет и толщину для лучшей видимости
-            ruler.line.setPen(pg.mkPen((255, 0, 0), width=2, style=Qt.SolidLine))
-            ruler.delta_line.setPen(pg.mkPen((255, 0, 0), width=2, style=Qt.SolidLine))
+            ruler.line.setPen(pg.mkPen((255, 0, 0), width=2, style=Qt.PenStyle.SolidLine))
+            ruler.delta_line.setPen(pg.mkPen((255, 0, 0), width=2, style=Qt.PenStyle.SolidLine))
             
             # Добавляем элементы на график
             self.addItem(ruler.line, ignoreBounds=True)
@@ -274,7 +274,7 @@ class PlotRulerMixin:
 
         # Обновляем линию с дельтой
         ruler.delta_line.setData([x_pos, x_pos], [y1, y2], symbolSize=10)
-        ruler.delta_line.setPen(pg.mkPen(color=(255, 0, 0), width=2, style=Qt.SolidLine))
+        ruler.delta_line.setPen(pg.mkPen(color=(255, 0, 0), width=2, style=Qt.PenStyle.SolidLine))
         
         # Явно устанавливаем видимость
         ruler.delta_line.setVisible(True)
@@ -484,8 +484,8 @@ class PlotRulerMixin:
             print(f"Ошибка при удалении линейки {ruler_id}: {e}")
             
         # Установка стиля
-        ruler.line.setPen(pg.mkPen((255, 0, 0), width=2, style=Qt.SolidLine))
-        ruler.delta_line.setPen(pg.mkPen((255, 0, 0), width=2, style=Qt.SolidLine))
+        ruler.line.setPen(pg.mkPen((255, 0, 0), width=2, style=Qt.PenStyle.SolidLine))
+        ruler.delta_line.setPen(pg.mkPen((255, 0, 0), width=2, style=Qt.PenStyle.SolidLine))
         
         # Установка высокого z-индекса
         ruler.line.setZValue(1000)

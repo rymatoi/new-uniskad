@@ -1,7 +1,7 @@
-import PySide2
+import PySide6
 import pyqtgraph as pg
-from PySide2.QtCore import QPointF, Qt
-from PySide2.QtWidgets import QGraphicsItem
+from PySide6.QtCore import QPointF, Qt
+from PySide6.QtWidgets import QGraphicsItem
 from typing import Any, Callable
 
 from pyqtgraph import PlotWidget
@@ -246,7 +246,7 @@ class PlotInteractionMixin:
         и увеличенным размером.
         """
         # Проверяем, что это левый клик мыши
-        if evt[0].button() != Qt.LeftButton:
+        if evt[0].button() != Qt.MouseButton.LeftButton:
             return
 
         pos = evt[0].scenePos()

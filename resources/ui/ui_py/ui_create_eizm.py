@@ -8,9 +8,9 @@
 ## WARNING! All changes made in this file will be lost when recompiling UI file!
 ################################################################################
 
-from PySide2.QtCore import *
-from PySide2.QtGui import *
-from PySide2.QtWidgets import *
+from PySide6.QtCore import *
+from PySide6.QtGui import *
+from PySide6.QtWidgets import *
 
 
 class Ui_CreateEizmDialog(object):
@@ -27,39 +27,39 @@ class Ui_CreateEizmDialog(object):
         self.nameLabel = QLabel(CreateEizmDialog)
         self.nameLabel.setObjectName(u"nameLabel")
 
-        self.formLayout.setWidget(0, QFormLayout.LabelRole, self.nameLabel)
+        self.formLayout.setWidget(0, QFormLayout.ItemRole.LabelRole, self.nameLabel)
 
         self.shortnameLabel = QLabel(CreateEizmDialog)
         self.shortnameLabel.setObjectName(u"shortnameLabel")
 
-        self.formLayout.setWidget(1, QFormLayout.LabelRole, self.shortnameLabel)
+        self.formLayout.setWidget(1, QFormLayout.ItemRole.LabelRole, self.shortnameLabel)
 
         self.descriptionLabel = QLabel(CreateEizmDialog)
         self.descriptionLabel.setObjectName(u"descriptionLabel")
 
-        self.formLayout.setWidget(2, QFormLayout.LabelRole, self.descriptionLabel)
+        self.formLayout.setWidget(2, QFormLayout.ItemRole.LabelRole, self.descriptionLabel)
 
         self.lineEdit = QLineEdit(CreateEizmDialog)
         self.lineEdit.setObjectName(u"lineEdit")
 
-        self.formLayout.setWidget(0, QFormLayout.FieldRole, self.lineEdit)
+        self.formLayout.setWidget(0, QFormLayout.ItemRole.FieldRole, self.lineEdit)
 
         self.lineEdit_2 = QLineEdit(CreateEizmDialog)
         self.lineEdit_2.setObjectName(u"lineEdit_2")
 
-        self.formLayout.setWidget(1, QFormLayout.FieldRole, self.lineEdit_2)
+        self.formLayout.setWidget(1, QFormLayout.ItemRole.FieldRole, self.lineEdit_2)
 
         self.plainTextEdit = QPlainTextEdit(CreateEizmDialog)
         self.plainTextEdit.setObjectName(u"plainTextEdit")
 
-        self.formLayout.setWidget(2, QFormLayout.FieldRole, self.plainTextEdit)
+        self.formLayout.setWidget(2, QFormLayout.ItemRole.FieldRole, self.plainTextEdit)
 
         self.verticalLayout.addLayout(self.formLayout)
 
         self.buttonBox = QDialogButtonBox(CreateEizmDialog)
         self.buttonBox.setObjectName(u"buttonBox")
-        self.buttonBox.setOrientation(Qt.Horizontal)
-        self.buttonBox.setStandardButtons(QDialogButtonBox.Cancel | QDialogButtonBox.Ok)
+        self.buttonBox.setOrientation(Qt.Orientation.Horizontal)
+        self.buttonBox.setStandardButtons(QDialogButtonBox.StandardButton.Cancel | QDialogButtonBox.StandardButton.Ok)
 
         self.verticalLayout.addWidget(self.buttonBox)
 

@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 
-from PySide2.QtCore import *
-from PySide2.QtGui import *
-from PySide2.QtWidgets import *
+from PySide6.QtCore import *
+from PySide6.QtGui import *
+from PySide6.QtWidgets import *
 
 
 class Ui_CreateEpureDialog(object):
@@ -15,16 +15,16 @@ class Ui_CreateEpureDialog(object):
         self.mainLayout.setObjectName(u"mainLayout")
         self.headerFormLayout = QFormLayout()
         self.headerFormLayout.setObjectName(u"headerFormLayout")
-        self.headerFormLayout.setFieldGrowthPolicy(QFormLayout.ExpandingFieldsGrow)
+        self.headerFormLayout.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
         self.label_4 = QLabel(CreateEpureDialog)
         self.label_4.setObjectName(u"label_4")
 
-        self.headerFormLayout.setWidget(0, QFormLayout.LabelRole, self.label_4)
+        self.headerFormLayout.setWidget(0, QFormLayout.ItemRole.LabelRole, self.label_4)
 
         self.nameLineEdit = QLineEdit(CreateEpureDialog)
         self.nameLineEdit.setObjectName(u"nameLineEdit")
 
-        self.headerFormLayout.setWidget(0, QFormLayout.FieldRole, self.nameLineEdit)
+        self.headerFormLayout.setWidget(0, QFormLayout.ItemRole.FieldRole, self.nameLineEdit)
 
         self.mainLayout.addLayout(self.headerFormLayout)
 
@@ -49,8 +49,8 @@ class Ui_CreateEpureDialog(object):
         self.paramsTreeView.setAlternatingRowColors(True)
         self.paramsTreeView.setRootIsDecorated(False)
         self.paramsTreeView.setHeaderHidden(True)
-        self.paramsTreeView.setSelectionBehavior(QAbstractItemView.SelectRows)
-        self.paramsTreeView.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.paramsTreeView.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self.paramsTreeView.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
 
         self.axisLayout.addWidget(self.paramsTreeView)
 
@@ -66,7 +66,7 @@ class Ui_CreateEpureDialog(object):
 
         self.axisButtonsLayout.addWidget(self.removeParamPushButton)
 
-        self.axisButtonsSpacer = QSpacerItem(40, 20, QSizePolicy.Expanding, QSizePolicy.Minimum)
+        self.axisButtonsSpacer = QSpacerItem(40, 20, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
 
         self.axisButtonsLayout.addItem(self.axisButtonsSpacer)
 
@@ -108,7 +108,7 @@ class Ui_CreateEpureDialog(object):
 
         self.footerLayout.addWidget(self.oySetupPushButton)
 
-        self.footerSpacer = QSpacerItem(40, 20, QSizePolicy.Expanding, QSizePolicy.Minimum)
+        self.footerSpacer = QSpacerItem(40, 20, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
 
         self.footerLayout.addItem(self.footerSpacer)
 

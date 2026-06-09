@@ -1,6 +1,6 @@
 import ast
 import re
-from PySide2.QtWidgets import QTreeWidgetItem, QDialog, QTreeWidgetItemIterator
+from PySide6.QtWidgets import QTreeWidgetItem, QDialog, QTreeWidgetItemIterator
 from app import basic_funcs
 from app.plugins.base_state.dialogs.edit_user_formula import EditUserFormulaDialog
 from app.plugins.project import utils
@@ -127,7 +127,7 @@ class ManageUserFormulasDialog(BaseDialog):
         if selected_items:
             item = selected_items[0]
             dialog = EditUserFormulaDialog(item, self, self.mw)
-            if dialog.exec_():  # Если произошло изменение данных
+            if dialog.exec():  # Если произошло изменение данных
                 arg_list, formula, name = dialog.get_result()
                 self.render_formula(arg_list, formula, item)
                 item.need_update = True
@@ -164,4 +164,4 @@ class ManageUserFormulasDialog(BaseDialog):
     @classmethod
     def modal(cls, parent=None):
         wnd = cls(parent)
-        return wnd.exec_()
+        return wnd.exec()
