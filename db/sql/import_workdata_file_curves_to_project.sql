@@ -35,11 +35,17 @@ DECLARE
     v_inserted_rows integer;
     v_stats record;
 BEGIN
-    WITH source_data AS MATERIALIZED (
+    WITH selected_names AS MATERIALIZED (
+        SELECT DISTINCT unnest(p_curve_names)::varchar AS excel_param_name
+    ), source_data AS MATERIALIZED (
         SELECT data.*
         FROM sc_ref.get_import_file_data2(p_id_excel_file, p_file_version) AS data
-        WHERE data.excel_param_name = ANY(p_curve_names)
-           OR data.excel_param_name IS NULL
+        WHERE data.excel_param_name IS NULL
+           OR EXISTS (
+               SELECT 1
+               FROM selected_names sn
+               WHERE sn.excel_param_name = data.excel_param_name
+           )
     ), project_rows AS (
         -- Copy every selected source record unchanged.  Null excel_param_name +
         -- non-null date_time_izm is the ProjectTableModel column key; selected
