@@ -163,7 +163,13 @@ class TreeView(QTreeView):
         model.set_view(self)
         self.setColumnWidth(0, 320)
         if self.HIDE_REMOVED_ITEMS:
-            QTimer.singleShot(0, self._refresh_removed_items_if_enabled)
+            if getattr(model, 'has_deleted_nodes', True):
+                QTimer.singleShot(0, self._refresh_removed_items_if_enabled)
+            else:
+                logger.info(
+                    'TreeView refresh skipped: no deleted nodes, nodes=%s',
+                    self._tree_node_count(model),
+                )
         self._reset_tree_state()
         try:
             model.modelReset.connect(self._apply_pending_state)
