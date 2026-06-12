@@ -677,3 +677,12 @@ class Session:
             login,
             auth_manually,
         )
+
+    def logout(self):
+        """Clear local authorization state without closing the reusable DB connection."""
+        logger.info("Logout started")
+        self._login = None
+        self._password = None
+        self.main_window = None
+        self._clear_menu_cache('user logged out')
+        logger.info("Logout completed")

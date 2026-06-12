@@ -58,12 +58,34 @@ class LoginDialog(BaseDialog):
             self.show_info_message(False, "")
             success = sp.checkuserpassword(username, password)
             if not isinstance(success, RaiseError) and success:
+                try:
+                    blocked = self._current_user_is_blocked(username)
+                except Exception:
+                    logger.exception('Failed to validate authenticated user status: login=%s', username)
+                    session.logout()
+                    self.show_error('Не удалось проверить состояние пользователя. Обратитесь к администратору.')
+                    return
+                if blocked:
+                    logger.warning('Blocked user login denied: login=%s', username)
+                    session.logout()
+                    self.show_error('Пользователь заблокирован. Обратитесь к администратору.')
+                    return
                 logger.info('Авторизация прошла успешно.')
                 self.accept()
             else:
                 if 'Неверный пароль' in str(success):
                     sp.reduce_user_fail_count(username)
                 self.show_error(str(success))
+
+    @staticmethod
+    def _current_user_is_blocked(username):
+        """Return whether the authenticated user is inactive or marked as deleted/blocked."""
+        users = sp.get_full_users_list()
+        user = next((item for item in users if item.login == username), None)
+        if user is None:
+            logger.warning('Authenticated user is absent from get_full_users_list: login=%s', username)
+            return True
+        return not bool(user.active) or bool(user.deleted)
 
     def show_info_message(self, visible: bool, error):
         self.ui.messageBox.setVisible(visible)

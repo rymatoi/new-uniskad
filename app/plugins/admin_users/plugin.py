@@ -20,6 +20,10 @@ class AdminUsersPlugin(BasePlugin):
 
         model = AdminUsersTreeModel()
         users = sp.get_full_users_list()
+        logger.info(
+            'User info loaded for administration: users=%s, displayed_fields=%s',
+            len(users), len(model.headers),
+        )
 
         # activeFolder = User({'id': -10, 'id_up': 0, 'type_': 'active_folder', 'deleted': False})
         # inactiveFolder = User({'id': -20, 'id_up': 0, 'type_': 'inactive_folder', 'deleted': False})
@@ -29,6 +33,8 @@ class AdminUsersPlugin(BasePlugin):
         self.users_treeview = AdminUsersTreeView(self._parent, main_window=self._parent)
         self.users_treeview.setModel(model)
         self.users_treeview.setSelectionMode(QTreeView.SingleSelection)
+        self.users_treeview.setColumnWidth(0, 220)
+        self.users_treeview.setColumnWidth(1, 160)
 
         # self.users_treeview.add_folders(True)
         # self.users_treeview.sort_items_to_folders(True)
