@@ -3,6 +3,7 @@ import re
 from collections.abc import Iterable
 from copy import copy
 from datetime import datetime
+from time import perf_counter
 
 from PySide2 import QtCore, QtWidgets
 from PySide2.QtCore import Qt, QSortFilterProxyModel, QSize, QLocale, QTimer, QPersistentModelIndex, QModelIndex, \
@@ -101,7 +102,7 @@ class TreeView(QTreeView):
         self.setDragEnabled(True)  # включаем Drag
         self.setAcceptDrops(True)  # включаем Drop
         self.setDropIndicatorShown(True)  # включаем индикатор, указывающий допустимость перемещения элемента
-        self.setAnimated(True)
+        self.setAnimated(False)
 
         self.available_actions = []
         self._parent = parent
@@ -156,11 +157,13 @@ class TreeView(QTreeView):
         self._link_dict = link_dict
 
     def setModel(self, model: QtCore.QAbstractItemModel) -> None:
+        started = perf_counter()
         super(TreeView, self).setModel(model)
         self.clear_pending_save()
         model.set_view(self)
-        self.resizeColumnToContents(0)
-        self.refresh()
+        self.setColumnWidth(0, 320)
+        if self.HIDE_REMOVED_ITEMS:
+            QTimer.singleShot(0, self._refresh_removed_items_if_enabled)
         self._reset_tree_state()
         try:
             model.modelReset.connect(self._apply_pending_state)
@@ -175,6 +178,17 @@ class TreeView(QTreeView):
         except TypeError:
             pass
         self._apply_pending_state()
+        logger.info(
+            'TreeView setModel completed: nodes=%s, elapsed=%.3fs',
+            self._tree_node_count(model), perf_counter() - started,
+        )
+
+    @staticmethod
+    def _tree_node_count(model):
+        node_count = getattr(model, '_node_count', None)
+        if node_count is not None:
+            return node_count
+        return model.rowCount() if model is not None else 0
 
     def _reset_tree_state(self):
         self._search_text = ''
@@ -306,6 +320,7 @@ class TreeView(QTreeView):
         if model is None:
             return False
 
+        started = perf_counter()
         state = self._pending_restore_state
 
         needs_nodes = bool(state.get('expanded') or state.get('selected') or state.get('open_tabs') or
@@ -374,8 +389,8 @@ class TreeView(QTreeView):
         finally:
             self._restoring_tabs = previous_flag
         logger.info(
-            'Tree UI state restore completed: restored_tabs=%s, skipped_permission=%s',
-            restored_tabs, skipped_tabs_permission,
+            'Tree UI state restore completed: restored_tabs=%s, skipped_permission=%s, elapsed=%.3fs',
+            restored_tabs, skipped_tabs_permission, perf_counter() - started,
         )
 
         if active_identifier:
@@ -438,24 +453,36 @@ class TreeView(QTreeView):
         if identifier and self._active_tab_identifier == str(identifier):
             self._active_tab_identifier = None
 
+    def _refresh_removed_items_if_enabled(self):
+        if self.HIDE_REMOVED_ITEMS:
+            self.refresh()
+
     def refresh(self):
-        for row in range(self.model().rowCount()):
-            index = self.model().index(row, 0)
-            hidden = self.model().data(index, Qt.UserRole)
+        model = self.model()
+        if model is None:
+            return
+        started = perf_counter()
+        hidden_rows = 0
+        for row in range(model.rowCount()):
+            index = model.index(row, 0)
+            hidden = model.data(index, Qt.UserRole)
             if not self.HIDE_REMOVED_ITEMS:
-                self.setItemVisibility(self.model(), index, False)
+                hidden_rows += self.setItemVisibility(model, index, False)
             else:
-                self.setItemVisibility(self.model(), index, hidden)
+                hidden_rows += self.setItemVisibility(model, index, hidden)
+        logger.info('TreeView refresh completed: hidden_rows=%s, elapsed=%.3fs', hidden_rows, perf_counter() - started)
 
     def setItemVisibility(self, model, index, hidden):
         self.setRowHidden(index.row(), index.parent(), hidden)
+        hidden_rows = int(bool(hidden))
         for i in range(model.rowCount(index)):
             childIndex = model.index(i, 0, index)
             hidden = model.data(childIndex, Qt.UserRole)
             if not self.HIDE_REMOVED_ITEMS:
-                self.setItemVisibility(model, childIndex, False)
+                hidden_rows += self.setItemVisibility(model, childIndex, False)
             else:
-                self.setItemVisibility(model, childIndex, hidden)
+                hidden_rows += self.setItemVisibility(model, childIndex, hidden)
+        return hidden_rows
 
     def _index_sort_key(self, index):
         path = []
@@ -889,6 +916,7 @@ class TreeView(QTreeView):
             return (0 if child.is_folder() else 1, str(name).casefold())
 
         children.sort(key=sort_key, reverse=not ascending)
+        node._reindex_children()
         for child in children:
             self._sort_node(child, ascending)
 
@@ -900,6 +928,7 @@ class TreeView(QTreeView):
         if order_ids:
             index_map = {child_id: position for position, child_id in enumerate(order_ids)}
             children.sort(key=lambda child: index_map.get(id(child), len(order_ids)))
+            node._reindex_children()
         for child in children:
             self._restore_sort_snapshot(child, snapshot)
 

@@ -1,13 +1,18 @@
 from collections import defaultdict
 from copy import copy
 from typing import List
+from time import perf_counter
 import PySide2
 from PySide2.QtCore import QAbstractItemModel, QPointF, Signal, QPersistentModelIndex
 from PySide2.QtGui import QIcon, QColor, QPainter, QPen, QPixmap
 
+from app import app_logger
 from app.ui_font import explicit_format_font
 
 from PySide2.QtCore import Qt, QModelIndex
+
+
+logger = app_logger.get_logger(__name__)
 
 
 ANY_CHILD_TYPE = 'any'
@@ -27,6 +32,7 @@ class Node(object):
         self._data = data
         self._parent = None
         self._children = []
+        self._row = 0
 
         self.obj_list = []
 
@@ -122,24 +128,31 @@ class Node(object):
             return self._children[row]
 
     def row(self):
-        if self._parent:
-            return self._parent._children.index(self)
-        return 0
+        return self._row
+
+    def _reindex_children(self, start=0):
+        """Обновляет сохранённые номера строк только у детей этого узла."""
+        for row in range(max(0, start), len(self._children)):
+            self._children[row]._row = row
 
     def insertChildren(self, position, items):
         for item in items:
             item._parent = self
             self._children.insert(position, item)
+        self._reindex_children(position)
 
     def addChild(self, child):
         child._parent = self
+        child._row = len(self._children)
         self._children.append(child)
 
     def removeChild(self, row: int):
         """Удалить дочерний элемент по его номеру"""
         try:
-            self._children[row]._parent = None
-            self._children.pop(row)
+            child = self._children.pop(row)
+            child._parent = None
+            child._row = 0
+            self._reindex_children(row)
         except IndexError:
             pass
 
@@ -225,6 +238,7 @@ class TreeModel(QAbstractItemModel):
         self.view = None
         self.parent_widget = parent_widget
         self._root = Node(None)
+        self._node_count = 0
         self.action_types = {}  # словарь предназначен для хранения действий над дочерними элементами узлов
         self.self_action_types = {}  # словарь предназначен для хранения действий нам самими узлами
         self.item_types = {  # связь типов элементов с классами в программе
@@ -362,6 +376,7 @@ class TreeModel(QAbstractItemModel):
         """
         Инициализация дерева: подготавливает данные и вызывает построение дерева.
         """
+        started = perf_counter()
         self.display_prop = display_prop
         self._setup_props(nodes)
 
@@ -369,11 +384,13 @@ class TreeModel(QAbstractItemModel):
         children_dict = self.preprocess_nodes(nodes)
 
         # Запуск построения дерева
-        self.__ini_tree(children_dict, self.root_id, self._root)
+        node_count = self.__ini_tree(children_dict, self.root_id, self._root)
+        self._node_count = node_count
+        logger.info('TreeModel initialized: nodes=%s, elapsed=%.3fs', node_count, perf_counter() - started)
 
     def custom_ini_tree(self, nodes, root_id, root_item, root_item_index=None):
         children_dict = self.preprocess_nodes(nodes)
-        self.__ini_tree(children_dict, root_id, root_item, root_item_index)
+        self._node_count += self.__ini_tree(children_dict, root_id, root_item, root_item_index)
 
     def __ini_tree(self, children_dict, root_id, root_item, root_item_index=None):
         """
@@ -381,6 +398,7 @@ class TreeModel(QAbstractItemModel):
         """
         # Стек для обхода узлов (каждый элемент: текущий узел, родительский элемент дерева и индекс)
         stack = [(root_id, root_item, root_item_index)]
+        node_count = 0
 
         # Итеративное построение дерева
         while stack:
@@ -394,6 +412,7 @@ class TreeModel(QAbstractItemModel):
 
                 # Создаем элемент узла
                 element_item = self.item_types.get(node.type_, self.item_types['root'])(node)
+                node_count += 1
 
                 # Добавляем элемент в дерево
                 if parent_index is not None:
@@ -409,6 +428,8 @@ class TreeModel(QAbstractItemModel):
 
                 # Добавляем дочерние элементы в стек для дальнейшей обработки
                 stack.append((node.id, element_item, None))  # Индекс для детей не используется
+
+        return node_count
 
     # def ini_tree(self, nodes, display_prop='name'):
     #     """
