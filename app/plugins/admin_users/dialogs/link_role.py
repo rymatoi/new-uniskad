@@ -1,8 +1,11 @@
+from time import perf_counter
+
 from PySide2.QtCore import QSortFilterProxyModel, QModelIndex, QRegExp, Qt, QItemSelection, QSize
 from PySide2.QtGui import QIcon
-from PySide2.QtWidgets import QDialogButtonBox
+from PySide2.QtWidgets import QDialogButtonBox, QPushButton
 
 from app.plugins.admin_roles.models import AdminRolesTreeModel
+from app.plugins.base_state.selection_helpers import apply_filter, log_initialized, set_visible_checked
 from app.plugins.eizm_dictionary.models import EizmDictionaryTreeModel
 from db import sp
 from dialogs.base import BaseDialog
@@ -15,9 +18,14 @@ class LinkRoleDialog(BaseDialog):
     def __init__(self, current, exclude=None, flags=None, *args, **kwargs):
         if exclude is None:
             exclude = []
+        started = perf_counter()
         super().__init__(flags, *args, **kwargs)
         self.ui = Ui_LinkRoleDialog()
         self.ui.setupUi(self)
+        self.selectAllButton = QPushButton('Выбрать все', self)
+        self.clearAllButton = QPushButton('Снять все', self)
+        self.ui.buttonBox.addButton(self.selectAllButton, QDialogButtonBox.ActionRole)
+        self.ui.buttonBox.addButton(self.clearAllButton, QDialogButtonBox.ActionRole)
         self.current = current
         roles = [role for role in sp.get_roles() if
                  role.rolename not in exclude]
@@ -34,6 +42,7 @@ class LinkRoleDialog(BaseDialog):
         # self.ui.treeView.header().setResizeMode(QHeaderView.ResizeToContents)  # Подгоняем колонки под контент
         self.setWindowIcon(QIcon(":/uniskad.ico"))
         self.create_connections()  # создаем привязки
+        log_initialized(self, len(roles), started)
 
     def create_connections(self):
         """Создание привязок для обработки кнопок"""
@@ -41,6 +50,8 @@ class LinkRoleDialog(BaseDialog):
         self.ui.buttonBox.button(QDialogButtonBox.Cancel).clicked.connect(self.cancel)
         self.ui.lineEdit.textChanged.connect(self.search_line_changed)
         self.ui.treeView.doubleClicked.connect(self.select_item)
+        self.selectAllButton.clicked.connect(self.select_all)
+        self.clearAllButton.clicked.connect(self.clear_all)
         # self.ui.treeView.selectionModel().selectionChanged.connect(self.change_selected_item)
 
     def source_index(self, index: QModelIndex):
@@ -57,10 +68,19 @@ class LinkRoleDialog(BaseDialog):
         self.res = selected_roles
         self.accept()
 
+    def select_all(self):
+        set_visible_checked(self, Qt.Checked, 'select_all')
+
+    def clear_all(self):
+        set_visible_checked(self, Qt.Unchecked, 'clear_all')
+
     def search_line_changed(self, text):
         """Изменение содержимого поисковой строки"""
-        search = QRegExp(text, Qt.CaseInsensitive, QRegExp.RegExp)
-        self.proxy.setFilterRegExp(search)  # Применяем регулярное выражение для фильтрации пользователей
+        apply_filter(self, text)
+
+    @staticmethod
+    def _selection_filter(text):
+        return QRegExp(text, Qt.CaseInsensitive, QRegExp.RegExp)
 
     def cancel(self):
         """Обработка кнопки отмены """
