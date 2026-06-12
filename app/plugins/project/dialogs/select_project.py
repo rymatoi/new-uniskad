@@ -75,8 +75,8 @@ class ProjectSelectionDialog(BaseDialog):
         self.search_mode = 'name'
         self.create_connections()  # создаем привязки
         self.auto_open_id = auto_open_id
-        self.personal_tree.resizeColumnToContents(0)
-        self.shared_tree.resizeColumnToContents(0)
+        self.personal_tree.setColumnWidth(0, 320)
+        self.shared_tree.setColumnWidth(0, 320)
 
         self.sort_by_date_button.hide()
         # Создаем новую кнопку сортировки
@@ -295,8 +295,8 @@ class ProjectSelectionDialog(BaseDialog):
         for tree in [self.personal_tree, self.shared_tree]:
             search_tree(tree)
 
-        self.personal_tree.resizeColumnToContents(0)
-        self.shared_tree.resizeColumnToContents(0)
+        self.personal_tree.setColumnWidth(0, 320)
+        self.shared_tree.setColumnWidth(0, 320)
 
         self.ui.othersProjectsTreeWidget.itemChanged.connect(self.on_item_changed)
         self.ui.ownProjectsTreeWidget.itemChanged.connect(self.on_item_changed)
