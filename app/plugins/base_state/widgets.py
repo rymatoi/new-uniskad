@@ -1151,27 +1151,48 @@ class TreeView(QTreeView):
         logger.info(f'Добавление элемента типа "{type_}".')
         up_node_id = parent._data.id if parent._data else self.model().root_id
         node_type = self.model().item_types.get(type_, 'node')
-        item = node_type.add(up_node_id, parent)
-        self._add_item(item, index, up_node_id, parent)
+        try:
+            item = node_type.add(up_node_id, parent)
+        except Exception as exc:
+            logger.exception('Ошибка при создании элемента типа "%s".', type_)
+            basic_funcs.error('Ошибка добавления элемента', str(exc))
+            return False
+        return self._add_item(item, index, up_node_id, parent)
+
+    @staticmethod
+    def _item_error(item):
+        if isinstance(item, Exception):
+            return item
+        if isinstance(item, tuple):
+            return next((value for value in item if isinstance(value, Exception)), None)
+        return None
 
     def _add_item(self, item, index, up_node_id, parent):
-        if item:
-            if isinstance(item, tuple):
-                if isinstance(item[0], Node):
-                    self.model()._setup_props([item_._data for item_ in item])
-                    self.model().custom_ini_tree([item_._data for item_ in item], up_node_id, parent,
-                                                 root_item_index=index)
-                else:
-                    self.model()._setup_props(item)
-                    self.model().custom_ini_tree(item, up_node_id, parent,
-                                                 root_item_index=index)
-                self.model().dataChanged.emit(index, index)
-                if self.isExpanded(index):
-                    self.setExpanded(index, False)
-                    self.setExpanded(index, True)
+        item_error = self._item_error(item)
+        if item_error is not None:
+            logger.error('Созданный элемент не добавлен в дерево из-за ошибки: %s', item_error)
+            basic_funcs.error('Ошибка добавления элемента', str(item_error))
+            return False
+        if not item:
+            return False
+        if isinstance(item, tuple):
+            if isinstance(item[0], Node):
+                self.model()._setup_props([item_._data for item_ in item])
+                self.model().custom_ini_tree([item_._data for item_ in item], up_node_id, parent,
+                                             root_item_index=index)
             else:
-                self.insertRow(item, index)
-                self.model().dataChanged.emit(index, index)
+                self.model()._setup_props(item)
+                self.model().custom_ini_tree(item, up_node_id, parent,
+                                             root_item_index=index)
+            self.model().dataChanged.emit(index, index)
+            if self.isExpanded(index):
+                self.setExpanded(index, False)
+                self.setExpanded(index, True)
+            return True
+        if self.insertRow(item, index):
+            self.model().dataChanged.emit(index, index)
+            return True
+        return False
 
     def export_item(self, index):
         item = index.internalPointer()
@@ -1356,10 +1377,15 @@ class TreeView(QTreeView):
                         self._opened_tabs[index].refresh(index)
 
     def insertRow(self, item, index):
+        item_error = self._item_error(item)
+        if item_error is not None:
+            logger.error('Объект ошибки не может быть добавлен в дерево: %s', item_error)
+            basic_funcs.error('Ошибка добавления элемента', str(item_error))
+            return False
         if item:
-            self.model().addChild(item, index)
-        else:
-            logger.error('Не удалось добавить элемент в дерево.')
+            return self.model().addChild(item, index)
+        logger.error('Не удалось добавить элемент в дерево.')
+        return False
 
     def insertRows(self, items, index):
         if len(items):

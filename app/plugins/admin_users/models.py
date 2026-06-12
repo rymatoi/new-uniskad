@@ -1,10 +1,14 @@
 from PySide2.QtGui import QIcon
 
+from app import app_logger
 from app.basic_funcs import error
 from app.plugins.admin_users.dialogs.create_user import CreateUserDialog
 from app.plugins.base_state.models import Node, TreeModel
-from db import sp, session
+from db import sp
 from db.schemas import User
+
+
+logger = app_logger.get_logger(__name__)
 
 
 class UserRootNode(Node):
@@ -105,10 +109,18 @@ class UserNode(Node):
         if dialog.exec_():
             data = dialog.get_result()
             result = sp.new_uniskaduser(*data)
-            if result == -2 or (isinstance(result, User) and result.id is None):
+            if isinstance(result, Exception):
+                logger.error('Ошибка БД при создании пользователя: %s', result)
                 error('Ошибка создания пользователя', str(result))
-            else:
-                return UserNode(result)
+                return None
+            if result == -2 or not isinstance(result, User) or result.id is None:
+                logger.error('Процедура создания пользователя вернула некорректный результат: %r', result)
+                error(
+                    'Ошибка создания пользователя',
+                    'Не удалось создать пользователя. Проверьте заполнение обязательных полей.',
+                )
+                return None
+            return UserNode(result)
 
     @staticmethod
     def remove(item, final=False):

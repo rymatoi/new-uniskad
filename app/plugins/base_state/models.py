@@ -494,14 +494,29 @@ class TreeModel(QAbstractItemModel):
         return self._root.columnCount()
 
     def addChild(self, node, _parent):
-        if not node._data.prop_name == self.display_prop:
-            return
+        if not isinstance(node, Node):
+            logger.error(
+                'Невозможно добавить в дерево объект неподдерживаемого типа %s: %s',
+                type(node).__name__, node,
+            )
+            return False
+        data = getattr(node, '_data', None)
+        if data is None:
+            logger.error('Невозможно добавить в дерево узел без данных: %s', type(node).__name__)
+            return False
+        if getattr(data, 'prop_name', self.display_prop) != self.display_prop:
+            return False
+
         parent = self.nodeFromIndex(_parent)
         self.insertRows(parent.childCount(), [node], _parent)
-        props = self._prop_dict.get(node._data.id, [node._data])
+        node_id = getattr(data, 'id', None)
+        props = self._prop_dict.get(node_id, [data])
         for prop in props:
-            if prop.prop_value:
-                setattr(node, prop.prop_name, prop.prop_value)
+            prop_name = getattr(prop, 'prop_name', None)
+            prop_value = getattr(prop, 'prop_value', None)
+            if prop_name and prop_value:
+                setattr(node, prop_name, prop_value)
+        return True
 
     def insertChild(self, node, _parent, row=0):
         self.insertRows(row, [node], _parent)
