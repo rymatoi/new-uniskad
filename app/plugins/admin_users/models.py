@@ -10,11 +10,7 @@ from db.schemas import User
 
 logger = app_logger.get_logger(__name__)
 
-USER_COLUMNS = (
-    'Пользователь', 'Логин', 'Фамилия', 'Имя', 'Активен', 'Заблокирован',
-    'Роль по умолчанию (ID)', 'Последний вход', 'Последний выход',
-    'Допустимо попыток', 'Осталось попыток',
-)
+USER_COLUMNS = ('ФИО', 'Логин')
 
 
 def _display_value(value):
@@ -126,15 +122,6 @@ class UserNode(Node):
         values = (
             '{} {}'.format(self._data.fam or '', self._data.name or '').strip(),
             self._data.login,
-            self._data.fam,
-            self._data.name,
-            self._data.active,
-            self._data.deleted,
-            self._data.default_id_role,
-            self._data.last_login,
-            self._data.last_logout,
-            self._data.default_password_fail_count,
-            self._data.password_fail_count,
         )
         return _display_value(values[column]) if 0 <= column < len(values) else ''
 
