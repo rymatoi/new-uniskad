@@ -1,6 +1,6 @@
 from PySide2 import QtWidgets
 
-from app.basic_funcs import info, error
+from app.basic_funcs import error
 from db import sp
 from dialogs.base import BaseDialog
 from widgets.password import PasswordEdit
@@ -57,6 +57,16 @@ class CreateUserDialog(BaseDialog):
         secondname = self.secondname_line_edit.text()
         # lastname = self.lastname_line_edit.text()
         # description = self.description_text_edit.toPlainText()
+        required_fields = (
+            (secondname, 'Заполните фамилию пользователя'),
+            (username, 'Заполните логин пользователя'),
+            (password, 'Заполните пароль пользователя'),
+        )
+        for value, message in required_fields:
+            if not value.strip():
+                error('Ошибка создания пользователя', message)
+                return
+
         chosen_option = self.options_combo_box.currentText()
         self.res = (50, username, password, secondname, firstname, self.roles[chosen_option].id)
         self.accept()
