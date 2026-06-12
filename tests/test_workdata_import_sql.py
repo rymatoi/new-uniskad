@@ -5,6 +5,12 @@ SQL = (Path(__file__).parents[1] / 'db/sql/import_workdata_file_curves_to_projec
 
 
 def test_db_import_sql_copies_legacy_keys_properties_and_validates_columns():
+    assert SQL.index('CREATE OR REPLACE FUNCTION sc_ref.get_project_data_import_stats') < SQL.index('CREATE OR REPLACE FUNCTION sc_ref.import_workdata_file_curves_to_project')
+    assert "AS row_type_count" in SQL
+    assert "AS row_npp_count" in SQL
+    assert "AS column_type_count" in SQL
+    assert "AS column_npp_count" in SQL
+    assert "AS value_count" in SQL
     assert 'FROM sc_ref.get_import_file_data2(p_id_excel_file, p_file_version)' in SQL
     assert 'selected_names AS MATERIALIZED' in SQL
     assert 'SELECT DISTINCT unnest(p_curve_names)::varchar AS excel_param_name' in SQL

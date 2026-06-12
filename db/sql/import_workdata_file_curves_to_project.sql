@@ -1,6 +1,6 @@
 -- Deploy this file after the application update.  The import deliberately uses
--- get_import_file_data2 so its source rows are identical to the legacy Python
--- fallback (including row/column/cell formatting properties and lookup names).
+-- get_import_file_data2 so its source rows include row/column/cell formatting
+-- properties and lookup names.
 CREATE OR REPLACE FUNCTION sc_ref.get_project_data_import_stats(p_project_id integer)
 RETURNS TABLE (
     row_type_count bigint,
@@ -13,13 +13,14 @@ LANGUAGE sql
 STABLE
 AS $function$
     SELECT
-        count(*) FILTER (WHERE param_prop_name = 'type' AND prop_value = 'row'),
-        count(*) FILTER (WHERE param_prop_name = 'row_npp'),
-        count(*) FILTER (WHERE param_prop_name = 'type' AND prop_value = 'column'),
-        count(*) FILTER (WHERE param_prop_name = 'column_npp'),
-        count(*) FILTER (WHERE param_prop_name = 'value')
+        count(*) FILTER (WHERE param_prop_name = 'type' AND prop_value = 'row') AS row_type_count,
+        count(*) FILTER (WHERE param_prop_name = 'row_npp') AS row_npp_count,
+        count(*) FILTER (WHERE param_prop_name = 'type' AND prop_value = 'column') AS column_type_count,
+        count(*) FILTER (WHERE param_prop_name = 'column_npp') AS column_npp_count,
+        count(*) FILTER (WHERE param_prop_name = 'value') AS value_count
     FROM sc_ref.project_data
-    WHERE project_id = p_project_id AND deleted = false;
+    WHERE project_id = p_project_id
+      AND deleted = false;
 $function$;
 
 CREATE OR REPLACE FUNCTION sc_ref.import_workdata_file_curves_to_project(
@@ -48,8 +49,8 @@ BEGIN
            )
     ), source_data AS MATERIALIZED (
         -- Source file 474/version 0 contains two orphan row_npp records without
-        -- matching row type records.  The legacy fallback does not create rows
-        -- for them, so do not copy those unusable ordering records either.
+        -- matching row type records. Do not copy those unusable ordering
+        -- records.
         SELECT data.*
         FROM raw_source_data data
         WHERE data.param_prop_name IS DISTINCT FROM 'row_npp'
@@ -80,8 +81,7 @@ BEGIN
 
         UNION ALL
 
-        -- These are the extra records made by the legacy Python loop whenever
-        -- it encounters a row type record.
+        -- Add the ProjectData properties required for each row type record.
         SELECT p_target_project_id, id_excel_file, file_version,
                excel_param_name, 'name', NULL, zamer_n, rejim_zamer,
                excel_param_name, false, npp
@@ -116,8 +116,8 @@ BEGIN
     SELECT * INTO v_stats
     FROM sc_ref.get_project_data_import_stats(p_target_project_id);
 
-    -- Raise inside this statement so PostgreSQL rolls the malformed import back
-    -- before the application invokes the legacy fallback.
+    -- Raise inside this statement so PostgreSQL rolls the malformed file back;
+    -- the application will skip that file and continue with the remaining files.
     IF v_inserted_rows > 0 AND (
            v_stats.column_type_count = 0 OR v_stats.column_npp_count = 0 OR
            v_stats.column_type_count <> v_stats.column_npp_count OR
