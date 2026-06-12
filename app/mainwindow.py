@@ -19,6 +19,7 @@ from app.plugins.base_state.widgets import TreeView, DockWidget
 from app.plugins.project.widgets.docks import ProjectDockWidget
 from db import sp
 from db._session import Worker
+from app.progress import ProgressState
 from db.user_settings import UserSettings
 from dialogs.help import HelpApp
 from resources.ui.ui_py.ui_mainwindow import Ui_MainWindow
@@ -361,21 +362,54 @@ class MainWindow(QtWidgets.QMainWindow):
 
     @Slot()
     def on_worker_started(self):
+        if session.has_active_progress:
+            self.set_progress_bar_status(session.progress_state)
+            return
         if not self._current_progress_message:
             self._current_progress_message = 'Загрузка...'
         self.progress_bar.setRange(0, 0)
         self.set_progress_bar_status(self._current_progress_message)
         self.progress_bar.setVisible(True)
 
-    @Slot(str)
-    def set_progress_bar_status(self, message):
-        self._current_progress_message = message
-        self.progress_bar.setFormat(message + '..')
+    @Slot(object)
+    def set_progress_bar_status(self, state):
+        if state is None:
+            self.clear_progress_bar()
+            return
+        if isinstance(state, str):
+            state = ProgressState(title=state)
+
+        self._current_progress_message = state.message or state.title
+        if state.is_determinate:
+            self.progress_bar.setRange(0, state.total)
+            self.progress_bar.setValue(state.current)
+            self.progress_bar.setFormat(
+                f'{state.title}: {state.current} / {state.total} ({state.percent}%)'
+            )
+            remaining = f'Осталось: {state.remaining}'
+            detail = state.detail or state.message or ''
+            if remaining not in detail:
+                detail = f'{detail}  {remaining}'.strip()
+            self.status_label.setText(detail)
+        else:
+            self.progress_bar.setRange(0, 0)
+            self.progress_bar.setFormat(self._current_progress_message or 'Загрузка...')
+            self.status_label.setText(state.detail or '')
+        self.progress_bar.setVisible(True)
+
+    def clear_progress_bar(self):
+        self.progress_bar.setVisible(False)
+        self.progress_bar.setRange(0, 0)
+        self.progress_bar.setValue(0)
+        self.progress_bar.setFormat('')
+        self.status_label.clear()
+        self._current_progress_message = ''
 
     @Slot()
     def on_worker_finished(self):
-        self.progress_bar.setRange(0, 100)
-        self.progress_bar.setValue(100)
+        if not session.has_active_progress:
+            self.progress_bar.setRange(0, 100)
+            self.progress_bar.setValue(100)
 
     def run_with_progress(self, func, progress_text="Загрузка..."):
         self.result = None
@@ -394,7 +428,8 @@ class MainWindow(QtWidgets.QMainWindow):
         event_loop.exec_()
 
         # self.status_label.clear()
-        self.progress_bar.setVisible(False)
+        if not session.has_active_progress:
+            self.clear_progress_bar()
 
         return self.result
 

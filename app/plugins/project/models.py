@@ -239,26 +239,33 @@ def _normalize_selected_parents(selected, parent_id):
 def _resolve_workdata_import_sources(source_tests, diagnostics=None):
     started = time.perf_counter()
     cache = {}
-    for source_test in source_tests:
-        source_test_id = int(source_test._data.id)
-        if source_test_id in cache:
-            continue
-        item_started = time.perf_counter()
-        if diagnostics is not None:
-            diagnostics.add('source_file_calls', 1)
-        try:
-            cache[source_test_id] = _workdata_import_source(source_test, cache)
-        except Exception as exc:
-            cache[source_test_id] = exc
-        elapsed = time.perf_counter() - item_started
-        if diagnostics is not None:
-            result = cache[source_test_id]
-            id_excel_file = result[0] if not isinstance(result, Exception) else None
-            file_version = result[1] if not isinstance(result, Exception) else None
-            diagnostics.record_stage(
-                'sp.get_product_uniskad_files', elapsed, source_test_id=source_test_id,
-                id_excel_file=id_excel_file, file_version=file_version,
+    source_tests = list(source_tests)
+    with sp.session.progress('Получение файлов WorkData', total=len(source_tests)) as progress:
+        for index, source_test in enumerate(source_tests, 1):
+            source_test_id = int(source_test._data.id)
+            progress.update(
+                current=index,
+                message=f'Получение файла WorkData {index} из {len(source_tests)}',
+                detail=f'Испытание: {source_test_id}',
             )
+            if source_test_id in cache:
+                continue
+            item_started = time.perf_counter()
+            if diagnostics is not None:
+                diagnostics.add('source_file_calls', 1)
+            try:
+                cache[source_test_id] = _workdata_import_source(source_test, cache)
+            except Exception as exc:
+                cache[source_test_id] = exc
+            elapsed = time.perf_counter() - item_started
+            if diagnostics is not None:
+                result = cache[source_test_id]
+                id_excel_file = result[0] if not isinstance(result, Exception) else None
+                file_version = result[1] if not isinstance(result, Exception) else None
+                diagnostics.record_stage(
+                    'sp.get_product_uniskad_files', elapsed, source_test_id=source_test_id,
+                    id_excel_file=id_excel_file, file_version=file_version,
+                )
     if diagnostics is not None:
         diagnostics.update(source_files_elapsed=time.perf_counter() - started)
     return cache
@@ -273,67 +280,79 @@ def _import_workdata_tests(test_projects, source_tests, param_list, source_cache
     slowest_id_excel_file = None
     skipped_imports = []
 
-    for test in test_projects:
-        source_test_id = int(test.prop_value)
-        source_test = source_tests.get(source_test_id)
-        id_excel_file = file_version = None
-        file_name = None
-        db_started = time.perf_counter()
-        try:
-            if source_test is None:
-                raise RuntimeError(f'Selected WorkData test {source_test_id} was not found')
-            id_excel_file, file_version, file_name = _workdata_import_source(source_test, source_cache)
-            inserted_count = _import_workdata_curves_db(
-                test.project_id, id_excel_file, file_version, param_list, diagnostics, source_test_id
+    total = len(test_projects)
+    with sp.session.progress('Импорт WorkData', total=total, blocking=True) as progress:
+        for index, test in enumerate(test_projects, 1):
+            source_test_id = int(test.prop_value)
+            source_hint = source_cache.get(source_test_id)
+            file_hint = source_hint[2] if isinstance(source_hint, tuple) and len(source_hint) > 2 else None
+            progress.update(
+                current=index,
+                message=f'Импорт испытания {index} из {total}',
+                detail=f'Файл: {file_hint or "не определён"}  Испытание: {source_test_id}  Осталось: {total - index}',
             )
-        except Exception as exc:
+            source_test = source_tests.get(source_test_id)
+            id_excel_file = file_version = None
+            file_name = None
+            db_started = time.perf_counter()
+            try:
+                if source_test is None:
+                    raise RuntimeError(f'Selected WorkData test {source_test_id} was not found')
+                id_excel_file, file_version, file_name = _workdata_import_source(source_test, source_cache)
+                inserted_count = _import_workdata_curves_db(
+                    test.project_id, id_excel_file, file_version, param_list, diagnostics, source_test_id
+                )
+            except Exception as exc:
+                elapsed = time.perf_counter() - db_started
+                db_elapsed += elapsed
+                if elapsed > db_max_elapsed:
+                    db_max_elapsed = elapsed
+                    slowest_id_excel_file = id_excel_file
+                if not _is_invalid_project_data_metadata_error(exc):
+                    if diagnostics is not None:
+                        diagnostics.update(
+                            db_tests=db_tests, db_inserted_rows=db_inserted_rows,
+                            inserted_rows=db_inserted_rows, db_import_elapsed=db_elapsed,
+                            failed_error=str(exc),
+                        )
+                    raise
+                file_name = file_name or f'id_excel_file={id_excel_file}, version={file_version}'
+                reason = f'Файл {file_name}: {exc}'
+                skipped_import = {
+                    'source_test_id': source_test_id,
+                    'target_project_id': test.project_id,
+                    'id_excel_file': id_excel_file,
+                    'file_version': file_version,
+                    'file_name': file_name,
+                    'reason': reason,
+                }
+                skipped_imports.append(skipped_import)
+                logger.warning(
+                    'WorkData import skipped item: target_project_id=%s, source_test_id=%s, '
+                    'id_excel_file=%s, file_version=%s, file_name=%s, elapsed=%.4fs, reason=%s',
+                    test.project_id, source_test_id, id_excel_file, file_version, file_name,
+                    elapsed, reason,
+                )
+                progress.update(
+                    detail=f'Пропущен файл: {file_name}  Осталось: {total - index}'
+                )
+                continue
+
             elapsed = time.perf_counter() - db_started
             db_elapsed += elapsed
+            db_inserted_rows += inserted_count
+            db_tests += 1
             if elapsed > db_max_elapsed:
                 db_max_elapsed = elapsed
                 slowest_id_excel_file = id_excel_file
-            if not _is_invalid_project_data_metadata_error(exc):
-                if diagnostics is not None:
-                    diagnostics.update(
-                        db_tests=db_tests, db_inserted_rows=db_inserted_rows,
-                        inserted_rows=db_inserted_rows, db_import_elapsed=db_elapsed,
-                        failed_error=str(exc),
-                    )
-                raise
-            file_name = file_name or f'id_excel_file={id_excel_file}, version={file_version}'
-            reason = f'Файл {file_name}: {exc}'
-            skipped_import = {
-                'source_test_id': source_test_id,
-                'target_project_id': test.project_id,
-                'id_excel_file': id_excel_file,
-                'file_version': file_version,
-                'file_name': file_name,
-                'reason': reason,
-            }
-            skipped_imports.append(skipped_import)
-            logger.warning(
-                'WorkData import skipped item: target_project_id=%s, source_test_id=%s, '
-                'id_excel_file=%s, file_version=%s, file_name=%s, elapsed=%.4fs, reason=%s',
-                test.project_id, source_test_id, id_excel_file, file_version, file_name,
-                elapsed, reason,
-            )
-            continue
-
-        elapsed = time.perf_counter() - db_started
-        db_elapsed += elapsed
-        db_inserted_rows += inserted_count
-        db_tests += 1
-        if elapsed > db_max_elapsed:
-            db_max_elapsed = elapsed
-            slowest_id_excel_file = id_excel_file
-        if elapsed >= _IMPORT_ITEM_SECONDS:
-            logger.info(
-                'WorkData import item: target_project_id=%s, source_test_id=%s, '
-                'id_excel_file=%s, file_version=%s, file_name=%s, rows=%s, '
-                'elapsed=%.4fs, path=db',
-                test.project_id, source_test_id, id_excel_file, file_version, file_name,
-                inserted_count, elapsed,
-            )
+            if elapsed >= _IMPORT_ITEM_SECONDS:
+                logger.info(
+                    'WorkData import item: target_project_id=%s, source_test_id=%s, '
+                    'id_excel_file=%s, file_version=%s, file_name=%s, rows=%s, '
+                    'elapsed=%.4fs, path=db',
+                    test.project_id, source_test_id, id_excel_file, file_version, file_name,
+                    inserted_count, elapsed,
+                )
 
     if diagnostics is not None:
         diagnostics.record_stage('DB-import loop', db_elapsed, tests_count=db_tests,
@@ -869,6 +888,7 @@ class TestNode(ProjectRoot):
 
             # This lookup only needs source WorkData ids, so parameter selection can safely
             # happen before project writes. Cancelling now leaves the project untouched.
+            sp.session.update_loading_bar('Получение списка параметров')
             with diagnostics.stage(
                     'sp.get_param_list_from_test_id_list', test_count=len(source_tests)):
                 params = sp.get_param_list_from_test_id_list(list(source_tests))
@@ -924,6 +944,7 @@ class TestNode(ProjectRoot):
             records_count = len(selected_data) + len(selected_props_data)
             diagnostics.update(records_count=records_count)
 
+            sp.session.update_loading_bar('Подготовка проекта')
             with diagnostics.stage('sp.new_update_project_from_record', project_id=up_node_id):
                 sp.new_update_project_from_record(
                     new_prop(project_node._data, 'default_test_value', next_default_value).table_fit(

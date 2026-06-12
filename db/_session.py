@@ -2,6 +2,7 @@ import asyncio
 import contextlib
 import threading
 import time
+from dataclasses import replace
 from functools import wraps
 from inspect import signature
 
@@ -13,6 +14,7 @@ from asyncpg import RaiseError
 from config.config import config
 
 from app import app_logger
+from app.progress import ProgressState
 
 logger = app_logger.get_logger(__name__)
 
@@ -63,7 +65,28 @@ class Worker(QThread):
 
 
 class _ProgressEmitter(QObject):
-    progress = Signal(str)
+    progress = Signal(object)
+
+
+class _ProgressContext:
+    def __init__(self, session, title, total=None, blocking=False, detail=None):
+        self.session = session
+        self.state = session.begin_progress(title, total, blocking, detail)
+
+    def update(self, **kwargs):
+        self.state = self.session.update_progress(**kwargs)
+        return self.state
+
+    def advance(self, step=1, detail=None, message=None):
+        self.state = self.session.advance_progress(step, detail, message)
+        return self.state
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.session.end_progress()
+
 
 
 class Session:
@@ -83,6 +106,8 @@ class Session:
         self._password = None
         self._progress_emitter = None
         self._last_progress_message = None
+        self._progress_state = None
+        self._progress_started_at = None
 
         logger.info("Session initialized. Event loop thread: %s", self._loop_thread.name)
 
@@ -137,8 +162,10 @@ class Session:
             self._progress_emitter = _ProgressEmitter()
         self._progress_emitter.moveToThread(mw.thread())
         self._progress_emitter.progress.connect(mw.set_progress_bar_status, Qt.QueuedConnection)
-        if self._last_progress_message:
-            self._progress_emitter.progress.emit(self._last_progress_message)
+        if self._progress_state is not None:
+            self._progress_emitter.progress.emit(self._progress_state)
+        elif self._last_progress_message:
+            self._progress_emitter.progress.emit(ProgressState(title=self._last_progress_message))
         logger.debug("Main window initialized for session progress updates")
 
     async def connect_db(self):
@@ -228,14 +255,77 @@ class Session:
                 logger.debug("Last reconnect error: %s", last_error)
             return False
 
-    def update_loading_bar(self, message):
-        self._last_progress_message = message
-        if not getattr(self, 'main_window', None) or self._progress_emitter is None:
-            logger.debug("Progress update queued (main window not ready): %s", message)
-            return
+    @property
+    def progress_state(self):
+        return self._progress_state
 
-        self._progress_emitter.progress.emit(message)
+    @property
+    def has_active_progress(self):
+        return self._progress_state is not None and self._progress_started_at is not None
+
+    def _emit_progress(self, state):
+        if not getattr(self, 'main_window', None) or self._progress_emitter is None:
+            logger.debug("Progress update queued (main window not ready): %s", state)
+            return
+        self._progress_emitter.progress.emit(state)
+
+    def begin_progress(self, title, total=None, blocking=False, detail=None):
+        current = 0 if total is not None else None
+        self._progress_state = ProgressState(
+            title=title, detail=detail, current=current, total=total, blocking=blocking,
+        )
+        self._last_progress_message = title
+        self._progress_started_at = time.perf_counter()
+        logger.info("Progress started: title=%s, total=%s", title, total)
+        self._emit_progress(self._progress_state)
+        return self._progress_state
+
+    def update_progress(self, current=None, total=None, title=None, message=None, detail=None):
+        state = self._progress_state or ProgressState()
+        state = replace(
+            state,
+            title=title if title is not None else state.title,
+            message=message if message is not None else state.message,
+            detail=detail if detail is not None else state.detail,
+            current=current if current is not None else state.current,
+            total=total if total is not None else state.total,
+        )
+        self._progress_state = state
+        self._last_progress_message = state.message or state.title
+        self._emit_progress(state)
+        return state
+
+    def advance_progress(self, step=1, detail=None, message=None):
+        state = self._progress_state or ProgressState(current=0)
+        current = (state.current or 0) + step
+        return self.update_progress(current=current, detail=detail, message=message)
+
+    def end_progress(self):
+        state = self._progress_state
+        if state is not None:
+            elapsed = (time.perf_counter() - self._progress_started_at
+                       if self._progress_started_at is not None else 0.0)
+            logger.info(
+                "Progress completed: title=%s, current=%s, total=%s, elapsed=%.4fs",
+                state.title, state.current, state.total, elapsed,
+            )
+        self._progress_state = None
+        self._progress_started_at = None
+        self._last_progress_message = None
+        self._emit_progress(None)
+
+    def progress(self, title, total=None, blocking=False, detail=None):
+        return _ProgressContext(self, title, total, blocking, detail)
+
+    def update_loading_bar(self, message):
+        """Backward-compatible string progress update."""
+        if self.has_active_progress:
+            return self.update_progress(message=message)
+        self._last_progress_message = message
+        self._progress_state = ProgressState(title=message)
+        self._emit_progress(self._progress_state)
         logger.info("Progress bar message: %s", message)
+        return self._progress_state
 
     async def execute(self, procedure_name, *args):
         t_execute_total = time.perf_counter()
