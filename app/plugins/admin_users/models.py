@@ -10,9 +10,26 @@ from db.schemas import User
 
 logger = app_logger.get_logger(__name__)
 
+USER_COLUMNS = (
+    'Пользователь', 'Логин', 'Фамилия', 'Имя', 'Активен', 'Заблокирован',
+    'Роль по умолчанию (ID)', 'Последний вход', 'Последний выход',
+    'Допустимо попыток', 'Осталось попыток',
+)
+
+
+def _display_value(value):
+    if value is None:
+        return ''
+    if isinstance(value, bool):
+        return 'Да' if value else 'Нет'
+    return str(value)
+
 
 class UserRootNode(Node):
     exclude_from_base_actions = ['_customize', '_rename_node']
+
+    def columnCount(self):
+        return len(USER_COLUMNS)
 
     @staticmethod
     def internal_type():
@@ -30,6 +47,9 @@ class UserRootNode(Node):
 class ActiveFolder(Node):
     exclude_from_base_actions = ['_customize', '_rename_node', '_remove']
 
+    def columnCount(self):
+        return len(USER_COLUMNS)
+
     @staticmethod
     def is_folder():
         return True
@@ -43,7 +63,7 @@ class ActiveFolder(Node):
         return []
 
     def data(self, column=0):
-        return 'Активные'
+        return 'Активные' if column == 0 else ''
 
     def get_icon(self, column=0):
         if column == 0:
@@ -56,6 +76,9 @@ class ActiveFolder(Node):
 
 class InactiveFolder(Node):
     exclude_from_base_actions = ['_customize', '_rename_node', '_remove']
+
+    def columnCount(self):
+        return len(USER_COLUMNS)
 
     @staticmethod
     def is_folder():
@@ -70,7 +93,7 @@ class InactiveFolder(Node):
         return []
 
     def data(self, column=0):
-        return 'Неактивные'
+        return 'Неактивные' if column == 0 else ''
 
     def get_icon(self, column=0):
         if column == 0:
@@ -96,8 +119,24 @@ class UserNode(Node):
     def self_internal_actions():
         return ['remove']
 
+    def columnCount(self):
+        return len(USER_COLUMNS)
+
     def data(self, column=0):
-        return self._data.name + ' ' + self._data.fam
+        values = (
+            '{} {}'.format(self._data.fam or '', self._data.name or '').strip(),
+            self._data.login,
+            self._data.fam,
+            self._data.name,
+            self._data.active,
+            self._data.deleted,
+            self._data.default_id_role,
+            self._data.last_login,
+            self._data.last_logout,
+            self._data.default_password_fail_count,
+            self._data.password_fail_count,
+        )
+        return _display_value(values[column]) if 0 <= column < len(values) else ''
 
     def get_icon(self, column=0):
         if column == 0:
@@ -140,6 +179,8 @@ class UserNode(Node):
 
 
 class AdminUsersTreeModel(TreeModel):
+
+    headers = list(USER_COLUMNS)
 
     def __init__(self):
         super().__init__()

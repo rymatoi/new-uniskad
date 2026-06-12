@@ -18,8 +18,12 @@ def convert_to_pg_array(tuples_list):
 
 @session.stored_procedure(modifying=True, description='Авторизация')
 def checkuserpassword(name: str, password: str) -> bool:
-    session.authorize(name, password)
-    return session.call('checkuserpassword', name, password)
+    result = session.call('checkuserpassword', name, password)
+    if not isinstance(result, Exception) and result:
+        session.authorize(name, password)
+    else:
+        session.logout()
+    return result
 
 
 @session.stored_procedure(modifying=True, description='Изменение количества попыток')

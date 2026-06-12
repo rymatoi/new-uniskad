@@ -6,7 +6,7 @@ from urllib.parse import quote
 from PySide2 import QtWidgets
 from PySide2.QtCore import QEventLoop, Slot
 from PySide2.QtGui import QIcon, QCloseEvent, Qt, QKeySequence
-from PySide2.QtWidgets import QShortcut, QDockWidget, QProgressBar, QLabel
+from PySide2.QtWidgets import QShortcut, QDockWidget, QProgressBar, QLabel, QMessageBox, QDialog
 from app import app_logger, _menu, basic_funcs
 from app.cache import DataCache
 from app.menu_service import clear_menu_cache, get_menu
@@ -82,6 +82,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._pending_window_state_bytes = None
         self._pending_central_window_state_bytes = None
         self._restoring_after_role_switch = False
+        self._close_without_prompt = False
 
         config.config.app.enable_timer(self.user_settings.get('application_close_timeout', 30))
         config.config.app._main_window_initialized = True  # TODO test
@@ -345,11 +346,78 @@ class MainWindow(QtWidgets.QMainWindow):
             self.available_modes}
 
     def closeEvent(self, event: QCloseEvent):
-        """Выполнение действий до закрытия главного окна."""
+        """Offer application exit, logout/switch-user, or cancellation."""
+        if self._close_without_prompt:
+            event.accept()
+            return
+
+        action = self._ask_close_action()
+        if action == 'cancel':
+            event.ignore()
+            return
+        if action == 'logout':
+            logger.info("Selected logout from system")
+            event.ignore()
+            self._logout_and_restart_login()
+            return
+
+        logger.info("Selected application exit")
         self.save_windows_state()
         sp.session.close()
         logger.info("Выход из программы.")
-        super().closeEvent(event)
+        event.accept()
+
+    def _ask_close_action(self):
+        message = QMessageBox(self)
+        message.setWindowTitle('Выход')
+        message.setText('Что сделать?')
+        exit_button = message.addButton('Выйти из ЮниСКАД', QMessageBox.AcceptRole)
+        logout_button = message.addButton('Выйти из системы', QMessageBox.DestructiveRole)
+        cancel_button = message.addButton('Отмена', QMessageBox.RejectRole)
+        message.setDefaultButton(cancel_button)
+        message.exec_()
+        clicked = message.clickedButton()
+        if clicked is exit_button:
+            return 'exit'
+        if clicked is logout_button:
+            return 'logout'
+        return 'cancel'
+
+    def _logout_and_restart_login(self):
+        """Discard the current UI and restart login without closing the DB session."""
+        from dialogs.login import LoginDialog
+
+        try:
+            logger.info("Logout started from main window")
+            self.save_windows_state()
+            self.hide()
+            session.logout()
+            logger.info("Login restarted after logout")
+            login = LoginDialog()
+            if login.exec_() != QDialog.Accepted:
+                logger.info("Login cancelled after logout; closing application")
+                session.close()
+                self._close_without_prompt = True
+                self.close()
+                return
+
+            new_window = type(self)()
+            config.config.app._main_window = new_window
+            new_window.showMaximized()
+            self._close_without_prompt = True
+            self.close()
+            logger.info("Logout completed; main window initialized for new user")
+        except Exception:
+            logger.exception("Failed to logout or restart login")
+            session.logout()
+            QMessageBox.critical(
+                self,
+                'Ошибка выхода из системы',
+                'Не удалось выполнить выход из системы. Приложение будет закрыто.',
+            )
+            session.close()
+            self._close_without_prompt = True
+            self.close()
 
     def handle_result(self, result):
         self.result = result
