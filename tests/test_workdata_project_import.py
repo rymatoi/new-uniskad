@@ -15,10 +15,12 @@ def test_workdata_import_source_uses_selected_file_and_version(monkeypatch):
     monkeypatch.setattr(
         models.sp,
         'get_product_uniskad_files',
-        lambda product_id, file_type: SimpleNamespace(id_datafile=599),
+        lambda product_id, file_type: SimpleNamespace(
+            id_datafile=599, datafile_full_name='measurements.xlsx'
+        ),
     )
 
-    assert models._workdata_import_source(source_test) == (599, 3)
+    assert models._workdata_import_source(source_test) == (599, 3, 'measurements.xlsx')
 
 
 def test_db_import_passes_exact_curve_names_and_returns_inserted_count(monkeypatch):
@@ -114,18 +116,18 @@ def test_source_resolution_cache_calls_database_once_for_duplicate_test_id(monke
     monkeypatch.setattr(
         models.sp, 'get_product_uniskad_files',
         lambda product_id, file_type: calls.append((product_id, file_type))
-        or SimpleNamespace(id_datafile=599),
+        or SimpleNamespace(id_datafile=599, datafile_short_name='input.xlsx'),
     )
 
     cache = models._resolve_workdata_import_sources(source_tests)
 
-    assert cache == {406: (599, 3)}
+    assert cache == {406: (599, 3, 'input.xlsx')}
     assert calls == [(406, 'input_excel')]
-    assert models._workdata_import_source(source_tests[1], cache) == (599, 3)
+    assert models._workdata_import_source(source_tests[1], cache) == (599, 3, 'input.xlsx')
     assert calls == [(406, 'input_excel')]
 
 
-def test_source_resolution_cache_preserves_failure_for_fallback(monkeypatch):
+def test_source_resolution_cache_preserves_failure(monkeypatch):
     calls = []
     source_test = SimpleNamespace(_data=SimpleNamespace(id=406), final_version='3')
     monkeypatch.setattr(
@@ -152,41 +154,127 @@ def test_selected_parent_normalization_uses_selected_ids():
     assert other_root._data.id_up_prod == 50
 
 
-def test_import_workdata_tests_clean_db_success_avoids_fallback(monkeypatch):
+def test_import_workdata_tests_clean_db_success_uses_only_sql_import(monkeypatch, caplog):
     source_test = SimpleNamespace(_data=SimpleNamespace(id=406), final_version='3')
     test_project = SimpleNamespace(prop_value='406', project_id=4464)
+    diagnostics = models._ImportDiagnostics()
     monkeypatch.setattr(models, '_import_workdata_curves_db', lambda *args: 82)
     monkeypatch.setattr(
         models.sp, 'get_import_file_data_curves_data',
-        lambda *args: pytest.fail('fallback must not run after DB success'),
-    )
-
-    counts = models._import_workdata_tests(
-        [test_project], {406: source_test}, ['A'], None, {406: (599, 3)},
-    )
-
-    assert counts == (1, 82, 0)
-
-
-def test_import_workdata_tests_db_failure_uses_fallback(monkeypatch):
-    source_test = SimpleNamespace(_data=SimpleNamespace(id=406), final_version='3')
-    test_project = SimpleNamespace(prop_value='406', project_id=4464)
-    param = SimpleNamespace(
-        prop_name='value', prop_value='1', excel_param_name='A', is_secret=False,
-        table_fit=lambda table: (2, 'value'),
+        lambda *args: pytest.fail('Python fallback must never run'),
     )
     monkeypatch.setattr(
-        models, '_import_workdata_curves_db', lambda *args: (_ for _ in ()).throw(RuntimeError('db failed')),
+        models.sp, 'new_project_data_array',
+        lambda *args: pytest.fail('Python fallback must never run'),
     )
-    monkeypatch.setattr(models.sp, 'get_import_file_data_curves_data', lambda *args: [param])
-    monkeypatch.setattr(models.sp, 'new_project_data_array', lambda rows: rows)
 
     counts = models._import_workdata_tests(
-        [test_project], {406: source_test}, ['A'], None, {406: (599, 3)},
+        [test_project], {406: source_test}, ['A'], {406: (599, 3, 'good.xlsx')}, diagnostics,
     )
 
-    assert counts == (1, 0, 1)
-    assert param.project_id == 4464
+    assert counts == (1, 82, [])
+    assert diagnostics.values['inserted_rows'] == 82
+    assert diagnostics.values['skipped_files'] == []
+    diagnostics.log_summary()
+    assert 'Импорт завершён успешно. Импортировано: 1. Пропущено: 0.' in caplog.text
+    assert 'fallback item' not in caplog.text
+
+
+def test_import_workdata_tests_skips_invalid_metadata_and_continues(monkeypatch, caplog):
+    source_tests = {
+        406: SimpleNamespace(_data=SimpleNamespace(id=406), final_version='3'),
+        407: SimpleNamespace(_data=SimpleNamespace(id=407), final_version='4'),
+    }
+    test_projects = [
+        SimpleNamespace(prop_value='406', project_id=4464),
+        SimpleNamespace(prop_value='407', project_id=4465),
+    ]
+    source_cache = {
+        406: (599, 3, 'broken.xlsx'),
+        407: (600, 4, 'good.xlsx'),
+    }
+    calls = []
+
+    def import_curves(target_project_id, *args):
+        calls.append(target_project_id)
+        if target_project_id == 4464:
+            raise RuntimeError(
+                'WorkData import produced invalid ProjectData metadata for project 4464'
+            )
+        return 27
+
+    monkeypatch.setattr(models, '_import_workdata_curves_db', import_curves)
+    monkeypatch.setattr(
+        models.sp, 'get_import_file_data_curves_data',
+        lambda *args: pytest.fail('Python fallback must never run'),
+    )
+    monkeypatch.setattr(
+        models.sp, 'new_project_data_array',
+        lambda *args: pytest.fail('Python fallback must never run'),
+    )
+    diagnostics = models._ImportDiagnostics()
+
+    counts = models._import_workdata_tests(
+        test_projects, source_tests, ['A'], source_cache, diagnostics,
+    )
+    diagnostics.log_summary()
+
+    skipped = counts[2]
+    assert calls == [4464, 4465]
+    assert counts[:2] == (2, 27)
+    assert skipped == [{
+        'source_test_id': 406,
+        'target_project_id': 4464,
+        'id_excel_file': 599,
+        'file_version': 3,
+        'file_name': 'broken.xlsx',
+        'reason': 'Файл broken.xlsx: WorkData import produced invalid ProjectData metadata '
+                  'for project 4464',
+    }]
+    assert diagnostics.values['inserted_rows'] == 27
+    assert diagnostics.values['skipped_tests'] == [406]
+    assert diagnostics.values['skipped_files'] == ['broken.xlsx']
+    assert 'fallback item' not in caplog.text
+    assert 'Импорт завершён частично. Импортировано: 1. Пропущено: 1.' in caplog.text
+    assert 'Пропущенные файлы: broken.xlsx' in caplog.text
+
+
+def test_import_workdata_tests_invalid_metadata_uses_file_id_when_name_missing(monkeypatch):
+    source_test = SimpleNamespace(_data=SimpleNamespace(id=406), final_version='3')
+    test_project = SimpleNamespace(prop_value='406', project_id=4464)
+    monkeypatch.setattr(
+        models, '_import_workdata_curves_db',
+        lambda *args: (_ for _ in ()).throw(models.InvalidWorkDataDbImport('invalid metadata')),
+    )
+
+    _, _, skipped = models._import_workdata_tests(
+        [test_project], {406: source_test}, ['A'], {406: (599, 3, None)},
+    )
+
+    assert skipped[0]['file_name'] == 'id_excel_file=599, version=3'
+    assert 'Файл id_excel_file=599, version=3' in skipped[0]['reason']
+
+
+def test_import_workdata_tests_reraises_unrelated_database_error(monkeypatch):
+    source_test = SimpleNamespace(_data=SimpleNamespace(id=406), final_version='3')
+    test_project = SimpleNamespace(prop_value='406', project_id=4464)
+    monkeypatch.setattr(
+        models, '_import_workdata_curves_db',
+        lambda *args: (_ for _ in ()).throw(RuntimeError('connection lost')),
+    )
+
+    with pytest.raises(RuntimeError, match='connection lost'):
+        models._import_workdata_tests(
+            [test_project], {406: source_test}, ['A'], {406: (599, 3, 'input.xlsx')},
+        )
+
+
+def test_workdata_file_name_prefers_human_readable_datafile_name():
+    datafile = SimpleNamespace(
+        datafile_full_name='', full_name='', datafile_short_name='human-readable.xlsx'
+    )
+
+    assert models._workdata_file_name(datafile, 599, 3) == 'human-readable.xlsx'
 
 
 def test_project_add_creates_curve_point_symbol_property_once():

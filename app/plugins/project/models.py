@@ -47,15 +47,16 @@ class _ImportDiagnostics:
             'records_count': 0,
             'inserted_rows': 0,
             'db_tests': 0,
-            'fallback_tests': 0,
+            'skipped_tests': [],
+            'skipped_files': [],
+            'skipped_imports': [],
             'db_inserted_rows': 0,
-            'fallback_inserted_rows': 0,
             'source_file_calls': 0,
             'source_files_elapsed': 0.0,
             'db_import_elapsed': 0.0,
-            'fallback_import_elapsed': 0.0,
             'db_import_max_elapsed': 0.0,
             'slowest_id_excel_file': None,
+            'failed_error': None,
         }
 
     def stage(self, name, always=False, **details):
@@ -78,24 +79,37 @@ class _ImportDiagnostics:
 
     def log_summary(self):
         db_tests = self.values['db_tests']
-        db_attempts = db_tests + self.values['fallback_tests']
-        db_average = self.values['db_import_elapsed'] / db_attempts if db_attempts else 0.0
+        db_average = self.values['db_import_elapsed'] / db_tests if db_tests else 0.0
+        skipped_imports = self.values['skipped_imports']
+        skipped_summary = json.dumps(skipped_imports, ensure_ascii=False, default=str)
         logger.info(
             'WorkData import summary: selected_count=%s, test_count=%s, params_count=%s, '
-            'records_count=%s, inserted_rows=%s, db_tests=%s, fallback_tests=%s, '
-            'db_inserted_rows=%s, fallback_inserted_rows=%s, source_file_calls=%s, '
-            'source_files_elapsed=%.4fs, db_import_elapsed=%.4fs, fallback_import_elapsed=%.4fs, '
+            'records_count=%s, inserted_rows=%s, db_tests=%s, db_inserted_rows=%s, '
+            'skipped_tests=%s, skipped_files=%s, skipped_imports=%s, failed_error=%s, '
+            'source_file_calls=%s, '
+            'source_files_elapsed=%.4fs, db_import_elapsed=%.4fs, '
             'db_import_avg_elapsed=%.4fs, db_import_max_elapsed=%.4fs, '
             'slowest_id_excel_file=%s, elapsed=%.4fs',
             self.values['selected_count'], self.values['test_count'], self.values['params_count'],
             self.values['records_count'], self.values['inserted_rows'], db_tests,
-            self.values['fallback_tests'], self.values['db_inserted_rows'],
-            self.values['fallback_inserted_rows'], self.values['source_file_calls'],
-            self.values['source_files_elapsed'], self.values['db_import_elapsed'],
-            self.values['fallback_import_elapsed'], db_average,
+            self.values['db_inserted_rows'], self.values['skipped_tests'],
+            self.values['skipped_files'], skipped_summary, self.values['failed_error'],
+            self.values['source_file_calls'],
+            self.values['source_files_elapsed'], self.values['db_import_elapsed'], db_average,
             self.values['db_import_max_elapsed'], self.values['slowest_id_excel_file'],
             time.perf_counter() - self.started,
         )
+        if self.values['failed_error']:
+            logger.error('Импорт прерван из-за ошибки: %s', self.values['failed_error'])
+        elif skipped_imports:
+            skipped_names = ', '.join(item['file_name'] for item in skipped_imports)
+            logger.warning(
+                'Импорт завершён частично. Импортировано: %s. Пропущено: %s. '
+                'Пропущенные файлы: %s',
+                db_tests, len(skipped_imports), skipped_names,
+            )
+        else:
+            logger.info('Импорт завершён успешно. Импортировано: %s. Пропущено: 0.', db_tests)
 
 
 class _DiagnosticStage:
@@ -120,6 +134,25 @@ def _diagnostic_fields(values):
     return ', '.join(f'{name}={value}' for name, value in values.items())
 
 
+_INVALID_PROJECT_DATA_METADATA = 'WorkData import produced invalid ProjectData metadata'
+_FILE_NAME_FIELDS = (
+    'datafile_full_name', 'full_name', 'datafile_short_name', 'short_name',
+    'file_name', 'name', 'excel_file_name', 'path',
+)
+
+
+def _workdata_file_name(datafile, id_excel_file, file_version):
+    for field in _FILE_NAME_FIELDS:
+        value = getattr(datafile, field, None)
+        if value:
+            return str(value)
+    return f'id_excel_file={id_excel_file}, version={file_version}'
+
+
+def _is_invalid_project_data_metadata_error(exc):
+    return isinstance(exc, InvalidWorkDataDbImport) or _INVALID_PROJECT_DATA_METADATA in str(exc)
+
+
 def _workdata_import_source(source_test, cache=None):
     source_test_id = int(source_test._data.id)
     if cache is not None and source_test_id in cache:
@@ -132,7 +165,11 @@ def _workdata_import_source(source_test, cache=None):
         datafile = sp.get_product_uniskad_files(source_test_id, 'input_excel')
         if not datafile:
             raise RuntimeError(f'No input Excel datafile found for WorkData test {source_test_id}')
-        result = datafile.id_datafile, int(getattr(source_test, 'final_version', 0))
+        id_excel_file = datafile.id_datafile
+        file_version = int(getattr(source_test, 'final_version', 0))
+        result = id_excel_file, file_version, _workdata_file_name(
+            datafile, id_excel_file, file_version
+        )
     except Exception as exc:
         if cache is not None:
             cache[source_test_id] = exc
@@ -227,110 +264,90 @@ def _resolve_workdata_import_sources(source_tests, diagnostics=None):
     return cache
 
 
-def _import_workdata_tests(test_projects, source_tests, param_list, new_pr_prop, source_cache,
+def _import_workdata_tests(test_projects, source_tests, param_list, source_cache,
                            diagnostics=None):
-    db_elapsed = fallback_elapsed = 0.0
-    db_inserted_rows = fallback_inserted_rows = 0
-    db_tests = fallback_tests = 0
+    db_elapsed = 0.0
+    db_inserted_rows = 0
+    db_tests = 0
     db_max_elapsed = 0.0
     slowest_id_excel_file = None
+    skipped_imports = []
 
     for test in test_projects:
         source_test_id = int(test.prop_value)
         source_test = source_tests.get(source_test_id)
         id_excel_file = file_version = None
+        file_name = None
         db_started = time.perf_counter()
         try:
             if source_test is None:
                 raise RuntimeError(f'Selected WorkData test {source_test_id} was not found')
-            id_excel_file, file_version = _workdata_import_source(source_test, source_cache)
+            id_excel_file, file_version, file_name = _workdata_import_source(source_test, source_cache)
             inserted_count = _import_workdata_curves_db(
                 test.project_id, id_excel_file, file_version, param_list, diagnostics, source_test_id
             )
-            elapsed = time.perf_counter() - db_started
-            db_elapsed += elapsed
-            db_inserted_rows += inserted_count
-            db_tests += 1
-            if elapsed > db_max_elapsed:
-                db_max_elapsed = elapsed
-                slowest_id_excel_file = id_excel_file
-            if elapsed >= _IMPORT_ITEM_SECONDS:
-                logger.info(
-                    'WorkData import item: target_project_id=%s, source_test_id=%s, '
-                    'id_excel_file=%s, file_version=%s, rows=%s, elapsed=%.4fs, path=db',
-                    test.project_id, source_test_id, id_excel_file, file_version,
-                    inserted_count, elapsed,
-                )
-            continue
-        except InvalidWorkDataDbImport:
-            raise
         except Exception as exc:
             elapsed = time.perf_counter() - db_started
             db_elapsed += elapsed
             if elapsed > db_max_elapsed:
                 db_max_elapsed = elapsed
                 slowest_id_excel_file = id_excel_file
-            fallback_started = time.perf_counter()
-            fallback_reason = str(exc)
+            if not _is_invalid_project_data_metadata_error(exc):
+                if diagnostics is not None:
+                    diagnostics.update(
+                        db_tests=db_tests, db_inserted_rows=db_inserted_rows,
+                        inserted_rows=db_inserted_rows, db_import_elapsed=db_elapsed,
+                        failed_error=str(exc),
+                    )
+                raise
+            file_name = file_name or f'id_excel_file={id_excel_file}, version={file_version}'
+            reason = f'Файл {file_name}: {exc}'
+            skipped_import = {
+                'source_test_id': source_test_id,
+                'target_project_id': test.project_id,
+                'id_excel_file': id_excel_file,
+                'file_version': file_version,
+                'file_name': file_name,
+                'reason': reason,
+            }
+            skipped_imports.append(skipped_import)
+            logger.warning(
+                'WorkData import skipped item: target_project_id=%s, source_test_id=%s, '
+                'id_excel_file=%s, file_version=%s, file_name=%s, elapsed=%.4fs, reason=%s',
+                test.project_id, source_test_id, id_excel_file, file_version, file_name,
+                elapsed, reason,
+            )
+            continue
 
-        fallback_rows = []
-        call_started = time.perf_counter()
-        param_data = sp.get_import_file_data_curves_data(source_test_id, param_list)
-        if diagnostics is not None:
-            diagnostics.record_stage(
-                'sp.get_import_file_data_curves_data', time.perf_counter() - call_started,
-                target_project_id=test.project_id, source_test_id=source_test_id,
-                id_excel_file=id_excel_file, file_version=file_version,
-                params_count=len(param_list),
+        elapsed = time.perf_counter() - db_started
+        db_elapsed += elapsed
+        db_inserted_rows += inserted_count
+        db_tests += 1
+        if elapsed > db_max_elapsed:
+            db_max_elapsed = elapsed
+            slowest_id_excel_file = id_excel_file
+        if elapsed >= _IMPORT_ITEM_SECONDS:
+            logger.info(
+                'WorkData import item: target_project_id=%s, source_test_id=%s, '
+                'id_excel_file=%s, file_version=%s, file_name=%s, rows=%s, '
+                'elapsed=%.4fs, path=db',
+                test.project_id, source_test_id, id_excel_file, file_version, file_name,
+                inserted_count, elapsed,
             )
-        for param in param_data:
-            param.project_id = test.project_id
-            if param.prop_name == 'type' and param.prop_value == 'row':
-                fallback_rows.append(
-                    new_pr_prop(param, 'name', param.excel_param_name).table_fit(PROJECT_DATA))
-                if param.is_secret:
-                    fallback_rows.append(
-                        new_pr_prop(param, 'is_secret', param.is_secret).table_fit(PROJECT_DATA))
-                if hasattr(param, 'eizm_short'):
-                    fallback_rows.append(
-                        new_pr_prop(param, 'eizm_short', param.eizm_short).table_fit(PROJECT_DATA))
-            fallback_rows.append(param.table_fit(PROJECT_DATA))
-        fallback_rows = sorted(fallback_rows, key=lambda x: x[0])
-        call_started = time.perf_counter()
-        inserted_rows = sp.new_project_data_array(fallback_rows)
-        if diagnostics is not None:
-            diagnostics.record_stage(
-                'sp.new_project_data_array', time.perf_counter() - call_started,
-                target_project_id=test.project_id, source_test_id=source_test_id,
-                id_excel_file=id_excel_file, file_version=file_version,
-                records_count=len(fallback_rows),
-            )
-        inserted_count = len(inserted_rows) if inserted_rows is not None else len(fallback_rows)
-        elapsed = time.perf_counter() - fallback_started
-        fallback_elapsed += elapsed
-        fallback_inserted_rows += inserted_count
-        fallback_tests += 1
-        logger.warning(
-            'WorkData fallback item: target_project_id=%s, source_test_id=%s, '
-            'id_excel_file=%s, file_version=%s, rows=%s, elapsed=%.4fs, reason=%s',
-            test.project_id, source_test_id, id_excel_file, file_version,
-            inserted_count, elapsed, fallback_reason,
-        )
 
     if diagnostics is not None:
         diagnostics.record_stage('DB-import loop', db_elapsed, tests_count=db_tests,
-                                 inserted_rows=db_inserted_rows)
-        diagnostics.record_stage('fallback-import loop', fallback_elapsed,
-                                 tests_count=fallback_tests,
-                                 inserted_rows=fallback_inserted_rows)
+                                 inserted_rows=db_inserted_rows,
+                                 skipped_files=len(skipped_imports))
         diagnostics.update(
-            db_tests=db_tests, fallback_tests=fallback_tests,
-            db_inserted_rows=db_inserted_rows, fallback_inserted_rows=fallback_inserted_rows,
-            inserted_rows=db_inserted_rows + fallback_inserted_rows,
-            db_import_elapsed=db_elapsed, fallback_import_elapsed=fallback_elapsed,
+            db_tests=db_tests, db_inserted_rows=db_inserted_rows,
+            inserted_rows=db_inserted_rows, db_import_elapsed=db_elapsed,
             db_import_max_elapsed=db_max_elapsed, slowest_id_excel_file=slowest_id_excel_file,
+            skipped_tests=sorted({item['source_test_id'] for item in skipped_imports}),
+            skipped_files=[item['file_name'] for item in skipped_imports],
+            skipped_imports=skipped_imports,
         )
-    return len(test_projects), db_inserted_rows, fallback_inserted_rows
+    return len(test_projects), db_inserted_rows, skipped_imports
 
 
 class ProjectRoot(Node):
@@ -929,16 +946,10 @@ class TestNode(ProjectRoot):
             with diagnostics.stage('resolve WorkData source files', test_count=len(source_tests)):
                 source_cache = _resolve_workdata_import_sources(source_tests.values(), diagnostics)
 
-            def new_pr_prop(data, prop_name, prop_value):
-                prop = copy(data)
-                prop.param_prop_name = prop_name
-                prop.prop_value = str(prop_value)
-                return prop
-
-            with diagnostics.stage('DB-import and fallback-import loops',
+            with diagnostics.stage('DB-import loop',
                                    test_count=len(test_projects), params_count=len(param_list)):
                 _import_workdata_tests(
-                    test_projects, source_tests, param_list, new_pr_prop, source_cache, diagnostics,
+                    test_projects, source_tests, param_list, source_cache, diagnostics,
                 )
             return tuple(result_mass)
         finally:
