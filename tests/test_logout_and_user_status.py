@@ -1,4 +1,3 @@
-from datetime import datetime
 from types import SimpleNamespace
 
 import pytest
@@ -8,7 +7,7 @@ pytest.importorskip('PySide2')
 from PySide2.QtWidgets import QApplication, QDialog
 
 from app.mainwindow import MainWindow
-from app.plugins.admin_users.models import USER_COLUMNS, UserNode
+from app.plugins.admin_users.models import AdminUsersTreeModel, USER_COLUMNS, UserNode
 from db._session import Session
 from dialogs.login import LoginDialog
 
@@ -87,17 +86,14 @@ def test_active_user_login_is_unchanged(monkeypatch):
     assert dialog.result() == QDialog.Accepted
 
 
-def test_admin_user_node_displays_all_available_user_fields():
-    user = SimpleNamespace(
-        login='ivanov', fam='Иванов', name='Иван', active=True, deleted=False,
-        default_id_role=100, last_login=datetime(2026, 1, 2, 3, 4), last_logout=None,
-        default_password_fail_count=5, password_fail_count=3,
-    )
+def test_admin_user_tree_displays_only_full_name_and_login():
+    user = SimpleNamespace(login='ivanov', fam='Иванов', name='Иван')
     node = UserNode(user)
+    model = AdminUsersTreeModel()
 
     values = [node.data(column) for column in range(node.columnCount())]
 
-    assert node.columnCount() == len(USER_COLUMNS)
-    assert values[:7] == ['Иванов Иван', 'ivanov', 'Иванов', 'Иван', 'Да', 'Нет', '100']
-    assert values[7] == '2026-01-02 03:04:00'
-    assert values[8:] == ['', '5', '3']
+    assert USER_COLUMNS == ('ФИО', 'Логин')
+    assert model.headers == ['ФИО', 'Логин']
+    assert node.columnCount() == 2
+    assert values == ['Иванов Иван', 'ivanov']
