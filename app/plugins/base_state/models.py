@@ -239,6 +239,7 @@ class TreeModel(QAbstractItemModel):
         self.parent_widget = parent_widget
         self._root = Node(None)
         self._node_count = 0
+        self.has_deleted_nodes = False
         self.action_types = {}  # словарь предназначен для хранения действий над дочерними элементами узлов
         self.self_action_types = {}  # словарь предназначен для хранения действий нам самими узлами
         self.item_types = {  # связь типов элементов с классами в программе
@@ -413,6 +414,8 @@ class TreeModel(QAbstractItemModel):
                 # Создаем элемент узла
                 element_item = self.item_types.get(node.type_, self.item_types['root'])(node)
                 node_count += 1
+                if bool(getattr(node, 'deleted', False)):
+                    self.has_deleted_nodes = True
 
                 # Добавляем элемент в дерево
                 if parent_index is not None:
