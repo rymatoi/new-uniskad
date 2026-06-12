@@ -1,8 +1,11 @@
+from time import perf_counter
+
 from PySide2.QtCore import QSortFilterProxyModel, QModelIndex, QRegExp, Qt, QItemSelection
 from PySide2.QtGui import QIcon
-from PySide2.QtWidgets import QDialogButtonBox
+from PySide2.QtWidgets import QDialogButtonBox, QPushButton
 
 from app.plugins.eizm_dictionary.models import EizmDictionaryTreeModel
+from app.plugins.base_state.selection_helpers import apply_filter, log_initialized, set_visible_checked
 from db import sp
 from dialogs.base import BaseDialog
 from resources.ui.ui_py.ui_link_eizm_dialog import Ui_LinkEizmDialog
@@ -13,9 +16,14 @@ class LinkEizmDialog(BaseDialog):
     def __init__(self, current, exclude=None, flags=None, *args, **kwargs):
         if exclude is None:
             exclude = []
+        started = perf_counter()
         super().__init__(flags, *args, **kwargs)
         self.ui = Ui_LinkEizmDialog()
         self.ui.setupUi(self)
+        self.selectAllButton = QPushButton('Выбрать все', self)
+        self.clearAllButton = QPushButton('Снять все', self)
+        self.ui.buttonBox.addButton(self.selectAllButton, QDialogButtonBox.ActionRole)
+        self.ui.buttonBox.addButton(self.clearAllButton, QDialogButtonBox.ActionRole)
         self.current = current
         self.standards = None  # Выбранный пользователь. Используется для получения информации после выхода из диалога
         eizms = [eizm for eizm in sp.get_sprav_eizm_all() if
@@ -31,6 +39,7 @@ class LinkEizmDialog(BaseDialog):
         # self.ui.treeView.header().setResizeMode(QHeaderView.ResizeToContents)  # Подгоняем колонки под контент
         self.setWindowIcon(QIcon(":/uniskad.ico"))
         self.create_connections()  # создаем привязки
+        log_initialized(self, len(eizms), started)
 
     def create_connections(self):
         """Создание привязок для обработки кнопок"""
@@ -38,6 +47,8 @@ class LinkEizmDialog(BaseDialog):
         self.ui.buttonBox.button(QDialogButtonBox.Cancel).clicked.connect(self.cancel)
         self.ui.lineEdit.textChanged.connect(self.search_line_changed)
         self.ui.treeView.doubleClicked.connect(self.select_item)
+        self.selectAllButton.clicked.connect(self.select_all)
+        self.clearAllButton.clicked.connect(self.clear_all)
         self.ui.treeView.selectionModel().selectionChanged.connect(self.change_selected_item)
 
     def source_index(self, index: QModelIndex):
@@ -53,10 +64,22 @@ class LinkEizmDialog(BaseDialog):
         self.res = selected_eizms
         self.accept()
 
+    def select_all(self):
+        set_visible_checked(self, Qt.Checked, 'select_all')
+
+    def clear_all(self):
+        set_visible_checked(self, Qt.Unchecked, 'clear_all')
+
     def search_line_changed(self, text):
         """Изменение содержимого поисковой строки"""
-        search = QRegExp(text, Qt.CaseInsensitive, QRegExp.RegExp)
-        self.proxy.setFilterRegExp(search)  # Применяем регулярное выражение для фильтрации пользователей
+        apply_filter(self, text)
+
+    @staticmethod
+    def _selection_filter(text):
+        return QRegExp(text, Qt.CaseInsensitive, QRegExp.RegExp)
+
+    def selection_batch_completed(self):
+        self.ui.buttonBox.button(QDialogButtonBox.Ok).setEnabled(bool(self.model.checked_list))
 
     def cancel(self):
         """Обработка кнопки отмены """

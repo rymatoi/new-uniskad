@@ -29,6 +29,16 @@ class Ui_SelectTestDialog(object):
 
         self.horizontalLayout = QHBoxLayout()
         self.horizontalLayout.setObjectName(u"horizontalLayout")
+        self.selectAllButton = QPushButton(SelectTestDialog)
+        self.selectAllButton.setObjectName(u"selectAllButton")
+
+        self.horizontalLayout.addWidget(self.selectAllButton)
+
+        self.clearAllButton = QPushButton(SelectTestDialog)
+        self.clearAllButton.setObjectName(u"clearAllButton")
+
+        self.horizontalLayout.addWidget(self.clearAllButton)
+
         self.horizontalSpacer = QSpacerItem(40, 20, QSizePolicy.Expanding, QSizePolicy.Minimum)
 
         self.horizontalLayout.addItem(self.horizontalSpacer)
@@ -62,6 +72,8 @@ class Ui_SelectTestDialog(object):
         SelectTestDialog.setWindowTitle(QCoreApplication.translate("SelectTestDialog",
                                                                    u"\u0412\u044b\u0431\u043e\u0440 \u0438\u0441\u043f\u044b\u0442\u0430\u043d\u0438\u044f",
                                                                    None))
+        self.selectAllButton.setText(QCoreApplication.translate("SelectTestDialog", u"Выбрать все", None))
+        self.clearAllButton.setText(QCoreApplication.translate("SelectTestDialog", u"Снять все", None))
         self.selectButton.setText(
             QCoreApplication.translate("SelectTestDialog", u"\u0412\u044b\u0431\u0440\u0430\u0442\u044c", None))
         self.cancelButton.setText(

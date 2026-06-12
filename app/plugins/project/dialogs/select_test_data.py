@@ -1,6 +1,9 @@
+from time import perf_counter
+
 from PySide2.QtCore import QSortFilterProxyModel, QModelIndex, QRegExp, Qt
 from PySide2.QtGui import QIcon
 from app.plugins.base_state.models import TreeModel, Node
+from app.plugins.base_state.selection_helpers import apply_filter, log_initialized, set_visible_checked
 from db import sp
 from dialogs.base import BaseDialog
 from resources.ui.ui_py.ui_select_test_params_dialog import Ui_SelectTestParamsDialog
@@ -57,6 +60,7 @@ class TestDataTreeModel(TreeModel):
 class TestDataSelectionDialog(BaseDialog):
 
     def __init__(self, param_list, flags=None, *args, **kwargs):
+        started = perf_counter()
         super().__init__(flags, *args, **kwargs)
         self.ui = Ui_SelectTestParamsDialog()
         self.ui.setupUi(self)
@@ -70,6 +74,7 @@ class TestDataSelectionDialog(BaseDialog):
         #    False)  # делаем кнопку применения недоступной пока не выбран проект
         # self.ui.treeView.header().setResizeMode(QHeaderView.ResizeToContents)  # Подгоняем колонки под контент
         self.create_connections()  # создаем привязки
+        log_initialized(self, len(params), started)
 
     def create_connections(self):
         """Создание привязок для обработки кнопок"""
@@ -78,6 +83,7 @@ class TestDataSelectionDialog(BaseDialog):
         self.ui.lineEdit.textChanged.connect(self.search_line_changed)
         self.ui.treeView.doubleClicked.connect(self.select)
         self.ui.selectAllButton.clicked.connect(self.select_all)
+        self.ui.clearAllButton.clicked.connect(self.clear_all)
 
     def source_index(self, index: QModelIndex):
         """Индекс в исходной модели"""
@@ -88,16 +94,19 @@ class TestDataSelectionDialog(BaseDialog):
         self.res = [param.name for param in self.model.checked_list]
         self.accept()
 
-    def select_all(self):  # TODO проблема
-        if not len(self.model.checked_list) == self.model.rowCount():
-            self.model.checkMultipleItems(self.model.get_root_elements(), Qt.Checked)
-        else:
-            self.model.checkMultipleItems(self.model.get_root_elements(), Qt.Unchecked)
+    def select_all(self):
+        set_visible_checked(self, Qt.Checked, 'select_all')
+
+    def clear_all(self):
+        set_visible_checked(self, Qt.Unchecked, 'clear_all')
 
     def search_line_changed(self, text):
         """Изменение содержимого поисковой строки"""
-        search = QRegExp(text, Qt.CaseInsensitive, QRegExp.RegExp)
-        self.proxy.setFilterRegExp(search)  # Применяем регулярное выражение для фильтрации пользователей
+        apply_filter(self, text)
+
+    @staticmethod
+    def _selection_filter(text):
+        return QRegExp(text, Qt.CaseInsensitive, QRegExp.RegExp)
 
     def cancel(self):
         """Обработка кнопки отмены """

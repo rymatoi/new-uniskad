@@ -34,6 +34,11 @@ class Ui_SelectTestParamsDialog(object):
 
         self.horizontalLayout.addWidget(self.selectAllButton)
 
+        self.clearAllButton = QPushButton(SelectTestParamsDialog)
+        self.clearAllButton.setObjectName(u"clearAllButton")
+
+        self.horizontalLayout.addWidget(self.clearAllButton)
+
         self.horizontalSpacer = QSpacerItem(40, 20, QSizePolicy.Expanding, QSizePolicy.Minimum)
 
         self.horizontalLayout.addItem(self.horizontalSpacer)
@@ -70,6 +75,7 @@ class Ui_SelectTestParamsDialog(object):
         self.selectAllButton.setText(QCoreApplication.translate("SelectTestParamsDialog",
                                                                 u"\u0412\u044b\u0431\u0440\u0430\u0442\u044c \u0432\u0441\u0435",
                                                                 None))
+        self.clearAllButton.setText(QCoreApplication.translate("SelectTestParamsDialog", u"Снять все", None))
         self.selectButton.setText(
             QCoreApplication.translate("SelectTestParamsDialog", u"\u0412\u044b\u0431\u0440\u0430\u0442\u044c", None))
         self.cancelButton.setText(
