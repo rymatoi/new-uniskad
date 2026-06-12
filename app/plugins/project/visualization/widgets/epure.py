@@ -2,6 +2,7 @@ import numpy as np
 from PySide2.QtCore import Qt
 
 from app.plugins.project.core.constants import GraphConstants
+from app.plugins.project.visualization.widgets.colors import safe_color
 from app.plugins.project.visualization.widgets.legend_proxy import LegendProxyPlotDataItem
 import pyqtgraph as pg
 
@@ -39,11 +40,11 @@ class EpureItem(pg.ItemGroup):
 
     @staticmethod
     def _ensure_opaque_color(color_value):
-        color = pg.mkColor(color_value) if color_value is not None else None
-        if color is None:
-            color = pg.mkColor(GraphConstants.DEFAULT_STYLE['color'])
-        color.setAlpha(255)
-        return color
+        return safe_color(
+            color_value,
+            GraphConstants.DEFAULT_STYLE['color'],
+            force_opaque=True,
+        )
 
     def _normalize_style(self, style):
         base = GraphConstants.DEFAULT_STYLE.copy()

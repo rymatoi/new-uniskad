@@ -1,29 +1,11 @@
 import numpy as np
 from typing import Optional
 import pyqtgraph as pg
-from PySide2.QtGui import QColor
 from PySide2.QtCore import Qt
 
 from app.plugins.project.core.constants import GraphConstants
+from app.plugins.project.visualization.widgets.colors import safe_color
 
-# Словарь с RGB значениями для именованных цветов
-NAMED_COLORS = {
-    'Red': '#ff0000',
-    'Green': '#00ff00',
-    'Blue': '#0000ff',
-    'Cyan': '#00ffff',
-    'Magenta': '#ff00ff',
-    'Yellow': '#ffff00',
-    'DarkRed': '#800000',
-    'DarkGreen': '#008000',
-    'DarkBlue': '#000080',
-    'DarkCyan': '#008080',
-    'DarkMagenta': '#800080',
-    'DarkYellow': '#808000',
-    'DarkGray': '#808080',
-    'Gray': '#a0a0a4',
-    'LightGray': '#c0c0c0',
-}
 
 class CurveItem(pg.PlotDataItem):
     def __init__(self, x, y, name="", style=None):
@@ -54,41 +36,10 @@ class CurveItem(pg.PlotDataItem):
     def style(self):
         return self._style_config
 
-    def _convert_color(self, color):
-        """Преобразует входное значение в QColor"""
-        if color is None:
-            return QColor(Qt.black)
-
-        if isinstance(color, QColor):
-            return color
-
-        if isinstance(color, (tuple, list)) and len(color) >= 3:
-            return QColor(*color[:3])
-
-        if isinstance(color, str):
-            if color.lower() in {'none', 'transparent'}:
-                return None
-            # Если это именованный цвет из нашего словаря
-            if color in NAMED_COLORS:
-                return QColor(NAMED_COLORS[color])
-            # Если это hex-код цвета
-            if color.startswith('#'):
-                return QColor(color)
-            # Пробуем использовать стандартные цвета Qt или выражения вида rgb()
-            qt_color = QColor(color)
-            if qt_color.isValid():
-                return qt_color
-            try:
-                return QColor(getattr(Qt, color))
-            except AttributeError:
-                print(f"Не удалось преобразовать цвет {color}, используем черный")
-                return QColor(Qt.black)
-
-        # На случай неожиданных типов
-        qt_color = QColor(color)
-        if qt_color.isValid():
-            return qt_color
-        return QColor(Qt.black)
+    @staticmethod
+    def _convert_color(color):
+        """Преобразует входное значение в QColor с безопасным fallback."""
+        return safe_color(color, '#000000', allow_transparent=True)
 
     def apply_style(self):
         """Применение стиля к кривой"""
