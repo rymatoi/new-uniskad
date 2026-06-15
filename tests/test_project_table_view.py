@@ -73,6 +73,30 @@ def test_project_search_uses_model_display_values(application):
     assert view.currentIndex() == view.model().index(0, 0)
 
 
+def test_project_load_skips_records_with_invalid_coordinates(application, caplog):
+    column = datetime.datetime(2024, 1, 1)
+    missing_column = datetime.datetime(2024, 1, 2)
+    view = ProjectTableView()
+
+    with caplog.at_level('WARNING'):
+        view.model().load_data([
+            record('valid', None, 'row_npp', '1'),
+            record(None, column, 'column_npp', '1'),
+            record('valid', column, 'value', 'shown'),
+            record('missing-number', None, 'type', 'row'),
+            record('missing-number', column, 'value', 'hidden'),
+            record(None, missing_column, 'type', 'column'),
+            record('valid', missing_column, 'value', 'hidden'),
+            record(None, None, 'value', 'unplaceable'),
+        ])
+
+    assert view.ord_rows == ['valid']
+    assert view.ord_columns == [column]
+    assert view.model().data(view.model().index(0, 0)) == 'shown'
+    assert set(view.table) == {('valid', column)}
+    assert 'skipped 5 records with missing or invalid row/column coordinates' in caplog.text
+
+
 def test_project_add_remove_row_and_column_are_lazy(application):
     column_1 = datetime.datetime(2024, 1, 1)
     column_2 = datetime.datetime(2024, 1, 2)
