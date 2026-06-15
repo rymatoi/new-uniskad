@@ -35,6 +35,18 @@ def test_edit_line_dialog_forwards_parent_without_conflicting_with_flags(monkeyp
     assert calls == {'args': (), 'kwargs': {'flags': None, 'parent': parent}}
 
 
+def test_edit_line_dialog_has_point_symbols():
+    assert edit_line.EditLineDialog.POINT_SYMBOLS
+    assert ('o', 'Круг') in edit_line.EditLineDialog.POINT_SYMBOLS
+
+
+def test_edit_line_dialog_falls_back_for_unknown_saved_style():
+    items = [('known', 'Known')]
+
+    assert edit_line.EditLineDialog._index_for_value(items, 'missing') == 0
+    assert edit_line.EditLineDialog._index_for_value(items, 'missing', 3) == 3
+
+
 def test_customize_curve_opens_dialog_for_selected_curve(monkeypatch):
     curve = Curve()
     calls = {}
