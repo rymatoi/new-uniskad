@@ -190,7 +190,7 @@ class EditEpureDialog(BaseDialog):
                 self.selected_params.pop(index.row())
 
     def add_parameters(self):
-        self.parameters = utils.collect_project_params(sp.get_project_test_params(self.project_id))
+        self.parameters = utils.get_project_params(self.project_id)
         dialog = TestDataSelectionDialog(list(self.parameters.keys()))
         if dialog.exec_():
             params = [RowParam(param) for param in dialog.res]
