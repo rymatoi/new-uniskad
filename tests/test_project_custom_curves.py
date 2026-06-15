@@ -46,3 +46,23 @@ def test_valid_manual_curve_is_processed_as_before():
 
 def test_legacy_curve_model_test_id_is_used():
     assert ItemProcessor.get_custom_curve_test_id({}, SimpleNamespace(test_id='9')) == 9
+
+
+def test_generated_custom_curve_uses_stored_parameters_without_losing_metadata(monkeypatch):
+    values = {
+        'type': 'polynomial', 'degree': 2, 'test_id': 7, 'name': 'Approx',
+        'x_param': 'temperature', 'y_param': 'pressure', 'extra': 'kept',
+    }
+    curve = SimpleNamespace(id=5, values=values)
+    processor = make_processor([curve])
+    processor.load_plot_data = lambda x, y: {'selected': (x, y)}
+    monkeypatch.setattr(
+        ItemProcessor, 'get_other_data',
+        lambda plot_data, curves, nodes: iter([(7, [1], [2], {'name': 'Approx'})]),
+    )
+
+    _, _, _, style = list(processor.get_custom_curves())[0]
+
+    assert style['custom_curve_id'] == 5
+    assert (style['x_param'], style['y_param']) == ('temperature', 'pressure')
+    assert values['extra'] == 'kept'
