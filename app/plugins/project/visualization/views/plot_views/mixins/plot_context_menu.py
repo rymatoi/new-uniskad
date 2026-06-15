@@ -16,6 +16,7 @@ from app.menu_service import get_menu
 from app.plugins.project.dialogs.create_approx import ApproxDialog
 from app.plugins.project.dialogs.create_interpolation import InterpDialog
 from app.plugins.project.dialogs.extrapolation_dialog import ExtrapolationDialog
+from app.plugins.project.dialogs.edit_line import EditLineDialog
 
 
 class PlotContextMenuMixin:
@@ -248,7 +249,10 @@ class PlotContextMenuMixin:
         curve = data['curve']
         action_name = data['action']
 
-        if action_name == PlotMenuActions.CURVE_HIDE.name and curve:
+        if action_name == PlotMenuActions.CURVE_STYLE.name:
+            self._open_curve_style_dialog(curve)
+
+        elif action_name == PlotMenuActions.CURVE_HIDE.name and curve:
             # Получаем test_id для кривой
             test_id = self.data_processor.get_test_id_for_curve(curve)
             if test_id:
@@ -403,6 +407,19 @@ class PlotContextMenuMixin:
                     print("Линейка не инициализирована должным образом")
 
         print(f"Curve action: {action_name}, checked: {checked}, curve: {curve.name() if curve else 'all curves'}")
+
+    def _open_curve_style_dialog(self, curve):
+        """Открывает существующий диалог настройки для выбранной кривой."""
+        if curve is None or curve not in self.curve_items or not hasattr(curve, 'style_config'):
+            print("Не удалось настроить стиль: выбранная кривая больше не существует")
+            return False
+
+        dialog = EditLineDialog(
+            curve,
+            parent=self,
+            persist_callback=getattr(self.data_processor, 'update_custom_curve_style', None),
+        )
+        return bool(dialog.exec_())
 
     def _handle_plot_action(self, action_name: str, checked: bool = False):
         """Обработчик действий для графика"""

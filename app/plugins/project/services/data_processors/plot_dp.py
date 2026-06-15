@@ -8,6 +8,7 @@ from app.plugins.project.visualization.widgets.curve import CurveItem
 from app.plugins.project.core.constants import GraphConstants
 import json
 import logging
+from db import sp
 
 logger = logging.getLogger(__name__)
 
@@ -330,3 +331,26 @@ class PlotProcessor(DataProcessor):
             return custom_curve.id
 
         return None
+
+    def update_custom_curve_style(self, curve) -> bool:
+        """Сохраняет стиль пользовательской кривой, не меняя формат её данных."""
+        curve_id = getattr(curve, 'custom_curve_id', None)
+        if curve_id is None:
+            return False
+
+        for curve_obj in self.other_data:
+            if curve_obj.id != curve_id:
+                continue
+            values = curve_obj.values
+            if isinstance(values, str):
+                values = json.loads(values)
+            values['name'] = curve.name()
+            values['style'] = curve.style_config.copy()
+            updated = sp.new_upd_custom_curve(
+                (curve_obj.id, self.data_manager.project_id, json.dumps(values))
+            )
+            if updated:
+                curve_obj.values = values
+                return True
+            return False
+        return False
