@@ -5,7 +5,7 @@ from PySide2.QtCore import Qt
 from PySide2.QtGui import QColor
 from PySide2.QtWidgets import *
 
-from app.plugins.project import utils
+from app.plugins.project import utils_
 from app.plugins.project.core.constants import GraphConstants
 from db import sp
 from dialogs.base import BaseDialog
@@ -22,6 +22,12 @@ class EditLineDialog(BaseDialog):
         (Qt.DashDotLine, 'Линия точка-тире'),
         (Qt.DashDotDotLine, 'Линия точка-точка-тире'),
     ]
+    POINT_SYMBOLS = utils_.SYMBOLS
+
+    @staticmethod
+    def _index_for_value(items, value, default=0):
+        """Return the item index without failing on an obsolete saved style."""
+        return next((index for index, (key, _) in enumerate(items) if key == value), default)
 
     def __init__(self, item, flags=None, persist_callback=None, *args, **kwargs):
         super().__init__(*args, flags=flags, **kwargs)
@@ -102,8 +108,12 @@ class EditLineDialog(BaseDialog):
 
         # TODO может быть сделать выгрузку значений по умолчанию здесь?
         self.ui.curveNameLineEdit.setText(curve_name)
-        line_type_index = next(i for i, (k, v) in enumerate(utils.LINE_STYLES) if k == int(curve_line_style))
-        point_type_index = next(i for i, (k, v) in enumerate(utils.SYMBOLS) if k == curve_point_symbol)
+        try:
+            curve_line_style = int(curve_line_style)
+        except (TypeError, ValueError):
+            curve_line_style = int(Qt.SolidLine)
+        line_type_index = self._index_for_value(self.LINE_STYLES, curve_line_style, 1)
+        point_type_index = self._index_for_value(self.POINT_SYMBOLS, curve_point_symbol)
         self.ui.colorButton.setColor(QColor(curve_color))  # Задаем цвет кривой
         self.ui.colorButton_3.setColor(QColor(curve_symbol_color))  # Задаем цвет кривой
         self.ui.colorButton_2.setColor(QColor(curve_symbol_fill_color))  # Задаем цвет кривой
@@ -119,7 +129,7 @@ class EditLineDialog(BaseDialog):
         sf_color = self.ui.colorButton_2.color()
         width = self.ui.thickness.value()
         line_style = self.LINE_STYLES[self.ui.lineType.currentIndex()][0]
-        symbol = utils.SYMBOLS[self.ui.pointType.currentIndex()][0]
+        symbol = self.POINT_SYMBOLS[self.ui.pointType.currentIndex()][0]
         point_size = self.ui.pointSizeSpinBox.value()
 
         self.example_plot.setSymbol(symbol)
@@ -138,7 +148,7 @@ class EditLineDialog(BaseDialog):
         """Функция заполнения списка типов точки."""
         # Указываются наименования стандартных типов точек в порядке,
         # соответствующем зарезервированным символьным константам (POINT_TYPES)
-        point_symbols = [name for _, name in utils.SYMBOLS]
+        point_symbols = [name for _, name in self.POINT_SYMBOLS]
         self.ui.pointType.addItems(point_symbols)
 
     def accept_(self) -> None:
@@ -149,7 +159,7 @@ class EditLineDialog(BaseDialog):
         curve_symbol_fill_color = self.ui.colorButton_2.color().name()
         curve_width = self.ui.thickness.value()
         curve_line_style = self.LINE_STYLES[self.ui.lineType.currentIndex()][0]
-        curve_point_symbol = utils.SYMBOLS[self.ui.pointType.currentIndex()][0]
+        curve_point_symbol = self.POINT_SYMBOLS[self.ui.pointType.currentIndex()][0]
         curve_point_size = self.ui.pointSizeSpinBox.value()
         styles = (
             ('curve_width', f'{curve_width}'),
