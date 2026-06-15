@@ -1,5 +1,4 @@
 import json
-import logging
 
 from PySide2.QtCore import Qt
 from PySide2.QtWidgets import *
@@ -12,8 +11,6 @@ from dialogs.base import BaseDialog
 from resources.ui.ui_py.ui_edit_line import Ui_EditLineDialog
 import pyqtgraph as pg
 
-logger = logging.getLogger(__name__)
-
 
 class EditLineDialog(BaseDialog):
     LINE_STYLES = [
@@ -25,19 +22,12 @@ class EditLineDialog(BaseDialog):
         (Qt.DashDotDotLine, 'Линия точка-точка-тире'),
     ]
 
-    def __init__(self, item, parent=None, flags=None, parameters=None, x_param=None, y_param=None):
+    def __init__(self, item, parent=None, flags=None):
         super().__init__(parent, flags)
         self.item = item
         self.result_style = None
-        self.result_params = None
-        self.parameters = list(dict.fromkeys(parameters or []))
-        self.current_params = (x_param or '', y_param or '')
         self.ui = Ui_EditLineDialog()
         self.ui.setupUi(self)
-        # The generated form connects ``accepted`` directly to accept(); validation
-        # and result construction must run first through accept_().
-        self.ui.buttonBox.accepted.disconnect(self.accept)
-        self._init_parameter_controls()
 
         self.example_plot = pg.PlotDataItem([0, 1], [0, 1])
 
@@ -55,28 +45,6 @@ class EditLineDialog(BaseDialog):
         self.ui.plotView.plotItem.addItem(self.example_plot)  # Добавляем кривую-образец
         self.refresh()
         self.create_connections()  # создаем привязки
-        logger.debug("Opening curve editor with X=%r, Y=%r", *self.current_params)
-
-    def _init_parameter_controls(self):
-        """Add searchable parameter selectors without disturbing the generated style form."""
-        group = QGroupBox('Параметры кривой', self)
-        form = QFormLayout(group)
-        self.x_param_combo = QComboBox(group)
-        self.y_param_combo = QComboBox(group)
-        for combo, value in ((self.x_param_combo, self.current_params[0]),
-                             (self.y_param_combo, self.current_params[1])):
-            combo.setEditable(True)
-            combo.setInsertPolicy(QComboBox.NoInsert)
-            combo.addItems(self.parameters)
-            combo.setCurrentText(value)
-            combo.completer().setCaseSensitivity(Qt.CaseInsensitive)
-            combo.completer().setFilterMode(Qt.MatchContains)
-            combo.setEnabled(bool(self.parameters))
-        form.addRow('X-параметр:', self.x_param_combo)
-        form.addRow('Y-параметр:', self.y_param_combo)
-        self.ui.verticalLayout_6.insertWidget(0, group)
-        if not self.parameters:
-            logger.warning("Parameter list is unavailable; X/Y editing is disabled")
 
     def create_connections(self):
         """Создание привязок для обработки кнопок"""
@@ -176,16 +144,6 @@ class EditLineDialog(BaseDialog):
         self.ui.pointType.addItems(point_symbols)
 
     def accept_(self) -> None:
-        if self.parameters:
-            x_param = self.x_param_combo.currentText().strip()
-            y_param = self.y_param_combo.currentText().strip()
-            if not x_param or not y_param or x_param not in self.parameters or y_param not in self.parameters:
-                QMessageBox.warning(self, 'Параметры кривой',
-                                    'Выберите существующие непустые X- и Y-параметры.')
-                return
-            self.result_params = (x_param, y_param)
-            logger.info("Curve parameters selected: X=%r, Y=%r, changed=%s",
-                        x_param, y_param, self.result_params != self.current_params)
         curve = self.item
         curve_name = self.ui.curveNameLineEdit.text()
         curve_color = self.ui.colorButton.color().name()
