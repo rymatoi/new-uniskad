@@ -32,6 +32,13 @@ class PlotProcessor(DataProcessor):
 
         return Collector.process_plot_values(x_data, y_data, x_param, y_param)
 
+    def load_plot_data(self, x_param, y_param):
+        """Load paired plot values for an arbitrary parameter pair."""
+        test_ids = self.test_nodes.keys()
+        x_data = self.data_manager.load_curve_data(test_ids, x_param)
+        y_data = self.data_manager.load_curve_data(test_ids, y_param)
+        return Collector.process_plot_values(x_data, y_data, x_param, y_param)
+
     def init_other_data(self):
         custom_curves = self.data_manager.load_custom_curves()
         return custom_curves
@@ -75,51 +82,16 @@ class PlotProcessor(DataProcessor):
                 approx_curves.append((curve, curve_values))
 
         if approx_curves:
-            approx_objects = [curve for curve, _ in approx_curves]
-            curves_data = ItemProcessor.get_other_data(self.plot_data, approx_objects, self.test_nodes)
-
-            remaining_curves = list(approx_curves)
-
-            for test_id, x, y, style in curves_data:
-                curve_name = style.get('name', '')
-                curve_type = style.get('type', '')
-                curve_degree = style.get('degree', None)
-
-                best_match = None
-                best_match_index = -1
-
-                for i, (curve_obj, curve_data) in enumerate(remaining_curves):
-                    if curve_data.get('test_id') != int(test_id) or curve_data.get('name') != curve_name:
-                        continue
-
-                    curve_matches = True
-
-                    if curve_type and 'type' in curve_data and curve_data.get('type') != curve_type:
-                        curve_matches = False
-
-                    if curve_degree is not None and 'degree' in curve_data and curve_data.get('degree') != curve_degree:
-                        curve_matches = False
-
-                    if curve_matches:
-                        for field in ('left_points', 'right_points', 'left_limit', 'right_limit'):
-                            if field in curve_data:
-                                style_value = style.get(field)
-                                if style_value is None:
-                                    continue
-                                if curve_data.get(field) != style_value:
-                                    curve_matches = False
-                                    break
-
-                    if curve_matches:
-                        best_match = curve_obj
-                        best_match_index = i
-                        break
-
-                if best_match:
-                    style['custom_curve_id'] = best_match.id
-                    remaining_curves.pop(best_match_index)
-
-                yield test_id, x, y, style
+            for curve_obj, curve_data in approx_curves:
+                x_param = curve_data.get('x_param')
+                y_param = curve_data.get('y_param')
+                source_data = self.load_plot_data(x_param, y_param) if x_param and y_param else self.plot_data
+                curves_data = ItemProcessor.get_other_data(source_data, [curve_obj], self.test_nodes)
+                for test_id, x, y, style in curves_data:
+                    style['custom_curve_id'] = curve_obj.id
+                    style['x_param'] = x_param
+                    style['y_param'] = y_param
+                    yield test_id, x, y, style
 
         for curve_obj, curve_data in manual_curves:
             points = curve_data.get('points') or []

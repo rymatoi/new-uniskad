@@ -19,6 +19,7 @@ from app.plugins.project.dialogs.create_approx import ApproxDialog
 from app.plugins.project.dialogs.create_interpolation import InterpDialog
 from app.plugins.project.dialogs.extrapolation_dialog import ExtrapolationDialog
 from app.plugins.project.dialogs.edit_line import EditLineDialog, visual_style_to_dialog_style
+from app.plugins.project.utils_ import collect_project_params
 
 logger = logging.getLogger(__name__)
 
@@ -416,12 +417,16 @@ class PlotContextMenuMixin:
         print(f"Curve action: {action_name}, checked: {checked}, curve: {curve.name() if curve else 'all curves'}")
 
     def _customize_curve_style(self, curve):
-        """Open the style editor and apply its result without rebuilding the plot."""
+        """Open the curve editor and apply style and coordinate parameters."""
         if curve is None or not hasattr(curve, 'apply_style'):
             logger.warning("Cannot customize a missing or invalid curve")
             return
         try:
-            dialog = EditLineDialog(curve, parent=self)
+            parameters = self._available_curve_parameters()
+            x_param, y_param = self._curve_parameters(curve)
+            dialog = EditLineDialog(
+                curve, parent=self, parameters=parameters, x_param=x_param, y_param=y_param
+            )
             if not dialog.exec_() or not dialog.result_style:
                 return
             old_name = curve.name() if callable(getattr(curve, 'name', None)) else ''
@@ -437,6 +442,14 @@ class PlotContextMenuMixin:
                 curve.opts['name'] = new_name
             curve.apply_style()
             self._persist_curve_style(curve, dialog.result_style)
+            if dialog.result_params and dialog.result_params != (x_param, y_param):
+                self._persist_curve_parameters(curve, *dialog.result_params)
+                self.data_processor.plot_data = self.data_processor.load_plot_data(
+                    self.item.graph_label_x, self.item.graph_label_y
+                )
+                self.prepare_curves()
+                logger.info("Curve rebuilt after changing X/Y to %r", dialog.result_params)
+                return
             if hasattr(self.plotItem, 'legend') and self.plotItem.legend is not None:
                 for sample, label in self.plotItem.legend.items:
                     if getattr(label, 'text', None) == old_name and new_name:
@@ -445,6 +458,48 @@ class PlotContextMenuMixin:
             curve.update()
         except Exception:
             logger.exception("Could not customize curve style")
+
+    def _available_curve_parameters(self):
+        try:
+            return list(collect_project_params(
+                sp.get_project_test_params(self.data_processor.data_manager.project_id)
+            ).keys())
+        except Exception:
+            logger.exception("Could not obtain parameters for curve editor")
+            return []
+
+    def _curve_parameters(self, curve):
+        custom_id = getattr(curve, 'custom_curve_id', None)
+        if custom_id is not None:
+            record = next((item for item in self.data_processor.other_data
+                           if getattr(item, 'id', None) == custom_id), None)
+            if record is not None:
+                try:
+                    values = json.loads(record.values) if isinstance(record.values, str) else record.values
+                    return (values.get('x_param', self.item.graph_label_x),
+                            values.get('y_param', self.item.graph_label_y))
+                except (TypeError, json.JSONDecodeError):
+                    logger.warning("Invalid custom curve values for %r", custom_id)
+        return self.item.graph_label_x, self.item.graph_label_y
+
+    def _persist_curve_parameters(self, curve, x_param, y_param):
+        custom_id = getattr(curve, 'custom_curve_id', None)
+        if custom_id is not None:
+            record = next(item for item in self.data_processor.other_data if item.id == custom_id)
+            values = json.loads(record.values) if isinstance(record.values, str) else dict(record.values or {})
+            values.update({'x_param': x_param, 'y_param': y_param})
+            record.values = json.dumps(values)
+            sp.new_upd_custom_curve((record.id, record.graph_project_id, record.values))
+            logger.info("Saved custom curve %r X/Y", custom_id)
+            return
+        data = self.item._data
+        props = [
+            (None, data.id, data.id_up, 7, name, value, None, None, None, 0, None)
+            for name, value in (('graph_label_x', x_param), ('graph_label_y', y_param))
+        ]
+        updated = sp.new_update_project_from_record_array(props)
+        self.item.update_class_props(updated)
+        logger.info("Saved project graph X/Y")
 
     def _persist_curve_style(self, curve, style):
         """Persist custom curves; Project/Test curves retain their existing node mechanism."""
