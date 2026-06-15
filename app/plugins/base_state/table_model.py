@@ -107,6 +107,7 @@ class LazyTableModel(QAbstractTableModel):
 
     def load_data(self, db_objects):
         started = time.perf_counter()
+        db_objects = list(db_objects)
         self.beginResetModel()
         self.rows = {}
         self.columns = {}
@@ -115,6 +116,34 @@ class LazyTableModel(QAbstractTableModel):
 
         for obj in db_objects:
             self._object_for(obj).update({obj.prop_name: obj})
+
+        valid_rows = {
+            row for row in self.rows
+            if row[0] is not None and self._row_prop(row, 'row_npp', int, None) is not None
+        }
+        valid_columns = {
+            column for column, properties in self.columns.items()
+            if column[1] is not None
+            and self._get(properties, 'column_npp', int, None) is not None
+        }
+        invalid_records = sum(
+            len(properties) for key, properties in self.rows.items() if key not in valid_rows
+        ) + sum(
+            len(properties) for key, properties in self.columns.items() if key not in valid_columns
+        ) + sum(
+            len(properties) for key, properties in self.table.items()
+            if (key[0], None) not in valid_rows or (None, key[1]) not in valid_columns
+        )
+        self.rows = {key: value for key, value in self.rows.items() if key in valid_rows}
+        self.columns = {key: value for key, value in self.columns.items() if key in valid_columns}
+        self.table = {
+            key: value for key, value in self.table.items()
+            if (key[0], None) in valid_rows and (None, key[1]) in valid_columns
+        }
+        if invalid_records:
+            logger.warning(
+                "LazyTableModel: skipped %d records with missing or invalid row/column coordinates",
+                invalid_records)
 
         self.ord_columns = [
             column[1] for column in sorted(
