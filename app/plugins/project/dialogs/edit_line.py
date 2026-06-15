@@ -24,7 +24,7 @@ class EditLineDialog(BaseDialog):
     ]
 
     def __init__(self, item, flags=None, persist_callback=None, *args, **kwargs):
-        super().__init__(flags, *args, **kwargs)
+        super().__init__(*args, flags=flags, **kwargs)
         self.item = item
         self.persist_callback = persist_callback
         self.ui = Ui_EditLineDialog()
