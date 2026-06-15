@@ -239,7 +239,7 @@ class EditProjectItemDialog(BaseDialog):
         self.ui.plotView.plotItem.vb.setMouseEnabled(x=False, y=False)
         self.ui.plotView.plotItem.addItem(self.example_plot)  # Добавляем кривую-образец
         self.refresh()
-        self.ui.groupBox.setFixedHeight(280)
+        self.ui.groupBox.setMinimumHeight(380)
 
         if self.item.internal_type() != 'test':
             self.ui.groupBox_3.setEnabled(False)

@@ -23,6 +23,8 @@ class Ui_EditTestDialog(object):
         EditTestDialog.resize(1020, 767)
         self.verticalLayout_6 = QVBoxLayout(EditTestDialog)
         self.verticalLayout_6.setObjectName(u"verticalLayout_6")
+        self.verticalLayout_6.setSpacing(14)
+        self.verticalLayout_6.setContentsMargins(16, 16, 16, 16)
         self.verticalLayout = QVBoxLayout()
         self.verticalLayout.setObjectName(u"verticalLayout")
         self.groupBox = QGroupBox(EditTestDialog)
@@ -34,7 +36,8 @@ class Ui_EditTestDialog(object):
         self.form = QFormLayout()
         self.form.setObjectName(u"form")
         self.form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
-        self.form.setVerticalSpacing(6)
+        self.form.setHorizontalSpacing(14)
+        self.form.setVerticalSpacing(12)
         self.label = QLabel(self.groupBox)
         self.label.setObjectName(u"label")
 
@@ -52,7 +55,8 @@ class Ui_EditTestDialog(object):
 
         self.colorButton = ColorButton(self.groupBox)
         self.colorButton.setObjectName(u"colorButton")
-        self.colorButton.setMaximumSize(QSize(30, 30))
+        self.colorButton.setMinimumSize(QSize(48, 28))
+        self.colorButton.setMaximumSize(QSize(48, 28))
         self.colorButton.setStyleSheet(u"background-color: transparent;")
         self.colorButton.setAutoDefault(False)
 
@@ -65,7 +69,7 @@ class Ui_EditTestDialog(object):
 
         self.lineType = QComboBox(self.groupBox)
         self.lineType.setObjectName(u"lineType")
-        self.lineType.setMinimumSize(QSize(200, 0))
+        self.lineType.setMinimumSize(QSize(240, 0))
 
         self.form.setWidget(2, QFormLayout.FieldRole, self.lineType)
 
@@ -108,7 +112,8 @@ class Ui_EditTestDialog(object):
 
         self.colorButton_3 = ColorButton(self.groupBox)
         self.colorButton_3.setObjectName(u"colorButton_3")
-        self.colorButton_3.setMaximumSize(QSize(30, 30))
+        self.colorButton_3.setMinimumSize(QSize(48, 28))
+        self.colorButton_3.setMaximumSize(QSize(48, 28))
         self.colorButton_3.setStyleSheet(u"background-color: transparent;")
         self.colorButton_3.setAutoDefault(False)
 
@@ -121,7 +126,8 @@ class Ui_EditTestDialog(object):
 
         self.colorButton_2 = ColorButton(self.groupBox)
         self.colorButton_2.setObjectName(u"colorButton_2")
-        self.colorButton_2.setMaximumSize(QSize(30, 30))
+        self.colorButton_2.setMinimumSize(QSize(48, 28))
+        self.colorButton_2.setMaximumSize(QSize(48, 28))
         self.colorButton_2.setStyleSheet(u"background-color: transparent;")
         self.colorButton_2.setAutoDefault(False)
 
@@ -142,7 +148,7 @@ class Ui_EditTestDialog(object):
 
         self.plotView = PlotWidget(self.groupBox)
         self.plotView.setObjectName(u"plotView")
-        self.plotView.setMinimumSize(QSize(120, 0))
+        self.plotView.setMinimumSize(QSize(260, 340))
 
         self.horizontalLayout.addWidget(self.plotView)
 
