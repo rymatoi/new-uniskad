@@ -20,6 +20,7 @@ class EditPlaneDialog(BaseDialog):
         self.y_label = plotview.graph_label_y
         self.curves = None
         self.param_values = {}
+        self.project_id = None
 
         self.ZComboBox = ExtendedComboBox(self)
 
@@ -86,6 +87,7 @@ class EditPlaneDialog(BaseDialog):
             self.ui.listWidget.takeItem(index.row())
 
     def update_values(self):
+        self._ensure_param_values(self.ZComboBox.currentText())
         if not self.valid_param():
             return
         cur_param = self.param_values[self.ZComboBox.currentText()]
@@ -126,10 +128,15 @@ class EditPlaneDialog(BaseDialog):
                 self.max_val = max_val
                 self.min_val = min_val
 
-        self.curves = utils_.collect_project_params(sp.get_project_test_params(project_id))
+        self.project_id = project_id
+        self.curves = utils_.get_project_params(project_id)
         curve_list = list(self.curves.keys())
+        self.ZComboBox.addItems(curve_list)
 
-        _curves = sp.get_params_values(curve_list, project_id)
+    def _ensure_param_values(self, param_name):
+        if not param_name or param_name in self.param_values:
+            return
+        _curves = utils_.get_param_values(self.project_id, param_name)
         for _c in _curves:
             c_val = to_float(_c.value)
             if _c.param not in self.param_values.keys():
@@ -138,8 +145,6 @@ class EditPlaneDialog(BaseDialog):
                 self.param_values[_c.param].max_val = c_val
             if c_val < self.param_values[_c.param].min_val:
                 self.param_values[_c.param].min_val = c_val
-
-        self.ZComboBox.addItems(list(self.param_values.keys()))
 
     def manually_checked(self):
         self.ui.xGridManually.setChecked(True)

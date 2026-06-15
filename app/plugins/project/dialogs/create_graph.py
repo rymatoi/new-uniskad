@@ -5,7 +5,7 @@ from PySide2.QtWidgets import QDialogButtonBox, QComboBox
 
 from app.plugins.base_state.widgets import ExtendedComboBox
 from app.plugins.project import utils
-from app.plugins.project.utils_ import collect_project_params
+from app.plugins.project.utils_ import get_param_values, get_project_params
 from db import sp
 from dialogs.base import BaseDialog
 from resources.ui.ui_py.ui_create_graph import Ui_CreateGraphDialog
@@ -20,6 +20,7 @@ class CreateGraphDialog(BaseDialog):
 
         self.curves = {}
         self.param_values = {}
+        self.project_id = project_id
         self.XComboBox = ExtendedComboBox(self)
         self.YComboBox = ExtendedComboBox(self)
         self.ZComboBox = ExtendedComboBox(self)
@@ -96,6 +97,7 @@ class CreateGraphDialog(BaseDialog):
         self.ui.nameLineEdit.setText(f'{self.YComboBox.currentText()} от {self.XComboBox.currentText()}')
 
     def update_values(self):
+        self._ensure_param_values(self.ZComboBox.currentText())
         if not self.valid_param():
             return
         cur_param = self.param_values[self.ZComboBox.currentText()]
@@ -112,10 +114,19 @@ class CreateGraphDialog(BaseDialog):
                 self.max_val = max_val
                 self.min_val = min_val
 
-        self.curves = collect_project_params(sp.get_project_test_params(project_id))
+        self.curves = get_project_params(project_id)
         curve_list = list(self.curves.keys())
+        self.ZComboBox.addItems(curve_list)
+        self.XComboBox.addItems(curve_list)
+        self.YComboBox.addItems(curve_list)
+        self.XComboBox.setCurrentText('')
+        self.YComboBox.setCurrentText('')
+        self.update_name()
 
-        _curves = sp.get_params_values(curve_list, project_id)
+    def _ensure_param_values(self, param_name):
+        if not param_name or param_name in self.param_values:
+            return
+        _curves = get_param_values(self.project_id, param_name)
         for _c in _curves:
             if _c.param not in self.param_values.keys():
                 self.param_values[_c.param] = Values(_c.value, _c.value)
@@ -126,15 +137,6 @@ class CreateGraphDialog(BaseDialog):
                 self.param_values[_c.param].max_val = _c.value
             if _c.value < self.param_values[_c.param].min_val:
                 self.param_values[_c.param].min_val = _c.value
-
-        self.XComboBox.addItems(curve_list)
-        self.YComboBox.addItems(curve_list)
-        self.ZComboBox.addItems(list(self.param_values.keys()))
-
-        self.XComboBox.setCurrentText('')
-        self.YComboBox.setCurrentText('')
-
-        self.update_name()
 
     def get_group_by(self):
         if self.ui.modelRadioButton.isChecked():

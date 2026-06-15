@@ -6,7 +6,7 @@ from PySide2.QtWidgets import QHBoxLayout, QPushButton, QTreeWidgetItem
 from app import app_logger
 from app.plugins.base_state.widgets import ExtendedComboBox
 from app.plugins.project import utils
-from app.plugins.project.utils_ import collect_project_params, collect_cell_values
+from app.plugins.project.utils_ import get_project_params, collect_cell_values
 from db import sp
 from dialogs.base import BaseDialog
 from resources.ui.ui_py.ui_extra_param_epure import Ui_ExtraParamEoure
@@ -38,7 +38,7 @@ class ExtraParamEpureDialog(BaseDialog):
 
         self.selected = extra_param_values
 
-        self.param_list = collect_project_params(sp.get_project_test_params(project_id))
+        self.param_list = get_project_params(project_id)
         self.param_values_dict = {}
         self.current_param = extra_param
         self.create_connections()  # создаем привязки

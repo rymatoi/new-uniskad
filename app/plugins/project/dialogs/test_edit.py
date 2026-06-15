@@ -297,7 +297,7 @@ class EditProjectItemDialog(BaseDialog):
 
     def init_param_list(self):
         project_item = self.item.parent().parent()
-        self.curves = utils.collect_project_params(sp.get_project_test_params(project_item._data.id))
+        self.curves = utils.get_project_params(project_item._data.id)
 
     def add_condition(self, style=None):
         normalized_style = self._normalize_condition_payload(style, strict=False) if style else None
