@@ -2,6 +2,7 @@
 from collections import defaultdict
 from itertools import groupby
 import json
+import logging
 
 import numpy as np
 
@@ -13,8 +14,23 @@ from app.plugins.project.utils.converters.graph_converter import GraphConverter
 from app.plugins.project.services.approximation import ApproximationService
 from app.plugins.project.services.extrapolation import ExtrapolationService
 
+logger = logging.getLogger(__name__)
+
 
 class ItemProcessor:
+    @staticmethod
+    def get_custom_curve_test_id(curve_data, curve=None):
+        """Return a normalized test id from curve JSON or a legacy model field."""
+        raw_test_id = curve_data.get('test_id') if isinstance(curve_data, dict) else None
+        if raw_test_id is None and curve is not None:
+            raw_test_id = getattr(curve, 'test_id', None)
+        if raw_test_id is None:
+            return None
+        try:
+            return int(raw_test_id)
+        except (TypeError, ValueError):
+            return None
+
     @staticmethod
     def get_plot_data(plot_data, test_nodes):
         for test_id, values in plot_data.items():
@@ -56,10 +72,24 @@ class ItemProcessor:
 
                 # Обрабатываем каждую дополнительную кривую для текущего теста
                 for curve in other_data:
-                    # Парсим JSON из строки values
-                    curve_data = json.loads(curve.values)
-                    
-                    if curve_data['test_id'] == test_id:
+                    try:
+                        curve_data = json.loads(curve.values) if isinstance(curve.values, str) else curve.values
+                    except (json.JSONDecodeError, TypeError):
+                        logger.warning("Skipping custom curve %r: invalid JSON", getattr(curve, 'id', None))
+                        continue
+                    if not isinstance(curve_data, dict):
+                        logger.warning("Skipping custom curve %r: values is not an object", getattr(curve, 'id', None))
+                        continue
+
+                    curve_test_id = ItemProcessor.get_custom_curve_test_id(curve_data, curve)
+                    if curve_test_id is None:
+                        logger.warning("Skipping custom curve %r: missing or invalid test_id", getattr(curve, 'id', None))
+                        continue
+
+                    if curve_test_id == int(test_id):
+                        if not curve_data.get('type') or not curve_data.get('name'):
+                            logger.warning("Skipping custom curve %r: missing required fields", getattr(curve, 'id', None))
+                            continue
                         curve_type = curve_data['type']
                         curve_name = curve_data['name']
 
@@ -128,7 +158,8 @@ class ItemProcessor:
 
                         yield test_id, x_new, y_new, style
 
-            except (InvalidCurveDataError, json.JSONDecodeError):
+            except (InvalidCurveDataError, json.JSONDecodeError, KeyError, TypeError, ValueError) as error:
+                logger.warning("Skipping invalid custom curve data for test %r: %s", test_id, error)
                 continue
 
     @staticmethod
