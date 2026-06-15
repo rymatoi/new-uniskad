@@ -9,6 +9,7 @@ import numpy as np
 import logging
 
 from app.plugins.project.services.data_processors.plot_dp import PlotProcessor
+from app.plugins.project.services.extrapolation import ExtrapolationService
 from app.plugins.project.visualization.views.plot_views.menu_tools.plot_menu_actions import PlotMenuActions, \
     ActionTarget, get_available_actions
 from app.plugins.project.visualization.views.plot_views.menu_tools.curve_clipboard import CurveClipboard
@@ -358,15 +359,18 @@ class PlotContextMenuMixin:
                     left_points = min(left_points, max_points_per_side)
                     right_points = min(right_points, max_points_per_side)
 
-                    self.add_extrapolated_curve(
-                        source_curve=curve,
-                        left_points=left_points,
-                        right_points=right_points,
-                        degree=2,
-                        name=f"Extrapolation_{curve.name()}",
-                        left_limit=backward_value,
-                        right_limit=forward_value,
-                    )
+                    try:
+                        self.add_extrapolated_curve(
+                            source_curve=curve,
+                            left_points=left_points,
+                            right_points=right_points,
+                            degree=2,
+                            name=f"Extrapolation_{curve.name()}",
+                            left_limit=backward_value,
+                            right_limit=forward_value,
+                        )
+                    except Exception:
+                        logger.exception("Could not build extrapolation for curve %r", curve.name())
                     
         elif action_name == PlotMenuActions.CURVE_DELETE.name and curve:
             # Проверяем, что кривая является пользовательской или сгенерированной (аппр./интерп./экстрап.)
