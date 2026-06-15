@@ -1,10 +1,11 @@
 import json
 
 from PySide2.QtCore import Qt
-from PySide2.QtGui import QColor
 from PySide2.QtWidgets import *
 
 from app.plugins.project import utils
+from app.plugins.project.core.constants import GraphConstants
+from app.plugins.project.visualization.widgets.colors import safe_color
 from db import sp
 from dialogs.base import BaseDialog
 from resources.ui.ui_py.ui_edit_line import Ui_EditLineDialog
@@ -21,8 +22,8 @@ class EditLineDialog(BaseDialog):
         (Qt.DashDotDotLine, 'Линия точка-точка-тире'),
     ]
 
-    def __init__(self, item, flags=None, *args, **kwargs):
-        super().__init__(flags, *args, **kwargs)
+    def __init__(self, item, parent=None, flags=None):
+        super().__init__(parent, flags)
         self.item = item
         self.result_style = None
         self.ui = Ui_EditLineDialog()
@@ -106,9 +107,9 @@ class EditLineDialog(BaseDialog):
                                 if int(k) == _safe_int(curve_line_style, int(Qt.SolidLine))), 1)
         point_type_index = next((i for i, (k, _) in enumerate(utils.SYMBOLS)
                                  if k == curve_point_symbol), 0)
-        self.ui.colorButton.setColor(QColor(curve_color))  # Задаем цвет кривой
-        self.ui.colorButton_3.setColor(QColor(curve_symbol_color))  # Задаем цвет кривой
-        self.ui.colorButton_2.setColor(QColor(curve_symbol_fill_color))  # Задаем цвет кривой
+        self.ui.colorButton.setColor(safe_color(curve_color, '#000000'))
+        self.ui.colorButton_3.setColor(safe_color(curve_symbol_color, '#000000'))
+        self.ui.colorButton_2.setColor(safe_color(curve_symbol_fill_color, '#000000'))
         self.ui.lineType.setCurrentIndex(line_type_index)  # Задаем цвет кривой
         self.ui.thickness.setValue(int(curve_width))  # устанавливае толщину линии
         self.ui.pointType.setCurrentIndex(point_type_index)  # устанавливае толщину линии
@@ -209,8 +210,7 @@ def _safe_int(value, default):
 
 
 def _color_name(value, default):
-    color = QColor(value)
-    return color.name() if color.isValid() else default
+    return safe_color(value, default).name()
 
 
 def visual_style_to_dialog_style(style, name=''):
@@ -219,7 +219,7 @@ def visual_style_to_dialog_style(style, name=''):
     return {
         'curve_color': _color_name(style.get('color'), '#000000'),
         'curve_width': _safe_int(style.get('width'), 1),
-        'curve_line_style': _safe_int(style.get('line_style'), int(Qt.SolidLine)),
+        'curve_line_style': int(GraphConstants.resolve_pen_style(style.get('line_style'))),
         'curve_point_symbol': style.get('symbol') or 'o',
         'curve_point_size': _safe_int(style.get('symbol_size'), 10),
         'curve_symbol_color': _color_name(style.get('symbol_color'), '#000000'),

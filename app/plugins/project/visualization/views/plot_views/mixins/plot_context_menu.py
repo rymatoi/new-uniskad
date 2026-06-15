@@ -439,8 +439,8 @@ class PlotContextMenuMixin:
                         label.setText(new_name)
                 self.plotItem.legend.update()
             curve.update()
-        except (RuntimeError, AttributeError, TypeError, ValueError) as exc:
-            logger.warning("Could not customize curve style: %s", exc)
+        except Exception:
+            logger.exception("Could not customize curve style")
 
     def _persist_curve_style(self, curve, style):
         """Persist custom curves; Project/Test curves retain their existing node mechanism."""
@@ -455,15 +455,18 @@ class PlotContextMenuMixin:
             return
         try:
             values = json.loads(record.values) if isinstance(record.values, str) else dict(record.values or {})
-            if isinstance(values.get('style'), dict):
-                values['style'].update(style)
-                values['name'] = style.get('name', values.get('name', ''))
-            else:
-                values.update(style)
+            stored_style = values.get('style')
+            if not isinstance(stored_style, dict):
+                stored_style = {}
+            stored_style.update(style)
+            values['style'] = stored_style
+            values['name'] = style.get('name', values.get('name', ''))
+            values['color'] = style.get('color', values.get('color'))
+            values['line_width'] = style.get('width', values.get('line_width'))
             record.values = json.dumps(values)
             sp.new_upd_custom_curve((record.id, record.graph_project_id, record.values))
-        except Exception as exc:
-            logger.warning("Could not persist custom curve %r: %s", custom_id, exc)
+        except Exception:
+            logger.exception("Could not persist custom curve %r", custom_id)
 
     def _persist_project_curve_style(self, curve, style):
         curve_map = getattr(self.data_processor, 'curve_map', {})
@@ -483,8 +486,8 @@ class PlotContextMenuMixin:
             updated_props = sp.new_update_project_from_record_array(props)
             if hasattr(node, 'update_class_props'):
                 node.update_class_props(updated_props)
-        except Exception as exc:
-            logger.warning("Could not persist ProjectData curve style: %s", exc)
+        except Exception:
+            logger.exception("Could not persist ProjectData curve style")
 
     def _handle_plot_action(self, action_name: str, checked: bool = False):
         """Обработчик действий для графика"""
