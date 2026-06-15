@@ -15,6 +15,23 @@ from db import sp
 
 logger = app_logger.get_logger(__name__)
 
+
+def normalize_bool(value, default=False):
+    """Normalize DB/UI boolean representations without treating ``"False"`` as true."""
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return value != 0
+    normalized = str(value).strip().lower()
+    if normalized in {'true', '1'}:
+        return True
+    if normalized in {'false', '0', ''}:
+        return False
+    return default
+
+
 def clone_property_record(template, prop_name, prop_value, key=None):
     """Create an independent property record from a compatible record template."""
     record = copy(template)
@@ -214,7 +231,7 @@ class LazyTableModel(QAbstractTableModel):
             return default
         value = obj.prop_value
         if cast_type is bool:
-            return value if isinstance(value, bool) else str(value).lower() == 'true'
+            return normalize_bool(value, default)
         if cast_type is not None:
             try:
                 return cast_type(value)
@@ -293,8 +310,7 @@ class ModelViewTable(QTableView):
     def load_table(self, db_objects):
         started = time.perf_counter()
         self.model().load_data(db_objects)
-        if sp.get_session_role_secret_grantness() is False:
-            self.hide_secret_rows()
+        self.apply_secret_visibility()
         self.clear_highlights()
         logger.info("ModelViewTable: loaded and set up QTableView in %.4f seconds",
                     time.perf_counter() - started)
@@ -567,8 +583,20 @@ class ModelViewTable(QTableView):
         return True
 
     def hide_secret_rows(self):
+        self.apply_secret_visibility(False)
+
+    def apply_secret_visibility(self, has_access=None):
+        if has_access is None:
+            has_access = normalize_bool(sp.get_session_role_secret_grantness(), False)
+        secret_count = hidden_count = 0
         for row in range(self.model().rowCount()):
-            self.setRowHidden(row, self.model().is_secret_row(row))
+            is_secret = self.model().is_secret_row(row)
+            secret_count += int(is_secret)
+            hidden = is_secret and not has_access
+            self.setRowHidden(row, hidden)
+            hidden_count += int(hidden)
+        logger.info("%s: secret rows=%d hidden=%d role_access=%s",
+                    type(self).__name__, secret_count, hidden_count, has_access)
 
     def apply_filters(self, filters):
         if not filters:
@@ -645,9 +673,29 @@ class ModelViewTable(QTableView):
         return '' if column is None else f'"{item.key[0]}"[{column + 1}]'
 
     def filter_table(self):
-        search = (self.search_string or '').lower()
+        search = (self.search_string or '').strip().casefold()
+        has_secret_access = normalize_bool(sp.get_session_role_secret_grantness(), False)
+        matches = []
         for row, name in enumerate(self.ord_rows):
-            self.setRowHidden(row, search not in name.lower())
+            secret_hidden = self.model().is_secret_row(row) and not has_secret_access
+            row_matches = search in str(name).casefold()
+            if not row_matches:
+                for column in range(self.model().columnCount()):
+                    value = self.model().data(self.model().index(row, column), Qt.DisplayRole)
+                    if search in str(value or '').casefold():
+                        row_matches = True
+                        if not secret_hidden:
+                            matches.append(self.model().index(row, column))
+                        break
+            elif self.model().columnCount() and not secret_hidden:
+                matches.append(self.model().index(row, 0))
+            self.setRowHidden(row, not row_matches or secret_hidden)
+        if matches:
+            self.setCurrentIndex(matches[0])
+            self.scrollTo(matches[0])
+        logger.info("%s: search query=%r found=%s position=%s",
+                    type(self).__name__, self.search_string, bool(matches),
+                    (matches[0].row(), matches[0].column()) if matches else None)
 
     def copy_to_clipboard(self):
         indexes = self.selectedIndexes()

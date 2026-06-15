@@ -2,6 +2,9 @@ from typing import Any, Optional, TypeVar, List, Dict, Set, Callable
 import numpy as np
 import pyqtgraph as pg
 from PySide2.QtCore import Qt, QPointF
+from app import app_logger
+
+logger = app_logger.get_logger(__name__)
 
 PlotWidgetType = TypeVar('PlotWidgetType', bound='pg.PlotWidget')
 
@@ -168,7 +171,14 @@ class PlotRulerMixin:
             ruler.delta_line.setData([], [])
             if self.active_ruler_id == ruler_id:
                 self.active_ruler_id = None
-            print(f"Линейка {ruler_id} удалена с графика")
+            logger.info("Линейка %s удалена с графика", ruler_id)
+
+    def remove_all_rulers(self):
+        """Remove every ruler and all of its scene items/references."""
+        for ruler_id in list(self.rulers):
+            self.remove_ruler(ruler_id)
+        self.active_ruler_id = None
+        logger.info("Все линейки удалены с графика")
     
     def _y_pos(self, x_pos: float, curve: pg.PlotDataItem) -> Optional[float]:
         """Найти значение функции в точке ``x_pos`` для кривой ``curve``."""
@@ -526,4 +536,4 @@ class PlotRulerMixin:
             }
             self.restore_rulers_state(new_state)
         else:
-            self.restore_rulers_state(state) 
+            self.restore_rulers_state(state)
