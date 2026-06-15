@@ -15,9 +15,6 @@ class PlotView(BasePlotView):
     @timing_decorator
     def prepare_curves(self):
         self.clear()
-        self.curve_items.clear()
-        self.selected_points.clear()
-        self.data_processor.curve_map.clear()
         
         # Загружаем ограничения, если они есть
         has_constraints = False
