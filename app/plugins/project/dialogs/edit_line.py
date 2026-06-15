@@ -6,6 +6,7 @@ from PySide2.QtGui import QColor
 from PySide2.QtWidgets import *
 
 from app.plugins.project import utils
+from app.plugins.project.core.constants import GraphConstants
 from db import sp
 from dialogs.base import BaseDialog
 from resources.ui.ui_py.ui_edit_line import Ui_EditLineDialog
@@ -22,9 +23,10 @@ class EditLineDialog(BaseDialog):
         (Qt.DashDotDotLine, 'Линия точка-точка-тире'),
     ]
 
-    def __init__(self, item, flags=None, *args, **kwargs):
+    def __init__(self, item, flags=None, persist_callback=None, *args, **kwargs):
         super().__init__(flags, *args, **kwargs)
         self.item = item
+        self.persist_callback = persist_callback
         self.ui = Ui_EditLineDialog()
         self.ui.setupUi(self)
 
@@ -57,8 +59,17 @@ class EditLineDialog(BaseDialog):
         self.ui.pointSizeSpinBox.valueChanged.connect(self.refresh)
 
     def init_values(self, curve):
-
-        if hasattr(self.item, 'internal_type'):
+        if hasattr(self.item, 'style_config'):
+            style = self.item.style_config
+            curve_line_style = GraphConstants.resolve_pen_style(style.get('line_style'))
+            curve_point_symbol = style.get('symbol', 'o')
+            curve_color = style.get('color', 'blue')
+            curve_symbol_color = style.get('symbol_color', curve_color)
+            curve_symbol_fill_color = style.get('fill_color', curve_symbol_color)
+            curve_point_size = style.get('symbol_size', 10)
+            curve_width = style.get('width', 1)
+            curve_name = self.item.name() or ''
+        elif hasattr(self.item, 'internal_type'):
             if self.item.curve_color is not None:
                 curve_line_style = curve.curve_line_style
                 curve_point_symbol = curve.curve_point_symbol
@@ -151,7 +162,22 @@ class EditLineDialog(BaseDialog):
             ('curve_name', curve_name),
         )
 
-        if hasattr(self.item, 'internal_type'):
+        if hasattr(self.item, 'style_config'):
+            style = self.item.style_config
+            style.update({
+                'color': curve_color,
+                'symbol_color': curve_symbol_color,
+                'fill_color': curve_symbol_fill_color,
+                'line_style': int(curve_line_style),
+                'symbol': curve_point_symbol,
+                'symbol_size': curve_point_size,
+                'width': curve_width,
+            })
+            self.item.setName(curve_name)
+            self.item.apply_style()
+            if self.persist_callback:
+                self.persist_callback(self.item)
+        elif hasattr(self.item, 'internal_type'):
             props = []
             for prop_name, prop_value in styles:
                 props.append((
