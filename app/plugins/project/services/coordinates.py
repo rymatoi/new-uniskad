@@ -154,6 +154,10 @@ class ItemProcessor:
                         if 'line_width' in curve_data:
                             style['width'] = curve_data['line_width']
 
+                        stored_style = curve_data.get('style')
+                        if isinstance(stored_style, dict):
+                            style.update(stored_style)
+
                         style['name'] = curve_name
 
                         yield test_id, x_new, y_new, style
