@@ -6,6 +6,7 @@ pytest.importorskip('PySide2')
 pytest.importorskip('pyqtgraph')
 
 from app.plugins.project.visualization.views.plot_views.mixins import plot_context_menu
+from app.plugins.project.dialogs import edit_line
 
 
 class Curve:
@@ -13,6 +14,25 @@ class Curve:
 
     def name(self):
         return 'curve'
+
+
+def test_edit_line_dialog_forwards_parent_without_conflicting_with_flags(monkeypatch):
+    parent = object()
+    calls = {}
+
+    class StopInitialization(Exception):
+        pass
+
+    def base_dialog_init(self, *args, **kwargs):
+        calls.update(args=args, kwargs=kwargs)
+        raise StopInitialization
+
+    monkeypatch.setattr(edit_line.BaseDialog, '__init__', base_dialog_init)
+
+    with pytest.raises(StopInitialization):
+        edit_line.EditLineDialog(Curve(), parent=parent)
+
+    assert calls == {'args': (), 'kwargs': {'flags': None, 'parent': parent}}
 
 
 def test_customize_curve_opens_dialog_for_selected_curve(monkeypatch):
