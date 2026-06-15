@@ -558,13 +558,19 @@ class MainWindow(QtWidgets.QMainWindow):
         if state_bytes is None and central_bytes is None:
             return
 
+        trees = self.findChildren(TreeView)
+        previous_flags = {tree: tree._restoring_tabs for tree in trees}
+        for tree in trees:
+            tree._restoring_tabs = True
+        restored_main = restored_central = None
         try:
             if state_bytes is not None:
                 if hasattr(state_bytes, 'isEmpty') and state_bytes.isEmpty():
                     state_bytes = None
                 else:
                     restored_main = self.restoreState(state_bytes)
-                    logger.debug('Результат восстановления состояния окна: %s', restored_main)
+                    if not restored_main:
+                        logger.warning('Не удалось полностью восстановить состояние главного окна; применена текущая компоновка')
         except Exception as exc:
             logger.warning('Не удалось восстановить состояние окна: %s', exc)
 
@@ -574,12 +580,21 @@ class MainWindow(QtWidgets.QMainWindow):
                     central_bytes = None
                 else:
                     restored_central = self.ui.centralWidget.restoreState(central_bytes)
-                    logger.debug('Результат восстановления центрального окна: %s', restored_central)
+                    if not restored_central:
+                        logger.warning('Не удалось полностью восстановить dock layout; открытые вкладки оставлены в fallback-компоновке')
         except Exception as exc:
             logger.warning('Не удалось восстановить состояние центрального окна: %s', exc)
         finally:
             self._pending_window_state_bytes = None
             self._pending_central_window_state_bytes = None
+            for tree, previous in previous_flags.items():
+                tree._restoring_tabs = previous
+                tree.restore_active_tab()
+            logger.info(
+                'Window layout restore completed: main=%s, central=%s, docks=%s, active_tabs=%s',
+                restored_main, restored_central, len(self.ui.centralWidget.findChildren(QDockWidget)),
+                {getattr(tree.dock_widget, 'plugin_name', 'tree'): tree._active_tab_identifier for tree in trees},
+            )
 
     def _ui_state_key(self, role=None):
         """Return the stable settings prefix for one login/active-role pair."""
