@@ -1,4 +1,3 @@
-import ast
 import json
 
 from PySide2.QtCore import Qt
@@ -25,6 +24,7 @@ class EditLineDialog(BaseDialog):
     def __init__(self, item, flags=None, *args, **kwargs):
         super().__init__(flags, *args, **kwargs)
         self.item = item
+        self.result_style = None
         self.ui = Ui_EditLineDialog()
         self.ui.setupUi(self)
 
@@ -49,7 +49,6 @@ class EditLineDialog(BaseDialog):
     def create_connections(self):
         """Создание привязок для обработки кнопок"""
         self.ui.buttonBox.button(QDialogButtonBox.Ok).clicked.connect(self.accept_)
-        self.ui.buttonBox.button(QDialogButtonBox.Ok).clicked.connect(self.close)
         self.ui.colorButton.sigColorChanged.connect(self.refresh)
         self.ui.lineType.currentIndexChanged.connect(self.refresh)
         self.ui.thickness.valueChanged.connect(self.refresh)
@@ -57,8 +56,20 @@ class EditLineDialog(BaseDialog):
         self.ui.pointSizeSpinBox.valueChanged.connect(self.refresh)
 
     def init_values(self, curve):
-
-        if hasattr(self.item, 'internal_type'):
+        if hasattr(self.item, 'style_config'):
+            values = visual_style_to_dialog_style(
+                getattr(self.item, 'style_config', {}) or {},
+                self.item.name() if callable(getattr(self.item, 'name', None)) else ''
+            )
+            curve_line_style = values['curve_line_style']
+            curve_point_symbol = values['curve_point_symbol']
+            curve_color = values['curve_color']
+            curve_symbol_color = values['curve_symbol_color']
+            curve_symbol_fill_color = values['curve_symbol_fill_color']
+            curve_point_size = values['curve_point_size']
+            curve_width = values['curve_width']
+            curve_name = values['curve_name']
+        elif hasattr(self.item, 'internal_type'):
             if self.item.curve_color is not None:
                 curve_line_style = curve.curve_line_style
                 curve_point_symbol = curve.curve_point_symbol
@@ -91,8 +102,10 @@ class EditLineDialog(BaseDialog):
 
         # TODO может быть сделать выгрузку значений по умолчанию здесь?
         self.ui.curveNameLineEdit.setText(curve_name)
-        line_type_index = next(i for i, (k, v) in enumerate(utils.LINE_STYLES) if k == int(curve_line_style))
-        point_type_index = next(i for i, (k, v) in enumerate(utils.SYMBOLS) if k == curve_point_symbol)
+        line_type_index = next((i for i, (k, _) in enumerate(utils.LINE_STYLES)
+                                if int(k) == _safe_int(curve_line_style, int(Qt.SolidLine))), 1)
+        point_type_index = next((i for i, (k, _) in enumerate(utils.SYMBOLS)
+                                 if k == curve_point_symbol), 0)
         self.ui.colorButton.setColor(QColor(curve_color))  # Задаем цвет кривой
         self.ui.colorButton_3.setColor(QColor(curve_symbol_color))  # Задаем цвет кривой
         self.ui.colorButton_2.setColor(QColor(curve_symbol_fill_color))  # Задаем цвет кривой
@@ -151,7 +164,9 @@ class EditLineDialog(BaseDialog):
             ('curve_name', curve_name),
         )
 
-        if hasattr(self.item, 'internal_type'):
+        if hasattr(self.item, 'style_config'):
+            self.result_style = dialog_style_to_visual_style(dict(styles))
+        elif hasattr(self.item, 'internal_type'):
             props = []
             for prop_name, prop_value in styles:
                 props.append((
@@ -184,3 +199,45 @@ class EditLineDialog(BaseDialog):
         """Запуск модального окна"""
         wnd = cls(parent)
         return wnd.exec()
+
+
+def _safe_int(value, default):
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _color_name(value, default):
+    color = QColor(value)
+    return color.name() if color.isValid() else default
+
+
+def visual_style_to_dialog_style(style, name=''):
+    """Convert a CurveItem style to the legacy EditLineDialog representation."""
+    style = style if isinstance(style, dict) else {}
+    return {
+        'curve_color': _color_name(style.get('color'), '#000000'),
+        'curve_width': _safe_int(style.get('width'), 1),
+        'curve_line_style': _safe_int(style.get('line_style'), int(Qt.SolidLine)),
+        'curve_point_symbol': style.get('symbol') or 'o',
+        'curve_point_size': _safe_int(style.get('symbol_size'), 10),
+        'curve_symbol_color': _color_name(style.get('symbol_color'), '#000000'),
+        'curve_symbol_fill_color': _color_name(style.get('fill_color'), '#000000'),
+        'curve_name': style.get('name', name) or name,
+    }
+
+
+def dialog_style_to_visual_style(style):
+    """Convert legacy ProjectData style keys to CurveItem style keys."""
+    style = style if isinstance(style, dict) else {}
+    return {
+        'color': _color_name(style.get('curve_color'), '#000000'),
+        'width': _safe_int(style.get('curve_width'), 1),
+        'line_style': _safe_int(style.get('curve_line_style'), int(Qt.SolidLine)),
+        'symbol': style.get('curve_point_symbol') or 'o',
+        'symbol_size': _safe_int(style.get('curve_point_size'), 10),
+        'symbol_color': _color_name(style.get('curve_symbol_color'), '#000000'),
+        'fill_color': _color_name(style.get('curve_symbol_fill_color'), '#000000'),
+        'name': style.get('curve_name', style.get('name', '')),
+    }
