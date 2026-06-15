@@ -20,7 +20,7 @@ class Ui_EditTestDialog(object):
     def setupUi(self, EditTestDialog):
         if not EditTestDialog.objectName():
             EditTestDialog.setObjectName(u"EditTestDialog")
-        EditTestDialog.resize(1180, 767)
+        EditTestDialog.resize(1180, 900)
         self.verticalLayout_6 = QVBoxLayout(EditTestDialog)
         self.verticalLayout_6.setObjectName(u"verticalLayout_6")
         self.verticalLayout_6.setSpacing(14)
@@ -149,7 +149,7 @@ class Ui_EditTestDialog(object):
 
         self.plotView = PlotWidget(self.groupBox)
         self.plotView.setObjectName(u"plotView")
-        self.plotView.setMinimumSize(QSize(260, 340))
+        self.plotView.setMinimumSize(QSize(260, 440))
 
         self.horizontalLayout.addWidget(self.plotView)
 
