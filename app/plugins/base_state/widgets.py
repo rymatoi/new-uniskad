@@ -13,6 +13,7 @@ from PySide2.QtWidgets import QTreeView, QMenu, QColorDialog, QInputDialog, QDoc
     QHBoxLayout, QToolButton, QWidget, QLabel, QAbstractItemView, QAction, QLineEdit, QShortcut, \
     QFontDialog, QComboBox, QCompleter, QTableWidget, QTableWidgetItem, QVBoxLayout, QTreeWidget, QTreeWidgetItem, \
     QApplication, QStyle, QSizePolicy, QDialog, QDialogButtonBox, QTextBrowser
+from shiboken2 import isValid
 from openpyxl.workbook import Workbook
 from app import app_logger, _menu, basic_funcs
 from app.ui_font import explicit_format_font
@@ -277,27 +278,41 @@ class TreeView(QTreeView):
     def _collect_open_tab_ids(self):
         opened = []
         seen = set()
-        docks = [
-            dock for dock in self._parent.ui.centralWidget.findChildren(QDockWidget)
-            if getattr(dock, '_parent', None) is self
+        opened_tabs_count = len(self._opened_tabs)
+        stale_identifiers = [
+            identifier for identifier, tab in self._opened_tabs.items()
+            if not isValid(tab)
         ]
-        for tab in docks:
+        for identifier in stale_identifiers:
+            self._opened_tabs.pop(identifier, None)
+
+        plugin_name = getattr(self.dock_widget, 'plugin_name', None)
+        object_name_prefix = f'{plugin_name}_tab_' if plugin_name else None
+        live_docks = []
+        missing_identifiers = 0
+        for tab in self._parent.ui.centralWidget.findChildren(QDockWidget):
+            if not isValid(tab):
+                continue
+            belongs_to_tree = getattr(tab, '_parent', None) is self
+            belongs_to_plugin = object_name_prefix and tab.objectName().startswith(object_name_prefix)
+            if not (belongs_to_tree or belongs_to_plugin):
+                continue
             identifier = getattr(tab, 'stable_identifier', None)
             if identifier is None:
-                item = getattr(tab, 'item', None)
-                data = getattr(item, '_data', None)
-                for attr in ('id', 'uuid', 'guid'):
-                    identifier = getattr(data, attr, None)
-                    if identifier is not None:
-                        break
-            if identifier is None:
-                logger.warning('Open dock widget skipped: no stable identifier, objectName=%s', tab.objectName())
+                missing_identifiers += 1
+                logger.debug('Open dock skipped: no stable identifier, objectName=%s', tab.objectName())
                 continue
+            live_docks.append(tab)
             identifier = str(identifier)
             if identifier not in seen:
                 seen.add(identifier)
                 opened.append(identifier)
-        logger.debug('Open tabs captured: docks=%s, tabs=%s, identifiers=%s', len(docks), len(opened), opened)
+        logger.info(
+            'Open tabs captured: opened_tabs=%s, live_docks=%s, stale_removed=%s, saved_ids=%s',
+            opened_tabs_count, len(live_docks), len(stale_identifiers), len(opened),
+        )
+        if missing_identifiers:
+            logger.debug('Open docks without stable identifier skipped: count=%s', missing_identifiers)
         return opened
 
     def capture_persistent_state(self):
@@ -1272,6 +1287,10 @@ class TreeView(QTreeView):
         identifier = self._node_identifier(index)
         identifier_str = str(identifier) if identifier is not None else None
         existing_tab = self._opened_tabs.get(identifier_str)
+        if existing_tab is not None and not isValid(existing_tab):
+            self._opened_tabs.pop(identifier_str, None)
+            logger.info('Stale open tab removed before reopening: tab=%s', identifier_str)
+            existing_tab = None
         if existing_tab is not None:
             if not existing_tab.isVisible():
                 try:
@@ -1281,9 +1300,10 @@ class TreeView(QTreeView):
             existing_tab.raise_()
             try:
                 existing_tab.activateWindow()
-                ensure_loaded = getattr(existing_tab, 'ensure_loaded', None)
-                if ensure_loaded is not None:
-                    ensure_loaded()
+                if not self._restoring_tabs:
+                    ensure_loaded = getattr(existing_tab, 'ensure_loaded', None)
+                    if ensure_loaded is not None:
+                        ensure_loaded()
             except Exception:
                 logger.exception('Не удалось активировать ранее открытую вкладку.')
             if identifier:
