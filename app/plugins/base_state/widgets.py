@@ -33,6 +33,7 @@ class Tab(QDockWidget):
         self._parent = parent
         self.index = index
         self.item = index.internalPointer()
+        self.stable_identifier = None
         self.setWindowTitle(self.item.data())
         self.ui = None
 
@@ -51,6 +52,7 @@ class Tab(QDockWidget):
 
         if plugin_name and node_id is not None:
             self.setObjectName(f'{plugin_name}_tab_{node_id}')
+            self.stable_identifier = str(node_id)
 
     def setupUi(self, ui):
         widget = QWidget(self)
@@ -72,7 +74,7 @@ class Tab(QDockWidget):
     def closeEvent(self, event) -> None:
         if self._parent is not None:
             try:
-                self._parent._handle_tab_closed(self.index)
+                self._parent._handle_tab_closed(self)
             except Exception:
                 logger.exception('Не удалось обработать закрытие вкладки.')
         super().closeEvent(event)
@@ -275,12 +277,27 @@ class TreeView(QTreeView):
     def _collect_open_tab_ids(self):
         opened = []
         seen = set()
-        for index in list(self._opened_tabs.keys()):
-            if index and index.isValid():
-                identifier = self._node_identifier(index)
-                if identifier and identifier not in seen:
-                    seen.add(identifier)
-                    opened.append(str(identifier))
+        docks = [
+            dock for dock in self._parent.ui.centralWidget.findChildren(QDockWidget)
+            if getattr(dock, '_parent', None) is self
+        ]
+        for tab in docks:
+            identifier = getattr(tab, 'stable_identifier', None)
+            if identifier is None:
+                item = getattr(tab, 'item', None)
+                data = getattr(item, '_data', None)
+                for attr in ('id', 'uuid', 'guid'):
+                    identifier = getattr(data, attr, None)
+                    if identifier is not None:
+                        break
+            if identifier is None:
+                logger.warning('Open dock widget skipped: no stable identifier, objectName=%s', tab.objectName())
+                continue
+            identifier = str(identifier)
+            if identifier not in seen:
+                seen.add(identifier)
+                opened.append(identifier)
+        logger.debug('Open tabs captured: docks=%s, tabs=%s, identifiers=%s', len(docks), len(opened), opened)
         return opened
 
     def capture_persistent_state(self):
@@ -401,7 +418,7 @@ class TreeView(QTreeView):
 
         if active_identifier:
             target_index = index_map.get(str(active_identifier))
-            tab_widget = self._opened_tabs.get(target_index)
+            tab_widget = self._opened_tabs.get(str(active_identifier))
             if target_index is None:
                 logger.info('UI restore entry skipped: active_tab=%s, reason=missing node data', active_identifier)
             elif tab_widget is None:
@@ -451,13 +468,22 @@ class TreeView(QTreeView):
         elif self._active_tab_identifier == identifier:
             self._active_tab_identifier = None
 
-    def _handle_tab_closed(self, index):
-        tab = self._opened_tabs.pop(index, None)
-        if not index or not index.isValid():
-            return
-        identifier = self._node_identifier(index)
+    def _handle_tab_closed(self, tab_or_index):
+        identifier = getattr(tab_or_index, 'stable_identifier', None)
+        if identifier is None:
+            identifier = self._node_identifier(tab_or_index)
+        self._opened_tabs.pop(str(identifier), None)
         if identifier and self._active_tab_identifier == str(identifier):
             self._active_tab_identifier = None
+
+    def restore_active_tab(self):
+        identifier = self._active_tab_identifier
+        tab = self._opened_tabs.get(str(identifier)) if identifier is not None else None
+        if tab is not None:
+            tab.show()
+            tab.raise_()
+            tab.activateWindow()
+        return tab is not None
 
     def _refresh_removed_items_if_enabled(self):
         if self.HIDE_REMOVED_ITEMS:
@@ -1133,10 +1159,10 @@ class TreeView(QTreeView):
     def update_external_nodes(self, nodes):
         index = True
         for node in nodes:
-            for _index in self._opened_tabs.keys():
-                if node == _index.internalPointer():
+            for tab in self._opened_tabs.values():
+                if node == getattr(tab, 'item', None):
                     try:
-                        self._opened_tabs[_index].refresh(index)
+                        tab.refresh(index)
                     except AttributeError as e:
                         logger.info(f'У элемента {node.data()} нет реализации обновления содержимого вкладки.')
 
@@ -1215,8 +1241,9 @@ class TreeView(QTreeView):
                     else:
                         if self.HIDE_REMOVED_ITEMS:
                             self.setItemVisibility(self.model(), _index, True)
-                    if _index in self._opened_tabs.keys():
-                        self._opened_tabs[_index].close()
+                    tab = self._opened_tabs.get(self._node_identifier(_index))
+                    if tab is not None:
+                        tab.close()
                 else:
                     basic_funcs.error('Ошибка', str(success))
 
@@ -1242,7 +1269,9 @@ class TreeView(QTreeView):
         if not self.DOUBLE_CLICK_OPEN:
             return
 
-        existing_tab = self._opened_tabs.get(index)
+        identifier = self._node_identifier(index)
+        identifier_str = str(identifier) if identifier is not None else None
+        existing_tab = self._opened_tabs.get(identifier_str)
         if existing_tab is not None:
             if not existing_tab.isVisible():
                 try:
@@ -1257,7 +1286,6 @@ class TreeView(QTreeView):
                     ensure_loaded()
             except Exception:
                 logger.exception('Не удалось активировать ранее открытую вкладку.')
-            identifier = self._node_identifier(index)
             if identifier:
                 self._active_tab_identifier = str(identifier)
             return existing_tab
@@ -1272,9 +1300,15 @@ class TreeView(QTreeView):
             children.append(dock)
 
         tab = self._link_dict.get(item_type, self._default_tab)(index, self, self.main_window)
-        self._opened_tabs[index] = tab
+        if identifier_str is None:
+            logger.warning('Tab open skipped: node has no stable identifier')
+            tab.deleteLater()
+            return None
+        tab.stable_identifier = identifier_str
+        plugin_name = getattr(self.dock_widget, 'plugin_name', None)
+        tab.setObjectName(f'{plugin_name or "tree"}_tab_{identifier_str}')
+        self._opened_tabs[identifier_str] = tab
 
-        identifier = self._node_identifier(index)
         if identifier:
             identifier_str = str(identifier)
 
@@ -1373,8 +1407,9 @@ class TreeView(QTreeView):
                 self.model().dataChanged.emit(index, index)
 
                 if need_tab_update:
-                    if index in self._opened_tabs:
-                        self._opened_tabs[index].refresh(index)
+                    tab = self._opened_tabs.get(self._node_identifier(index))
+                    if tab is not None:
+                        tab.refresh(index)
 
     def insertRow(self, item, index):
         item_error = self._item_error(item)
