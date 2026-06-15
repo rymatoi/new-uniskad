@@ -7,6 +7,9 @@ from typing import Any, Dict, List, Optional, Tuple
 from app.plugins.project.visualization.widgets.curve import CurveItem
 from app.plugins.project.core.constants import GraphConstants
 import json
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class PlotProcessor(DataProcessor):
@@ -50,7 +53,22 @@ class PlotProcessor(DataProcessor):
         approx_curves: List[Tuple[Any, Dict[str, Any]]] = []
 
         for curve in self.other_data:
-            curve_values = json.loads(curve.values) if isinstance(curve.values, str) else curve.values
+            try:
+                curve_values = json.loads(curve.values) if isinstance(curve.values, str) else curve.values
+            except (json.JSONDecodeError, TypeError):
+                logger.warning("Skipping custom curve %r: invalid JSON", getattr(curve, 'id', None))
+                continue
+            if not isinstance(curve_values, dict):
+                logger.warning("Skipping custom curve %r: values is not an object", getattr(curve, 'id', None))
+                continue
+
+            curve_test_id = ItemProcessor.get_custom_curve_test_id(curve_values, curve)
+            if curve_test_id is None:
+                logger.warning("Skipping custom curve %r: missing or invalid test_id", getattr(curve, 'id', None))
+                continue
+            curve_values = curve_values.copy()
+            curve_values['test_id'] = curve_test_id
+
             if isinstance(curve_values, dict) and ('points' in curve_values or curve_values.get('type') == 'manual'):
                 manual_curves.append((curve, curve_values))
             else:
@@ -71,7 +89,7 @@ class PlotProcessor(DataProcessor):
                 best_match_index = -1
 
                 for i, (curve_obj, curve_data) in enumerate(remaining_curves):
-                    if curve_data.get('test_id') != test_id or curve_data.get('name') != curve_name:
+                    if curve_data.get('test_id') != int(test_id) or curve_data.get('name') != curve_name:
                         continue
 
                     curve_matches = True
@@ -312,4 +330,3 @@ class PlotProcessor(DataProcessor):
             return custom_curve.id
 
         return None
-
