@@ -20,7 +20,7 @@ class Ui_EditTestDialog(object):
     def setupUi(self, EditTestDialog):
         if not EditTestDialog.objectName():
             EditTestDialog.setObjectName(u"EditTestDialog")
-        EditTestDialog.resize(1020, 767)
+        EditTestDialog.resize(1180, 767)
         self.verticalLayout_6 = QVBoxLayout(EditTestDialog)
         self.verticalLayout_6.setObjectName(u"verticalLayout_6")
         self.verticalLayout_6.setSpacing(14)
@@ -45,6 +45,7 @@ class Ui_EditTestDialog(object):
 
         self.curveNameLineEdit = QLineEdit(self.groupBox)
         self.curveNameLineEdit.setObjectName(u"curveNameLineEdit")
+        self.curveNameLineEdit.setMinimumSize(QSize(360, 0))
 
         self.form.setWidget(0, QFormLayout.FieldRole, self.curveNameLineEdit)
 
@@ -152,6 +153,8 @@ class Ui_EditTestDialog(object):
 
         self.horizontalLayout.addWidget(self.plotView)
 
+        self.horizontalLayout.setStretch(0, 3)
+        self.horizontalLayout.setStretch(1, 2)
 
         self.gridLayout.addLayout(self.horizontalLayout, 0, 0, 1, 1)
 
@@ -335,4 +338,3 @@ class Ui_EditTestDialog(object):
         self.copyButton_2.setText(QCoreApplication.translate("EditTestDialog", u"\u0421\u043a\u043e\u043f\u0438\u0440\u043e\u0432\u0430\u0442\u044c \u0444\u0438\u043b\u044c\u0442\u0440\u044b", None))
         self.pasteButton_2.setText(QCoreApplication.translate("EditTestDialog", u"\u0412\u0441\u0442\u0430\u0432\u0438\u0442\u044c \u0444\u0438\u043b\u044c\u0442\u0440\u044b", None))
     # retranslateUi
-
