@@ -20,21 +20,25 @@ class Ui_EditLineDialog(object):
     def setupUi(self, EditLineDialog):
         if not EditLineDialog.objectName():
             EditLineDialog.setObjectName(u"EditLineDialog")
-        EditLineDialog.resize(630, 297)
+        EditLineDialog.resize(760, 520)
+        EditLineDialog.setMinimumSize(QSize(680, 480))
         self.verticalLayout_6 = QVBoxLayout(EditLineDialog)
         self.verticalLayout_6.setObjectName(u"verticalLayout_6")
-        self.verticalLayout = QVBoxLayout()
-        self.verticalLayout.setObjectName(u"verticalLayout")
+        self.verticalLayout_6.setContentsMargins(16, 16, 16, 16)
+        self.verticalLayout_6.setSpacing(14)
         self.groupBox = QGroupBox(EditLineDialog)
         self.groupBox.setObjectName(u"groupBox")
         self.gridLayout = QGridLayout(self.groupBox)
         self.gridLayout.setObjectName(u"gridLayout")
-        self.horizontalLayout = QHBoxLayout()
-        self.horizontalLayout.setObjectName(u"horizontalLayout")
+        self.gridLayout.setContentsMargins(14, 18, 14, 14)
+        self.gridLayout.setHorizontalSpacing(18)
+        self.gridLayout.setVerticalSpacing(12)
         self.form = QFormLayout()
         self.form.setObjectName(u"form")
         self.form.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
-        self.form.setVerticalSpacing(6)
+        self.form.setLabelAlignment(Qt.AlignRight|Qt.AlignVCenter)
+        self.form.setHorizontalSpacing(14)
+        self.form.setVerticalSpacing(12)
         self.label = QLabel(self.groupBox)
         self.label.setObjectName(u"label")
 
@@ -42,6 +46,7 @@ class Ui_EditLineDialog(object):
 
         self.curveNameLineEdit = QLineEdit(self.groupBox)
         self.curveNameLineEdit.setObjectName(u"curveNameLineEdit")
+        self.curveNameLineEdit.setMinimumWidth(240)
 
         self.form.setWidget(0, QFormLayout.FieldRole, self.curveNameLineEdit)
 
@@ -52,7 +57,7 @@ class Ui_EditLineDialog(object):
 
         self.colorButton = ColorButton(self.groupBox)
         self.colorButton.setObjectName(u"colorButton")
-        self.colorButton.setMaximumSize(QSize(30, 30))
+        self.colorButton.setFixedSize(QSize(48, 28))
         self.colorButton.setStyleSheet(u"background-color: transparent;")
         self.colorButton.setAutoDefault(False)
 
@@ -65,7 +70,7 @@ class Ui_EditLineDialog(object):
 
         self.lineType = QComboBox(self.groupBox)
         self.lineType.setObjectName(u"lineType")
-        self.lineType.setMinimumSize(QSize(200, 0))
+        self.lineType.setMinimumWidth(240)
 
         self.form.setWidget(2, QFormLayout.FieldRole, self.lineType)
 
@@ -76,6 +81,7 @@ class Ui_EditLineDialog(object):
 
         self.thickness = QSpinBox(self.groupBox)
         self.thickness.setObjectName(u"thickness")
+        self.thickness.setMinimumWidth(100)
         self.thickness.setValue(1)
 
         self.form.setWidget(3, QFormLayout.FieldRole, self.thickness)
@@ -87,6 +93,7 @@ class Ui_EditLineDialog(object):
 
         self.pointType = QComboBox(self.groupBox)
         self.pointType.setObjectName(u"pointType")
+        self.pointType.setMinimumWidth(240)
 
         self.form.setWidget(4, QFormLayout.FieldRole, self.pointType)
 
@@ -97,6 +104,7 @@ class Ui_EditLineDialog(object):
 
         self.pointSizeSpinBox = QSpinBox(self.groupBox)
         self.pointSizeSpinBox.setObjectName(u"pointSizeSpinBox")
+        self.pointSizeSpinBox.setMinimumWidth(100)
         self.pointSizeSpinBox.setValue(10)
 
         self.form.setWidget(5, QFormLayout.FieldRole, self.pointSizeSpinBox)
@@ -108,7 +116,7 @@ class Ui_EditLineDialog(object):
 
         self.colorButton_3 = ColorButton(self.groupBox)
         self.colorButton_3.setObjectName(u"colorButton_3")
-        self.colorButton_3.setMaximumSize(QSize(30, 30))
+        self.colorButton_3.setFixedSize(QSize(48, 28))
         self.colorButton_3.setStyleSheet(u"background-color: transparent;")
         self.colorButton_3.setAutoDefault(False)
 
@@ -121,36 +129,28 @@ class Ui_EditLineDialog(object):
 
         self.colorButton_2 = ColorButton(self.groupBox)
         self.colorButton_2.setObjectName(u"colorButton_2")
-        self.colorButton_2.setMaximumSize(QSize(30, 30))
+        self.colorButton_2.setFixedSize(QSize(48, 28))
         self.colorButton_2.setStyleSheet(u"background-color: transparent;")
         self.colorButton_2.setAutoDefault(False)
 
         self.form.setWidget(7, QFormLayout.FieldRole, self.colorButton_2)
 
 
-        self.horizontalLayout.addLayout(self.form)
-
         self.plotView = PlotWidget(self.groupBox)
         self.plotView.setObjectName(u"plotView")
-        self.plotView.setMinimumSize(QSize(120, 0))
+        self.plotView.setMinimumSize(QSize(260, 300))
+        self.plotView.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
-        self.horizontalLayout.addWidget(self.plotView)
-
-
-        self.gridLayout.addLayout(self.horizontalLayout, 0, 0, 1, 1)
-
-
-        self.verticalLayout.addWidget(self.groupBox)
-
+        self.gridLayout.addLayout(self.form, 0, 0, 1, 1)
+        self.gridLayout.addWidget(self.plotView, 0, 1, 1, 1)
+        self.gridLayout.setColumnStretch(1, 1)
+        self.verticalLayout_6.addWidget(self.groupBox, 1)
         self.buttonBox = QDialogButtonBox(EditLineDialog)
         self.buttonBox.setObjectName(u"buttonBox")
         self.buttonBox.setOrientation(Qt.Horizontal)
         self.buttonBox.setStandardButtons(QDialogButtonBox.Cancel|QDialogButtonBox.Ok)
 
-        self.verticalLayout.addWidget(self.buttonBox)
-
-
-        self.verticalLayout_6.addLayout(self.verticalLayout)
+        self.verticalLayout_6.addWidget(self.buttonBox)
 
 
         self.retranslateUi(EditLineDialog)
@@ -172,4 +172,3 @@ class Ui_EditLineDialog(object):
         self.label_3.setText(QCoreApplication.translate("EditLineDialog", u"\u0426\u0432\u0435\u0442 \u0433\u0440\u0430\u043d\u0438\u0446\u044b \u0442\u043e\u0447\u043a\u0438", None))
         self.label_4.setText(QCoreApplication.translate("EditLineDialog", u"\u0417\u0430\u043b\u0438\u0432\u043a\u0430 \u0442\u043e\u0447\u043a\u0438", None))
     # retranslateUi
-
