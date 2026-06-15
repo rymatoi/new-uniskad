@@ -226,6 +226,15 @@ class PlotContextMenuMixin:
             # Используем метод класса напрямую
             qa.triggered.connect(self._on_plot_action_triggered)
 
+        if hasattr(self, 'remove_ruler'):
+            menu.addSeparator()
+            remove_active = menu.addAction("Убрать активную линейку")
+            remove_active.setEnabled(getattr(self, 'active_ruler_id', None) is not None)
+            remove_active.triggered.connect(lambda _checked=False: self.remove_ruler())
+            remove_all = menu.addAction("Убрать все линейки")
+            remove_all.setEnabled(bool(getattr(self, 'rulers', {})))
+            remove_all.triggered.connect(lambda _checked=False: self.remove_all_rulers())
+
     def _handle_point_action(self, data: dict, checked: bool = False):
         """Обработчик действий для точек"""
         print(f"Point action triggered: {data}, checked={checked}")

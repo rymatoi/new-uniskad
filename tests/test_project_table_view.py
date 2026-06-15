@@ -7,6 +7,7 @@ pytest.importorskip('PySide2')
 from PySide2.QtWidgets import QApplication
 
 from app.plugins.project.widgets.table import ProjectTableView
+from app.plugins.base_state.table_model import normalize_bool
 from db.schemas import ProjectData
 
 
@@ -24,6 +25,52 @@ def record(row, column, prop, value, record_id=1):
         'sprav_name': None, 'id_eizm': None, 'eizm_short': None,
         'eizm_full': None,
     })
+
+
+@pytest.mark.parametrize(('value', 'expected'), [
+    (True, True), (False, False), ('True', True), ('true', True), ('1', True),
+    ('False', False), ('false', False), ('0', False), (None, False),
+])
+def test_normalize_bool(value, expected):
+    assert normalize_bool(value) is expected
+
+
+def test_project_secret_rows_follow_role_access(application, monkeypatch):
+    column = datetime.datetime(2024, 1, 1)
+    records = [
+        record('public', None, 'row_npp', '1'),
+        record('secret', None, 'row_npp', '2'),
+        record('secret', None, 'is_secret', '1'),
+        record(None, column, 'column_npp', '1'),
+    ]
+    view = ProjectTableView()
+    monkeypatch.setattr('app.plugins.base_state.table_model.sp.get_session_role_secret_grantness',
+                        lambda: 'False')
+    view.load_table(records)
+    assert not view.isRowHidden(0)
+    assert view.isRowHidden(1)
+
+    monkeypatch.setattr('app.plugins.base_state.table_model.sp.get_session_role_secret_grantness',
+                        lambda: 'true')
+    view.apply_secret_visibility()
+    assert not view.isRowHidden(1)
+
+
+def test_project_search_uses_model_display_values(application):
+    column = datetime.datetime(2024, 1, 1)
+    view = ProjectTableView()
+    view.model().load_data([
+        record('alpha', None, 'row_npp', '1'),
+        record('beta', None, 'row_npp', '2'),
+        record(None, column, 'column_npp', '1'),
+        record('alpha', column, 'value', 'needle'),
+        record('beta', column, 'value', 'other'),
+    ])
+    view.search_string = 'needle'
+    view.filter_table()
+    assert not view.isRowHidden(0)
+    assert view.isRowHidden(1)
+    assert view.currentIndex() == view.model().index(0, 0)
 
 
 def test_project_add_remove_row_and_column_are_lazy(application):
