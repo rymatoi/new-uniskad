@@ -44,7 +44,6 @@ class EditLineDialog(BaseDialog):
         self.ui.plotView.plotItem.vb.setMouseEnabled(x=False, y=False)
         self.ui.plotView.plotItem.addItem(self.example_plot)  # Добавляем кривую-образец
         self.refresh()
-        self.ui.groupBox.setFixedHeight(280)
         self.create_connections()  # создаем привязки
 
     def create_connections(self):
