@@ -6,6 +6,7 @@ from typing import Any, List, Tuple, Optional
 from functools import partial
 import json
 import numpy as np
+import logging
 
 from app.plugins.project.services.data_processors.plot_dp import PlotProcessor
 from app.plugins.project.visualization.views.plot_views.menu_tools.plot_menu_actions import PlotMenuActions, \
@@ -16,6 +17,9 @@ from app.menu_service import get_menu
 from app.plugins.project.dialogs.create_approx import ApproxDialog
 from app.plugins.project.dialogs.create_interpolation import InterpDialog
 from app.plugins.project.dialogs.extrapolation_dialog import ExtrapolationDialog
+from app.plugins.project.dialogs.edit_line import EditLineDialog, visual_style_to_dialog_style
+
+logger = logging.getLogger(__name__)
 
 
 class PlotContextMenuMixin:
@@ -271,6 +275,9 @@ class PlotContextMenuMixin:
                     if label.text == curve.name():
                         sample.update()
 
+        elif action_name == PlotMenuActions.CURVE_STYLE.name:
+            self._customize_curve_style(curve)
+
         elif action_name == PlotMenuActions.CURVE_COPY.name and curve:
             project_id = getattr(getattr(self.data_processor, 'data_manager', None), 'project_id', None)
             CurveClipboard.copy_curve(curve, project_id=project_id)
@@ -403,6 +410,81 @@ class PlotContextMenuMixin:
                     print("Линейка не инициализирована должным образом")
 
         print(f"Curve action: {action_name}, checked: {checked}, curve: {curve.name() if curve else 'all curves'}")
+
+    def _customize_curve_style(self, curve):
+        """Open the style editor and apply its result without rebuilding the plot."""
+        if curve is None or not hasattr(curve, 'apply_style'):
+            logger.warning("Cannot customize a missing or invalid curve")
+            return
+        try:
+            dialog = EditLineDialog(curve, parent=self)
+            if not dialog.exec_() or not dialog.result_style:
+                return
+            old_name = curve.name() if callable(getattr(curve, 'name', None)) else ''
+            style = getattr(curve, 'style_config', None)
+            if not isinstance(style, dict):
+                curve._style_config = {}
+                style = curve._style_config
+            style.update(dialog.result_style)
+            new_name = style.get('name')
+            if new_name and hasattr(curve, 'setName'):
+                curve.setName(new_name)
+            elif new_name and isinstance(getattr(curve, 'opts', None), dict):
+                curve.opts['name'] = new_name
+            curve.apply_style()
+            self._persist_curve_style(curve, dialog.result_style)
+            if hasattr(self.plotItem, 'legend') and self.plotItem.legend is not None:
+                for sample, label in self.plotItem.legend.items:
+                    if getattr(label, 'text', None) == old_name and new_name:
+                        label.setText(new_name)
+                self.plotItem.legend.update()
+            curve.update()
+        except (RuntimeError, AttributeError, TypeError, ValueError) as exc:
+            logger.warning("Could not customize curve style: %s", exc)
+
+    def _persist_curve_style(self, curve, style):
+        """Persist custom curves; Project/Test curves retain their existing node mechanism."""
+        custom_id = getattr(curve, 'custom_curve_id', None)
+        if custom_id is None:
+            self._persist_project_curve_style(curve, style)
+            return
+        records = getattr(self.data_processor, 'other_data', ())
+        record = next((item for item in records if getattr(item, 'id', None) == custom_id), None)
+        if record is None:
+            logger.warning("Custom curve %r no longer exists; style is session-only", custom_id)
+            return
+        try:
+            values = json.loads(record.values) if isinstance(record.values, str) else dict(record.values or {})
+            if isinstance(values.get('style'), dict):
+                values['style'].update(style)
+                values['name'] = style.get('name', values.get('name', ''))
+            else:
+                values.update(style)
+            record.values = json.dumps(values)
+            sp.new_upd_custom_curve((record.id, record.graph_project_id, record.values))
+        except Exception as exc:
+            logger.warning("Could not persist custom curve %r: %s", custom_id, exc)
+
+    def _persist_project_curve_style(self, curve, style):
+        curve_map = getattr(self.data_processor, 'curve_map', {})
+        test_nodes = getattr(self.data_processor, 'test_nodes', {})
+        test_key = next((key for key, item in curve_map.items() if item is curve), None)
+        node = test_nodes.get(test_key)
+        data = getattr(node, '_data', None)
+        if data is None:
+            logger.debug("Generated curve %r has no persistent ProjectData node", curve)
+            return
+        legacy_style = visual_style_to_dialog_style(style, style.get('name', ''))
+        props = [
+            (None, data.id, data.id_up, 7, key, str(value), None, None, None, 0, None)
+            for key, value in legacy_style.items()
+        ]
+        try:
+            updated_props = sp.new_update_project_from_record_array(props)
+            if hasattr(node, 'update_class_props'):
+                node.update_class_props(updated_props)
+        except Exception as exc:
+            logger.warning("Could not persist ProjectData curve style: %s", exc)
 
     def _handle_plot_action(self, action_name: str, checked: bool = False):
         """Обработчик действий для графика"""
