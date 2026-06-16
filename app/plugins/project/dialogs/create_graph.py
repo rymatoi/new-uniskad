@@ -5,7 +5,7 @@ from PySide2.QtWidgets import QDialogButtonBox, QComboBox
 
 from app.plugins.base_state.widgets import ExtendedComboBox
 from app.plugins.project import utils
-from app.plugins.project.utils_ import get_param_values, get_project_params
+from app.plugins.project.utils_ import Values, get_param_values, get_project_param_names
 from db import sp
 from dialogs.base import BaseDialog
 from resources.ui.ui_py.ui_create_graph import Ui_CreateGraphDialog
@@ -109,13 +109,7 @@ class CreateGraphDialog(BaseDialog):
         self.ui.toDoubleSpinBox.setValue(cur_param.max_val)
 
     def init_values(self, project_id):
-        class Values:
-            def __init__(self, max_val, min_val):
-                self.max_val = max_val
-                self.min_val = min_val
-
-        self.curves = get_project_params(project_id)
-        curve_list = list(self.curves.keys())
+        curve_list = get_project_param_names(project_id)
         self.ZComboBox.addItems(curve_list)
         self.XComboBox.addItems(curve_list)
         self.YComboBox.addItems(curve_list)

@@ -4,6 +4,7 @@ from app import basic_funcs
 from app.basic_funcs import to_float, to_bool
 from app.plugins.base_state.widgets import ExtendedComboBox
 from app.plugins.project import utils, utils_
+from app.plugins.project.utils_ import Values
 from db import sp
 from dialogs.base import BaseDialog
 from resources.ui.ui_py.ui_edit_plane import Ui_EditPlaneDialog
@@ -123,14 +124,9 @@ class EditPlaneDialog(BaseDialog):
         self.ui.comboBox = None
 
     def init_values(self, project_id):
-        class Values:
-            def __init__(self, max_val, min_val):
-                self.max_val = max_val
-                self.min_val = min_val
-
         self.project_id = project_id
-        self.curves = utils_.get_project_params(project_id)
-        curve_list = list(self.curves.keys())
+        curve_list = utils_.get_project_param_names(project_id)
+        self.curves = curve_list
         self.ZComboBox.addItems(curve_list)
 
     def _ensure_param_values(self, param_name):
@@ -141,6 +137,8 @@ class EditPlaneDialog(BaseDialog):
             c_val = to_float(_c.value)
             if _c.param not in self.param_values.keys():
                 self.param_values[_c.param] = Values(c_val, c_val)
+            if c_val is None or self.param_values[_c.param].max_val is None or self.param_values[_c.param].min_val is None:
+                continue
             if c_val > self.param_values[_c.param].max_val:
                 self.param_values[_c.param].max_val = c_val
             if c_val < self.param_values[_c.param].min_val:

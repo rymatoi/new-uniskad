@@ -190,7 +190,7 @@ class ConditionsDialog(BaseDialog):
 
     def init_param_list(self):
         project_item = self.item.parent().parent()
-        self.curves = list(utils_.get_project_params(project_item._data.id))
+        self.curves = utils_.get_project_param_names(project_item._data.id)
 
     def condition_count(self):
         return self.container_lay.count() - 1

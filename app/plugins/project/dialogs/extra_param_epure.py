@@ -6,7 +6,7 @@ from PySide2.QtWidgets import QHBoxLayout, QPushButton, QTreeWidgetItem
 from app import app_logger
 from app.plugins.base_state.widgets import ExtendedComboBox
 from app.plugins.project import utils
-from app.plugins.project.utils_ import get_project_params, collect_cell_values
+from app.plugins.project.utils_ import get_project_param_names, collect_cell_values
 from db import sp
 from dialogs.base import BaseDialog
 from resources.ui.ui_py.ui_extra_param_epure import Ui_ExtraParamEoure
@@ -38,7 +38,7 @@ class ExtraParamEpureDialog(BaseDialog):
 
         self.selected = extra_param_values
 
-        self.param_list = get_project_params(project_id)
+        self.param_list = get_project_param_names(project_id)
         self.param_values_dict = {}
         self.current_param = extra_param
         self.create_connections()  # создаем привязки
@@ -59,7 +59,7 @@ class ExtraParamEpureDialog(BaseDialog):
         self.clearAllButton.clicked.connect(self.clear_all)
 
     def load_params(self):
-        self.comboBox.addItems(['Пусто'] + list(self.param_list.keys()))
+        self.comboBox.addItems(['Пусто'] + self.param_list)
         self.comboBox.setCurrentText(self.current_param if self.current_param else 'Пусто')
 
     def load_param_values(self, text):
