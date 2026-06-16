@@ -297,13 +297,13 @@ class EditProjectItemDialog(BaseDialog):
 
     def init_param_list(self):
         project_item = self.item.parent().parent()
-        self.curves = utils.get_project_params(project_item._data.id)
+        self.curves = utils.get_project_param_names(project_item._data.id)
 
     def add_condition(self, style=None):
         normalized_style = self._normalize_condition_payload(style, strict=False) if style else None
         condition_widget = ConditionWidget(
             self.container_lay.count(),
-            self.curves.keys(),
+            self.curves,
             parent=self,
             style=normalized_style
         )
@@ -316,7 +316,7 @@ class EditProjectItemDialog(BaseDialog):
         normalized_style = self._normalize_filter_payload(style, strict=False) if style else None
         filter_widget = FilterWidget(
             self.f_container_lay.count(),
-            self.curves.keys(),
+            self.curves,
             parent=self,
             style=normalized_style
         )

@@ -1,5 +1,7 @@
 from collections import OrderedDict
+from dataclasses import dataclass
 from time import perf_counter
+from types import SimpleNamespace
 
 from PySide2.QtCore import Qt
 
@@ -7,8 +9,15 @@ from app import app_logger
 from db import sp
 
 logger = app_logger.get_logger(__name__)
+_project_param_names_cache = {}
 _project_params_cache = {}
 _param_values_cache = {}
+
+
+@dataclass
+class Values:
+    max_val: float
+    min_val: float
 LINE_STYLES = [
     (Qt.NoPen, 'Прозрачная'),
     (Qt.SolidLine, 'Линия'),
@@ -71,17 +80,31 @@ def collect_project_params(db_objects):
     return params
 
 
-def get_project_params(project_id, force_reload=False):
-    """Return the shared, cached parameter map for a project."""
-    if not force_reload and project_id in _project_params_cache:
-        logger.debug("Project param cache hit: project_id=%s", project_id)
-        return _project_params_cache[project_id]
-    logger.debug("Project param cache miss: project_id=%s", project_id)
+def get_project_param_names(project_id, force_reload=False):
+    """Return cached project parameter names for combo/search UI."""
+    if not force_reload and project_id in _project_param_names_cache:
+        result = _project_param_names_cache[project_id]
+        logger.info("Project param names cache hit: project_id=%s, params=%s", project_id, len(result))
+        return result
+
     started = perf_counter()
-    result = collect_project_params(sp.get_project_test_params(project_id))
-    _project_params_cache[project_id] = result
-    logger.info("Project param list loaded: project_id=%s, params=%s, elapsed_ms=%.1f",
+    result = [name for name in (sp.get_project_param_names(project_id) or []) if name]
+    _project_param_names_cache[project_id] = result
+    logger.info("Project param names loaded: project_id=%s, params=%s, elapsed_ms=%.1f",
                 project_id, len(result), (perf_counter() - started) * 1000)
+    return result
+
+
+def get_project_params(project_id, force_reload=False):
+    """Return a lightweight, cached parameter map compatible with old UI code."""
+    if not force_reload and project_id in _project_params_cache:
+        result = _project_params_cache[project_id]
+        logger.info("Project param names cache hit: project_id=%s, params=%s", project_id, len(result))
+        return result
+
+    names = get_project_param_names(project_id, force_reload=force_reload)
+    result = {name: SimpleNamespace(prop_name='name', excel_param_name=name) for name in names}
+    _project_params_cache[project_id] = result
     return result
 
 
@@ -93,20 +116,22 @@ def get_param_values(project_id, param_name, force_reload=False):
         return _param_values_cache[key]
     logger.debug("Param values cache miss: project_id=%s, param=%s", project_id, param_name)
     started = perf_counter()
-    result = sp.get_params_values([param_name], project_id)
+    result = sp.get_params_values([param_name], project_id) or []
     _param_values_cache[key] = result
-    logger.info("Param values loaded: project_id=%s, param=%s, elapsed_ms=%.1f",
-                project_id, param_name, (perf_counter() - started) * 1000)
+    logger.info("Project param values loaded: project_id=%s, param=%s, values=%s, elapsed_ms=%.1f",
+                project_id, param_name, len(result), (perf_counter() - started) * 1000)
     return result
 
 
 def clear_project_params(project_id=None):
     """Invalidate parameter names and values for one project, or all projects."""
     if project_id is None:
+        _project_param_names_cache.clear()
         _project_params_cache.clear()
         _param_values_cache.clear()
         logger.debug("Project param caches cleared: all projects")
         return
+    _project_param_names_cache.pop(project_id, None)
     _project_params_cache.pop(project_id, None)
     for key in [key for key in _param_values_cache if key[0] == project_id]:
         _param_values_cache.pop(key, None)

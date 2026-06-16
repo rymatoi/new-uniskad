@@ -614,6 +614,20 @@ def get_project_test_params(project_id: int) -> List[ProjectData]:
     return session.call('get_project_test_params', project_id)
 
 
+def get_project_param_names(project_id: int) -> List[str]:
+    """Return distinct project parameter names without materializing project_data rows."""
+    result = session.call('get_project_param_names', project_id)
+    if result is None or isinstance(result, Exception):
+        return []
+
+    names = []
+    for row in result.all():
+        value = row.get('excel_param_name') if hasattr(row, 'get') else row[0]
+        if value:
+            names.append(str(value))
+    return names
+
+
 @session.stored_procedure(modifying=True)
 def add_new_xy_graph(graph_folder_id: int, graph_name: str, x_curve: str, y_curve: str, group_by: str,
                      constraints: str) -> List[Project]:
