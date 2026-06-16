@@ -27,3 +27,29 @@ def test_clear_only_one_project_and_values_cache(monkeypatch):
     utils_.get_param_values(1, 'x')
     assert param_calls == [1, 2, 1]
     assert value_calls == [(['x'], 1), (['x'], 1)]
+
+
+def test_empty_param_values_are_cached(monkeypatch):
+    value_calls = []
+    monkeypatch.setattr(
+        utils_.sp,
+        'get_params_values',
+        lambda names, project_id: value_calls.append((names, project_id)) or [],
+    )
+
+    assert utils_.get_param_values(1, 'empty') == []
+    assert utils_.get_param_values(1, 'empty') == []
+    assert value_calls == [(['empty'], 1)]
+
+
+def test_blank_param_name_skips_db(monkeypatch):
+    value_calls = []
+    monkeypatch.setattr(
+        utils_.sp,
+        'get_params_values',
+        lambda names, project_id: value_calls.append((names, project_id)) or ['unexpected'],
+    )
+
+    assert utils_.get_param_values(1, None) == []
+    assert utils_.get_param_values(1, '') == []
+    assert value_calls == []

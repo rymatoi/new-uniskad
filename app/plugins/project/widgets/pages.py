@@ -15,6 +15,7 @@ from app.plugins.base_state.widgets import TablePage1
 from app.plugins.project.dialogs.edit_plane import EditPlaneDialog
 from app.plugins.project.plot.plot_page import PlotPage
 from app.plugins.project.widgets.table import ProjectTableView, ProjectTableWidget
+from app.plugins.project.utils_ import clear_project_param_cache
 
 from app.utils import convert, excel
 from db import sp
@@ -59,6 +60,9 @@ class ProjectTablePage1(TablePage1):
         _menu.init_menu(self.column_menu, self, menu)
         self.connect_triggered_funcs(index)
         menu.popup(QCursor.pos())
+
+    def clear_param_cache(self):
+        clear_project_param_cache(self.item._data.project_id)
 
     def export_excel(self):
         filepath = basic_funcs.export_file(self.item.name.replace('"', '').replace("'", ''), "Экспорт испытания",
@@ -110,6 +114,7 @@ class ProjectTablePage1(TablePage1):
             c = cell.cell['type']
             result_list.append(self.get_cell_db_object(c.excel_param_name, prop_name, prop_value, c.date_time_izm))
         sp.new_upd_project_data_array(result_list)
+        self.clear_param_cache()
 
     def add_row(self, index, name=None, formula=None):
         ord_rows = list(self.table.ord_rows)
@@ -158,6 +163,7 @@ class ProjectTablePage1(TablePage1):
                     cells.append(self.get_cell_db_object(new_param_name, 'formula', str(formula), i))
             new_cells = sp.new_project_data_array(cells)
             self.table.add_row(new_cells, insert_position)
+            self.clear_param_cache()
 
             new_row_obj = self.table.rows.get((new_param_name, None), {}).get('row_npp')
             if new_row_obj is not None:
@@ -180,6 +186,7 @@ class ProjectTablePage1(TablePage1):
                     next_npp_value += 1
                 if update_data:
                     sp.new_upd_project_data_array(update_data)
+            self.clear_param_cache()
 
             self.update_formula_context()
             self._set_formula_target(self.table.currentItem())
@@ -216,6 +223,7 @@ class ProjectTablePage1(TablePage1):
 
         if result:
             self.table.ord_rows.remove(item.key[0])
+            self.clear_param_cache()
             del self.table.rows[item.key[0], None]
             self.table.removeRow(item.row())
             for cell in cells_to_delete:
@@ -241,6 +249,7 @@ class ProjectTablePage1(TablePage1):
              column_npp] + cells)
 
         self.table.add_column(new_columns)
+        self.clear_param_cache()
         self.update_formula_context()
         self._set_formula_target(self.table.currentItem())
 
@@ -271,6 +280,7 @@ class ProjectTablePage1(TablePage1):
 
         if result:
             self.table.removeColumn(item.column())
+            self.clear_param_cache()
             self.table.ord_columns.remove(item.key[1])
             del self.table.columns[None, item.key[1]]
             self._set_formula_target(self.table.currentItem())
@@ -372,6 +382,9 @@ class ProjectPlotPage(PlotPage):
         if dialog.exec_():  # Если произошло изменение данных
             result = dialog.get_result()
             self.plotView.refresh()
+
+    def clear_param_cache(self):
+        clear_project_param_cache(self.item._data.project_id)
 
     def export_excel(self):
         file_path = export_file("123.xlsx", "Экспорт графика", "Файл EXCEL (*.xlsx)")

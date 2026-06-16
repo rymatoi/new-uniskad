@@ -82,14 +82,15 @@ def collect_project_params(db_objects):
 
 def get_project_param_names(project_id, force_reload=False):
     """Return cached project parameter names for combo/search UI."""
-    if not force_reload and project_id in _project_param_names_cache:
-        result = _project_param_names_cache[project_id]
+    cache_key = int(project_id)
+    if not force_reload and cache_key in _project_param_names_cache:
+        result = _project_param_names_cache[cache_key]
         logger.info("Project param names cache hit: project_id=%s, params=%s", project_id, len(result))
         return result
 
     started = perf_counter()
     result = [name for name in (sp.get_project_param_names(project_id) or []) if name]
-    _project_param_names_cache[project_id] = result
+    _project_param_names_cache[cache_key] = result
     logger.info("Project param names loaded: project_id=%s, params=%s, elapsed_ms=%.1f",
                 project_id, len(result), (perf_counter() - started) * 1000)
     return result
@@ -97,45 +98,72 @@ def get_project_param_names(project_id, force_reload=False):
 
 def get_project_params(project_id, force_reload=False):
     """Return a lightweight, cached parameter map compatible with old UI code."""
-    if not force_reload and project_id in _project_params_cache:
-        result = _project_params_cache[project_id]
+    cache_key = int(project_id)
+    if not force_reload and cache_key in _project_params_cache:
+        result = _project_params_cache[cache_key]
         logger.info("Project param names cache hit: project_id=%s, params=%s", project_id, len(result))
         return result
 
     names = get_project_param_names(project_id, force_reload=force_reload)
     result = {name: SimpleNamespace(prop_name='name', excel_param_name=name) for name in names}
-    _project_params_cache[project_id] = result
+    _project_params_cache[cache_key] = result
     return result
 
 
 def get_param_values(project_id, param_name, force_reload=False):
     """Load values lazily for one parameter and cache them."""
-    key = project_id, param_name
+    if param_name is None or str(param_name) == '':
+        logger.info("Project param values skipped: project_id=%s, param=%r", project_id, param_name)
+        return []
+
+    key = int(project_id), str(param_name)
     if not force_reload and key in _param_values_cache:
-        logger.debug("Param values cache hit: project_id=%s, param=%s", project_id, param_name)
-        return _param_values_cache[key]
-    logger.debug("Param values cache miss: project_id=%s, param=%s", project_id, param_name)
+        values = _param_values_cache[key]
+        logger.info(
+            "Project param values cache hit: project_id=%s, param=%r, values=%s",
+            project_id, param_name, len(values),
+        )
+        return values
+
     started = perf_counter()
-    result = sp.get_params_values([param_name], project_id) or []
-    _param_values_cache[key] = result
-    logger.info("Project param values loaded: project_id=%s, param=%s, values=%s, elapsed_ms=%.1f",
-                project_id, param_name, len(result), (perf_counter() - started) * 1000)
-    return result
+    values = sp.get_params_values([str(param_name)], project_id) or []
+    _param_values_cache[key] = values
+    logger.info(
+        "Project param values loaded: project_id=%s, param=%r, values=%s, elapsed_ms=%.1f",
+        project_id, param_name, len(values), (perf_counter() - started) * 1000,
+    )
+    return values
 
 
-def clear_project_params(project_id=None):
-    """Invalidate parameter names and values for one project, or all projects."""
+def clear_project_param_cache(project_id=None):
+    """Invalidate cached project parameter names and values for one project, or all projects."""
     if project_id is None:
+        names_removed = len(_project_param_names_cache) + len(_project_params_cache)
+        values_removed = len(_param_values_cache)
         _project_param_names_cache.clear()
         _project_params_cache.clear()
         _param_values_cache.clear()
-        logger.debug("Project param caches cleared: all projects")
+        logger.info(
+            "Project param cache cleared: all projects, names_removed=%s, values_removed=%s",
+            names_removed, values_removed,
+        )
         return
-    _project_param_names_cache.pop(project_id, None)
-    _project_params_cache.pop(project_id, None)
-    for key in [key for key in _param_values_cache if key[0] == project_id]:
+
+    cache_key = int(project_id)
+    names_removed = int(_project_param_names_cache.pop(cache_key, None) is not None)
+    names_removed += int(_project_params_cache.pop(cache_key, None) is not None)
+    value_keys = [key for key in _param_values_cache if key[0] == cache_key]
+    for key in value_keys:
         _param_values_cache.pop(key, None)
-    logger.debug("Project param caches cleared: project_id=%s", project_id)
+    logger.info(
+        "Project param cache cleared: project_id=%s, names_removed=%s, values_removed=%s",
+        project_id, names_removed, len(value_keys),
+    )
+
+
+def clear_project_params(project_id=None):
+    """Backward-compatible alias for clear_project_param_cache."""
+    clear_project_param_cache(project_id)
 
 
 def collect_cell_values(db_objects):

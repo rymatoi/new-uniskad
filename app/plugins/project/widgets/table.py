@@ -3,6 +3,7 @@ import time
 from PySide2.QtCore import Qt
 
 from app import app_logger
+from app.plugins.project.utils_ import clear_project_param_cache
 from app.plugins.base_state.table_model import (LazyTableModel, LazyTableModelItem,
                                                 ModelViewTable)
 from app.plugins.base_state.widgets import TableWidget, TableItem
@@ -38,6 +39,7 @@ class ProjectTableWidget(TableWidget):
         logger.info("ProjectTableWidget: save/update path completed in %.4f seconds",
                     time.perf_counter() - started)
         if success:
+            clear_project_param_cache(self._parent.item._data.project_id)
             self._parent._parent._parent.model().update_external_graphs()
             self.need_update = []
 
@@ -83,6 +85,7 @@ class ProjectTableView(ModelViewTable):
             time.perf_counter() - started, len(deleted) if deleted_success else 0,
             len(deleted), len(updated) if updated_success else 0, len(updated), success)
         if success:
+            clear_project_param_cache(self._parent.item._data.project_id)
             self.need_update = []
             self.post_save()
         return success
