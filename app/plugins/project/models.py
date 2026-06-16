@@ -15,7 +15,7 @@ from app.plugins.project.dialogs.edit_epure import EditEpureDialog
 from app.plugins.project.dialogs.select_test import TestSelectionDialog
 from app.plugins.project.dialogs.select_test_data import TestDataSelectionDialog
 from app.plugins.project.dialogs.test_edit import EditProjectItemDialog
-from app.plugins.project.utils_ import get_next_default_combination
+from app.plugins.project.utils_ import clear_project_param_cache, get_next_default_combination
 from app.plugins.work_data.models import ProductNode, ModelNode, AssemblyNode
 from db import sp
 from db.tables import PROJECT_TABLE, PROJECT_DATA
@@ -445,11 +445,14 @@ class ProjectRoot(Node):
         project_record = data.table_fit(PROJECT_TABLE)
         item = sp.new_update_project_from_record(project_record)
         if item:
+            clear_project_param_cache(getattr(data, 'project_id', None) or getattr(data, 'id', None))
             return item
 
     @staticmethod
     def bulk_update(item, props):
-        item = sp.new_update_project_from_record_array(props)
+        project_id = getattr(item._data, 'project_id', None) or getattr(item._data, 'id', None)
+        sp.new_update_project_from_record_array(props)
+        clear_project_param_cache(project_id)
 
     @staticmethod
     def remove(item, final=False):
@@ -463,6 +466,7 @@ class ProjectRoot(Node):
         success = sp.delete_project(item._data.id, True, cascade, final)
         if success:
             item._data.deleted = True
+            clear_project_param_cache(getattr(item._data, 'project_id', None) or getattr(item._data, 'id', None))
         return success
 
     @staticmethod
@@ -470,6 +474,7 @@ class ProjectRoot(Node):
         success = sp.delete_project(item._data.id, False, False, False)
         if success:
             item._data.deleted = False
+            clear_project_param_cache(getattr(item._data, 'project_id', None) or getattr(item._data, 'id', None))
         return success
 
 
@@ -972,6 +977,7 @@ class TestNode(ProjectRoot):
                 _import_workdata_tests(
                     test_projects, source_tests, param_list, source_cache, diagnostics,
                 )
+            clear_project_param_cache(up_node_id)
             return tuple(result_mass)
         finally:
             diagnostics.log_summary()
@@ -1193,9 +1199,12 @@ class FileNode(ProjectRoot):
             success = sp.delete_project(item._data.id, True, False, False)
             if success:
                 item._data.deleted = True
+                clear_project_param_cache(getattr(item._data, 'project_id', None) or getattr(item._data, 'id_up', None))
             return success
         else:
             success = delete_file_data_project(item._data.id, 'other', other_format=True)
+            if success:
+                clear_project_param_cache(getattr(item._data, 'project_id', None) or getattr(item._data, 'id_up', None))
             return success
 
 
