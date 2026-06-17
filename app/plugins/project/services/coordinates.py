@@ -181,10 +181,18 @@ class ItemProcessor:
                 x_values = None
                 curve_segment = None
                 try:
-                    y_values = np.fromiter(
-                        (ItemProcessor.get_point_value(item[1]) for item in group),
-                        dtype=float
-                    )
+                    raw_group = list(group)
+                    numeric_values = []
+                    for point_index, item in enumerate(raw_group):
+                        raw_value = item[1] if len(item) > 1 else None
+                        try:
+                            numeric_values.append(ItemProcessor.get_point_value(raw_value))
+                        except Exception as exc:
+                            logger.warning(
+                                'Skipping invalid epure point: test_id=%s, parameter=%s, point_index=%s, raw_value=%r, error=%r',
+                                test_id, item[2] if len(item) > 2 else None, point_index, raw_value, exc, exc_info=True,
+                            )
+                    y_values = np.fromiter(numeric_values, dtype=float)
 
                     if y_values.size == 0:
                         raise InvalidCurveDataError("Empty group")
@@ -202,8 +210,8 @@ class ItemProcessor:
                         )
                         curve_segment = (i_y, i_x)
 
-                except (InvalidCurveDataError, ValueError, IndexError):
-                    logger.exception('Не удалось построить эпюру для испытания №%s', test_id)
+                except (InvalidCurveDataError, ValueError, IndexError) as exc:
+                    logger.exception('Failed to build epure: test_id=%s, error=%r', test_id, exc)
 
                 if curve_segment is not None and y_values is not None and x_values is not None:
                     scatter_values.append((y_values, x_values))
@@ -238,11 +246,15 @@ class ItemProcessor:
 
     @staticmethod
     def get_point_value(point):
-        if hasattr(point, 'prop_value'):
-            return GraphConverter.str_to_float(point.prop_value)
-        elif isinstance(point, str):
-            return GraphConverter.str_to_float(point)
-        elif isinstance(point, int) or isinstance(point, float):
-            return point
-        else:
-            raise InvalidPointValueError
+        try:
+            if hasattr(point, 'prop_value'):
+                return GraphConverter.str_to_float(point.prop_value)
+            elif isinstance(point, str):
+                return GraphConverter.str_to_float(point)
+            elif isinstance(point, int) or isinstance(point, float):
+                return point
+        except Exception as exc:
+            logger.warning('Failed to convert point value to float: raw_value=%r, error=%r', point, exc, exc_info=True)
+            raise
+        logger.warning('Invalid point value type: raw_value=%r, type=%s', point, type(point).__name__)
+        raise InvalidPointValueError

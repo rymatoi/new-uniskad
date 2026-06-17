@@ -1,7 +1,7 @@
 import json
 
 from PySide2.QtCore import QItemSelection
-from PySide2.QtWidgets import QDialogButtonBox, QComboBox
+from PySide2.QtWidgets import QDialogButtonBox, QComboBox, QMessageBox
 
 from app.plugins.base_state.widgets import ExtendedComboBox
 from app.plugins.project import utils
@@ -154,12 +154,17 @@ class CreateGraphDialog(BaseDialog):
         return json.dumps(c)
 
     def create_graph(self):
+        x_curve = self.XComboBox.currentText().strip()
+        y_curve = self.YComboBox.currentText().strip()
+        if not x_curve or not y_curve:
+            QMessageBox.warning(self, 'Невозможно создать график', 'У графика должны быть заданы параметры X и Y.')
+            return
         group_by = self.get_group_by()
         constraints = self.get_constraints()
         result = {
-            'x_curve': self.XComboBox.currentText(),
-            'y_curve': self.YComboBox.currentText(),
-            'graph_name': self.ui.nameLineEdit.text(),
+            'x_curve': x_curve,
+            'y_curve': y_curve,
+            'graph_name': self.ui.nameLineEdit.text().strip() or build_graph_name(x_curve, y_curve),
             'group_by': group_by,
             'constraints': constraints
         }

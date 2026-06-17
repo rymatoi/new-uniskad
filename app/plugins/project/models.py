@@ -16,7 +16,7 @@ from app.plugins.project.dialogs.select_test import TestSelectionDialog
 from app.plugins.project.dialogs.select_test_data import TestDataSelectionDialog
 from app.plugins.project.dialogs.test_edit import EditProjectItemDialog
 from app.plugins.project.utils_ import (
-    invalidate_project_param_cache_after_update, get_next_default_combination,
+    build_graph_name, invalidate_project_param_cache_after_update, get_next_default_combination,
     resolve_project_param_cache_project_id,
 )
 from app.plugins.work_data.models import ProductNode, ModelNode, AssemblyNode
@@ -1027,6 +1027,22 @@ class GraphNode(ProjectRoot):
 
         self.graph_x_dultiplier = 1
         self.graph_y_dultiplier = 1
+        self._sync_graph_display_name()
+
+    def _sync_graph_display_name(self):
+        graph_name = (getattr(self, 'graph_name', None) or getattr(self, 'name', None)
+                      or getattr(self._data, 'project_prop_value', None) or getattr(self._data, 'prop_value', None))
+        if graph_name:
+            self.name = graph_name
+            self.graph_name = graph_name
+            if hasattr(self._data, 'project_prop_value'):
+                self._data.project_prop_value = graph_name
+            if hasattr(self._data, 'prop_value'):
+                self._data.prop_value = graph_name
+
+    def update_class_props(self, props):
+        super().update_class_props(props)
+        self._sync_graph_display_name()
 
     @staticmethod
     def internal_type():
@@ -1067,7 +1083,11 @@ class GraphNode(ProjectRoot):
         dialog = CreateGraphDialog(project_item._data.id)
         if dialog.exec_():  # Если произошло изменение данных
             res = dialog.get_result()
-            return GraphNode._add_graph(up_node_id, 'xy', f'{res["graph_name"]}', res["x_curve"], res["y_curve"],
+            if not str(res.get('x_curve') or '').strip() or not str(res.get('y_curve') or '').strip():
+                logger.warning('Graph creation skipped because axis params are empty: up_node_id=%s, graph_name=%r', up_node_id, res.get('graph_name'))
+                return tuple()
+            graph_name = str(res.get('graph_name') or '').strip() or build_graph_name(res['x_curve'], res['y_curve'])
+            return GraphNode._add_graph(up_node_id, 'xy', graph_name, res["x_curve"], res["y_curve"],
                                         res["group_by"], res['constraints'])
 
     @staticmethod
@@ -1082,6 +1102,10 @@ class GraphNode(ProjectRoot):
             project_types_reversed[project_type.id_project_type] = project_type.project_type
 
         if graph_type == 'xy':
+            if not str(x_curve or '').strip() or not str(y_curve or '').strip():
+                logger.warning('Graph creation skipped because axis params are empty: up_node_id=%s, graph_name=%r, x_curve=%r, y_curve=%r', up_node_id, item_name, x_curve, y_curve)
+                return tuple()
+            item_name = str(item_name or '').strip() or build_graph_name(x_curve, y_curve)
             curves = sp.add_new_xy_graph(up_node_id, item_name, x_curve, y_curve, group_by, constraints)
             result = curves
 
@@ -1130,6 +1154,22 @@ class EpureNode(ProjectRoot):
 
         self.graph_x_dultiplier = 1
         self.graph_y_dultiplier = 1
+        self._sync_graph_display_name()
+
+    def _sync_graph_display_name(self):
+        graph_name = (getattr(self, 'graph_name', None) or getattr(self, 'name', None)
+                      or getattr(self._data, 'project_prop_value', None) or getattr(self._data, 'prop_value', None))
+        if graph_name:
+            self.name = graph_name
+            self.graph_name = graph_name
+            if hasattr(self._data, 'project_prop_value'):
+                self._data.project_prop_value = graph_name
+            if hasattr(self._data, 'prop_value'):
+                self._data.prop_value = graph_name
+
+    def update_class_props(self, props):
+        super().update_class_props(props)
+        self._sync_graph_display_name()
 
     @staticmethod
     def internal_type():
