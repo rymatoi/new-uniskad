@@ -2,7 +2,7 @@ from datetime import datetime
 from PySide2.QtCore import QTimer
 from PySide2.QtGui import QCursor, QIcon, QPixmap, QPainter, Qt
 from PySide2.QtPrintSupport import QPrinter, QPrintDialog
-from PySide2.QtWidgets import QAction, QMenu
+from PySide2.QtWidgets import QAction, QMenu, QMessageBox
 from pyqtgraph import InfiniteLine
 
 from app import _menu, app_logger, basic_funcs
@@ -36,6 +36,9 @@ class ProjectTablePage1(TablePage1):
         use_table_view = is_feature_enabled('UNISKAD_PROJECT_TABLE_VIEW')
         self.TABLE = ProjectTableView if use_table_view else ProjectTableWidget
         logger.info("Project table implementation: %s", self.TABLE.__name__)
+        self._autosave_in_progress = False
+        self._autosave_scheduled = False
+        self._pending_autosave_changed_params = set()
         super().__init__(cells, item, parent, main_window)
 
         if hasattr(self, "saveAction"):
@@ -107,7 +110,7 @@ class ProjectTablePage1(TablePage1):
     def _graph_depends_on_params(self, graph_item, changed_params):
         graph_id = getattr(getattr(graph_item, '_data', None), 'id', None)
         if changed_params is None:
-            logger.info(
+            logger.debug(
                 'Graph dependency check: graph_id=%s, dependencies=ALL, changed_params=None, depends=True',
                 graph_id,
             )
@@ -140,27 +143,28 @@ class ProjectTablePage1(TablePage1):
                         dependencies.add(dep)
 
         result = bool(dependencies & changed)
-        logger.info(
+        logger.debug(
             'Graph dependency check: graph_id=%s, dependencies=%s, changed_params=%s, depends=%s',
             graph_id, dependencies, changed, result,
         )
         return result
 
     def notify_project_data_changed(self, project_id, changed_params=None):
-        root_project_id = self._cache_project_id()
-        logger.info('Project data changed: project_id=%s, root_project_id=%s, changed_params=%s',
-                    project_id, root_project_id, changed_params)
-        if root_project_id is None:
-            logger.warning('Project data changed but cache project_id could not be determined; clearing all project param cache')
+        table_cache_project_id = self._cache_project_id()
+        logger.info('Project data changed: test_project_id=%s, table_cache_project_id=%s, changed_params=%s',
+                    project_id, table_cache_project_id, changed_params)
+        if table_cache_project_id is None:
+            logger.warning('Project data changed but table cache project id could not be determined; clearing all project param cache')
             clear_project_param_cache()
         else:
-            clear_project_param_cache(root_project_id)
+            clear_project_param_cache(table_cache_project_id)
 
         opened_tabs = self._opened_graph_tabs()
-        logger.info('Project data changed: opened tabs inspected=%s', len(opened_tabs))
+        logger.debug('Project data changed: opened tabs inspected=%s', len(opened_tabs))
+        refreshed_graph_ids = set()
         for tab in opened_tabs:
             tab_item = getattr(tab, 'item', None)
-            logger.info(
+            logger.debug(
                 'Opened tab inspected: tab=%s, tab_class=%s, item=%s, item_type=%s, item_id=%s, title=%s',
                 tab,
                 type(tab).__name__,
@@ -173,33 +177,34 @@ class ProjectTablePage1(TablePage1):
             graph_item = tab_item
             graph_id = getattr(getattr(graph_item, '_data', None), 'id', None) if graph_item is not None else None
             if graph_item is None or getattr(graph_item, 'internal_type', lambda: None)() != 'graph':
-                logger.info('Skipping opened tab because it is not a graph: tab_class=%s, item_id=%s',
+                logger.debug('Skipping opened tab because it is not a graph: tab_class=%s, item_id=%s',
                             type(tab).__name__, graph_id)
                 continue
-            graph_root_project_id = self._graph_cache_project_id(graph_item)
-            logger.info(
-                'Graph cache project id resolved: graph_id=%s, graph_root_project_id=%s',
-                graph_id, graph_root_project_id,
+            graph_cache_project_id = self._graph_cache_project_id(graph_item)
+            logger.debug(
+                'Graph cache project id resolved: graph_id=%s, graph_cache_project_id=%s',
+                graph_id, graph_cache_project_id,
             )
-            depends = self._graph_depends_on_params(graph_item, changed_params)
-            same_root_known = root_project_id is not None and graph_root_project_id is not None
-            if same_root_known and graph_root_project_id != root_project_id:
-                logger.info(
-                    'Skipping graph due to root mismatch: graph_id=%s, graph_root_project_id=%s, table_root_project_id=%s',
-                    graph_id, graph_root_project_id, root_project_id,
-                )
-                if depends:
-                    logger.info(
-                        'Graph root differs from table root but graph depends on changed params; refreshing anyway: '
-                        'graph_id=%s, graph_root_project_id=%s, table_root_project_id=%s',
-                        graph_id, graph_root_project_id, root_project_id,
-                    )
-                else:
-                    continue
-            if not depends:
+            if not self._normalize_param_name(getattr(graph_item, 'graph_label_x', None)) or not self._normalize_param_name(getattr(graph_item, 'graph_label_y', None)):
+                logger.warning('Skipping graph because axis params are empty: graph_id=%s', graph_id)
                 continue
-            if graph_root_project_id is not None:
-                clear_project_param_cache(graph_root_project_id)
+            depends = self._graph_depends_on_params(graph_item, changed_params)
+            same_cache_id_known = table_cache_project_id is not None and graph_cache_project_id is not None
+            if same_cache_id_known and graph_cache_project_id != table_cache_project_id:
+                if not depends:
+                    logger.info(
+                        'Skipping graph due to cache project mismatch and no dependency match: graph_id=%s, graph_cache_project_id=%s, table_cache_project_id=%s',
+                        graph_id, graph_cache_project_id, table_cache_project_id,
+                    )
+                    continue
+                logger.info(
+                    'Graph cache project mismatch detected, but dependency matched; refreshing anyway: graph_id=%s, graph_cache_project_id=%s, table_cache_project_id=%s',
+                    graph_id, graph_cache_project_id, table_cache_project_id,
+                )
+            if not depends or graph_id in refreshed_graph_ids:
+                continue
+            if graph_cache_project_id is not None and graph_cache_project_id != table_cache_project_id:
+                clear_project_param_cache(graph_cache_project_id)
 
             page = getattr(tab, 'plot_page', None)
             plot_view = getattr(page, 'plotView', None)
@@ -215,9 +220,10 @@ class ProjectTablePage1(TablePage1):
             logger.info(
                 'Refreshing dependent graph: graph_id=%s, graph_name=%s, changed_params=%s',
                 graph_id,
-                getattr(graph_item, 'graph_name', None),
+                (getattr(graph_item, 'graph_name', None) or getattr(graph_item, 'name', None) or graph_item.data() or (tab.windowTitle() if hasattr(tab, 'windowTitle') else None)),
                 changed_params,
             )
+            refreshed_graph_ids.add(graph_id)
             plot_view.reload_data_processor()
             plot_view.refresh()
 
@@ -225,15 +231,19 @@ class ProjectTablePage1(TablePage1):
         return getattr(getattr(self.item, '_data', None), 'project_id', None)
 
     def _autosave_pending_table_changes(self, changed_params=None):
-        if getattr(self, '_autosaving_project_table', False):
+        if getattr(self, '_autosave_in_progress', False):
+            self._autosave_scheduled = True
             return
         if not getattr(self.table, 'need_update', None):
             return
-        self._autosaving_project_table = True
+        self._autosave_in_progress = True
         try:
             self.table.update_table()
         finally:
-            self._autosaving_project_table = False
+            self._autosave_in_progress = False
+            if getattr(self, '_autosave_scheduled', False):
+                self._autosave_scheduled = False
+                self._queue_autosave_pending_table_changes(getattr(self, '_pending_autosave_changed_params', None))
 
     def _queue_autosave_pending_table_changes(self, changed_params=None):
         if not getattr(self.table, 'need_update', None):
@@ -244,12 +254,12 @@ class ProjectTablePage1(TablePage1):
         elif pending_params is not None:
             pending_params.update(changed_params)
             self._pending_autosave_changed_params = pending_params
-        if getattr(self, '_project_table_autosave_queued', False):
+        if getattr(self, '_autosave_scheduled', False):
             return
-        self._project_table_autosave_queued = True
+        self._autosave_scheduled = True
 
         def run_autosave():
-            self._project_table_autosave_queued = False
+            self._autosave_scheduled = False
             params = getattr(self, '_pending_autosave_changed_params', None)
             self._pending_autosave_changed_params = set()
             self._autosave_pending_table_changes(params or None)
@@ -525,9 +535,9 @@ class ProjectTablePage1(TablePage1):
             record = record.table_fit(PROJECT_DATA)
         else:
             record = self.get_row_db_object(name, prop_name, str(prop_value))
-        success = sp.new_upd_project_data_record(record)
+        success = sp.new_upd_project_data_array([record])
         if success:
-            self.table.update_row_obj(name, prop_name, success)
+            self.table.update_row_obj(name, prop_name, record)
             self.notify_project_data_changed(self._project_id(), {name})
 
     def update_column_prop(self, name, prop_name, prop_value):
@@ -537,9 +547,9 @@ class ProjectTablePage1(TablePage1):
             record = record.table_fit(PROJECT_DATA)
         else:
             record = self.get_column_db_object(name, prop_name, str(prop_value))
-        success = sp.new_upd_project_data_record(record)
+        success = sp.new_upd_project_data_array([record])
         if success:
-            self.table.update_column_obj(name, prop_name, success)
+            self.table.update_column_obj(name, prop_name, record)
             self.notify_project_data_changed(self._project_id(), None)
 
     def edit_formula_list(self):
@@ -551,6 +561,11 @@ class ProjectTablePage1(TablePage1):
 class ProjectPlotPage(PlotPage):
     def __init__(self, item, parent=None, main_window=None):
         super().__init__(item, parent, main_window)
+        x_param = str(getattr(item, 'graph_label_x', '') or '').strip()
+        y_param = str(getattr(item, 'graph_label_y', '') or '').strip()
+        if not x_param or not y_param:
+            logger.warning('Graph opened without axis params: graph_id=%s', getattr(getattr(item, '_data', None), 'id', None))
+            QMessageBox.warning(self, 'Некорректный график', 'У графика не заданы параметры X/Y.')
 
         # Определяем действия тулбара в виде словаря
         toolbar_actions = {
