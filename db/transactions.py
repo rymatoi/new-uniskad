@@ -89,7 +89,10 @@ def import_file_data(product_name, file, up_node_id):
 
     def get_cells_for_import(filename, excel_id, worksheet=None) -> list:
         workbook_started_at = time.perf_counter()
-        session.update_loading_bar('Импорт рабочих данных: чтение файла...')
+        session.update_progress(
+            message='Импорт рабочих данных: чтение файла...',
+            detail='Чтение Excel-файла',
+        )
         wb = xls2xlsx_(filename)
         logger.info(
             "WorkData import workbook loaded: elapsed=%.4fs",
@@ -97,7 +100,10 @@ def import_file_data(product_name, file, up_node_id):
         )
         ws = wb[worksheet] if worksheet else wb.active
 
-        session.update_loading_bar('Импорт рабочих данных: разбор листа...')
+        session.update_progress(
+            message='Импорт рабочих данных: разбор листа...',
+            detail='Разбор листа Excel',
+        )
         parse_started_at = time.perf_counter()
         # Загружаем данные в pandas DataFrame
         data = pd.DataFrame([[cell.value for cell in row] for row in ws.iter_rows()])
@@ -118,7 +124,10 @@ def import_file_data(product_name, file, up_node_id):
         )
 
         # Получаем IDs параметров
-        session.update_loading_bar('Импорт рабочих данных: подготовка справочника имён...')
+        session.update_progress(
+            message='Импорт рабочих данных: подготовка справочника имён...',
+            detail='Подготовка справочника имён',
+        )
         sprav_started_at = time.perf_counter()
         param_ids = sp.add_upd_sprav_names_array(row_names.tolist())
         logger.info(
@@ -128,7 +137,10 @@ def import_file_data(product_name, file, up_node_id):
         )
 
         # Дата для столбцов с уникальностью
-        session.update_loading_bar('Импорт рабочих данных: подготовка записей...')
+        session.update_progress(
+            message='Импорт рабочих данных: подготовка записей...',
+            detail='Подготовка записей для импорта',
+        )
         records_started_at = time.perf_counter()
         curr_date = datetime.now()
         date_column_dict = {
@@ -220,7 +232,10 @@ def import_file_data(product_name, file, up_node_id):
         except Exception:
             logger.exception("Fast COPY import failed, falling back to new_excel_data_array")
             sp.new_excel_data_array(records)
-        session.update_loading_bar('Импорт рабочих данных: обновление таблицы...')
+        session.update_progress(
+            message='Импорт рабочих данных: обновление таблицы...',
+            detail='Обновление таблицы рабочих данных',
+        )
         logger.info(
             "WorkData import completed: total_elapsed=%.4fs",
             time.perf_counter() - total_started_at,
