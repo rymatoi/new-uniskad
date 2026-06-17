@@ -202,8 +202,8 @@ class ItemProcessor:
                         )
                         curve_segment = (i_y, i_x)
 
-                except (InvalidCurveDataError, ValueError, IndexError) as e:
-                    print(f'Не удалось построить эпюру для испытания №{test_id}: {str(e)}')
+                except (InvalidCurveDataError, ValueError, IndexError):
+                    logger.exception('Не удалось построить эпюру для испытания №%s', test_id)
 
                 if curve_segment is not None and y_values is not None and x_values is not None:
                     scatter_values.append((y_values, x_values))

@@ -1,5 +1,5 @@
 from datetime import datetime
-import json
+from PySide2.QtCore import QTimer
 from PySide2.QtGui import QCursor, QIcon, QPixmap, QPainter, Qt
 from PySide2.QtPrintSupport import QPrinter, QPrintDialog
 from PySide2.QtWidgets import QAction, QMenu
@@ -16,7 +16,11 @@ from app.plugins.base_state.widgets import TablePage1
 from app.plugins.project.dialogs.edit_plane import EditPlaneDialog
 from app.plugins.project.plot.plot_page import PlotPage
 from app.plugins.project.widgets.table import ProjectTableView, ProjectTableWidget
-from app.plugins.project.utils_ import clear_project_param_cache, resolve_project_param_cache_project_id
+from app.plugins.project.utils_ import (
+    clear_project_param_cache,
+    parse_json_or_literal_value,
+    resolve_project_param_cache_project_id,
+)
 
 from app.utils import convert, excel
 from db import sp
@@ -51,10 +55,41 @@ class ProjectTablePage1(TablePage1):
 
 
     def _opened_graph_tabs(self):
+        candidates = []
         parent_tab = self.parent()
-        tree_view = getattr(parent_tab, '_parent', None)
-        get_tabs = getattr(tree_view, 'get_opened_tabs', None)
-        return list(get_tabs()) if callable(get_tabs) else []
+        if parent_tab is not None:
+            candidates.append(getattr(parent_tab, '_parent', None))
+        candidates.extend([
+            getattr(self, '_parent', None),
+            getattr(self, 'mw', None),
+            getattr(parent_tab, 'main_window', None) if parent_tab is not None else None,
+        ])
+
+        seen_sources = set()
+        tabs = []
+        seen_tabs = set()
+        for source in candidates:
+            if source is None or id(source) in seen_sources:
+                continue
+            seen_sources.add(id(source))
+            get_tabs = getattr(source, 'get_opened_tabs', None)
+            if callable(get_tabs):
+                try:
+                    source_tabs = list(get_tabs())
+                except Exception:
+                    logger.debug('Could not read opened tabs from %s', type(source).__name__, exc_info=True)
+                    continue
+                for tab in source_tabs:
+                    if id(tab) not in seen_tabs:
+                        seen_tabs.add(id(tab))
+                        tabs.append(tab)
+            opened_tabs = getattr(source, '_opened_tabs', None)
+            if isinstance(opened_tabs, dict):
+                for tab in opened_tabs.values():
+                    if id(tab) not in seen_tabs:
+                        seen_tabs.add(id(tab))
+                        tabs.append(tab)
+        return tabs
 
     def _cache_project_id(self):
         return resolve_project_param_cache_project_id(item=self.item) or self._project_id()
@@ -62,22 +97,54 @@ class ProjectTablePage1(TablePage1):
     def _graph_cache_project_id(self, graph_item):
         return resolve_project_param_cache_project_id(item=graph_item)
 
+    @staticmethod
+    def _normalize_param_name(value):
+        if value is None:
+            return None
+        text = str(value).strip()
+        return text or None
+
     def _graph_depends_on_params(self, graph_item, changed_params):
+        graph_id = getattr(getattr(graph_item, '_data', None), 'id', None)
         if changed_params is None:
+            logger.info(
+                'Graph dependency check: graph_id=%s, dependencies=ALL, changed_params=None, depends=True',
+                graph_id,
+            )
             return True
+
+        changed = {self._normalize_param_name(param) for param in changed_params}
+        changed.discard(None)
         dependencies = {
-            getattr(graph_item, 'graph_label_x', None),
-            getattr(graph_item, 'graph_label_y', None),
+            self._normalize_param_name(getattr(graph_item, 'graph_label_x', None)),
+            self._normalize_param_name(getattr(graph_item, 'graph_label_y', None)),
         }
+        dependencies.discard(None)
+
         constraints = getattr(graph_item, 'graph_constraints', None)
-        if constraints:
-            try:
-                parsed = json.loads(constraints) if isinstance(constraints, str) else constraints
-                if isinstance(parsed, dict):
-                    dependencies.update(parsed.keys())
-            except Exception:
-                logger.debug('Could not parse graph constraints while checking dependencies', exc_info=True)
-        return bool({p for p in dependencies if p} & set(changed_params))
+        parsed_constraints = parse_json_or_literal_value(constraints, default=None)
+        if isinstance(parsed_constraints, dict):
+            dependencies.update(
+                dep for dep in (self._normalize_param_name(key) for key in parsed_constraints.keys()) if dep
+            )
+        elif isinstance(parsed_constraints, (list, tuple, set)):
+            for constraint in parsed_constraints:
+                if isinstance(constraint, dict):
+                    for key in ('x', 'param', 'parameter', 'name'):
+                        dep = self._normalize_param_name(constraint.get(key))
+                        if dep:
+                            dependencies.add(dep)
+                else:
+                    dep = self._normalize_param_name(constraint)
+                    if dep:
+                        dependencies.add(dep)
+
+        result = bool(dependencies & changed)
+        logger.info(
+            'Graph dependency check: graph_id=%s, dependencies=%s, changed_params=%s, depends=%s',
+            graph_id, dependencies, changed, result,
+        )
+        return result
 
     def notify_project_data_changed(self, project_id, changed_params=None):
         root_project_id = self._cache_project_id()
@@ -89,26 +156,70 @@ class ProjectTablePage1(TablePage1):
         else:
             clear_project_param_cache(root_project_id)
 
-        for tab in self._opened_graph_tabs():
-            graph_item = getattr(tab, 'item', None)
+        opened_tabs = self._opened_graph_tabs()
+        logger.info('Project data changed: opened tabs inspected=%s', len(opened_tabs))
+        for tab in opened_tabs:
+            tab_item = getattr(tab, 'item', None)
+            logger.info(
+                'Opened tab inspected: tab=%s, tab_class=%s, item=%s, item_type=%s, item_id=%s, title=%s',
+                tab,
+                type(tab).__name__,
+                tab_item,
+                getattr(tab_item, 'internal_type', lambda: None)() if tab_item else None,
+                getattr(getattr(tab_item, '_data', None), 'id', None),
+                tab.windowTitle() if hasattr(tab, 'windowTitle') else None,
+            )
+
+            graph_item = tab_item
+            graph_id = getattr(getattr(graph_item, '_data', None), 'id', None) if graph_item is not None else None
             if graph_item is None or getattr(graph_item, 'internal_type', lambda: None)() != 'graph':
+                logger.info('Skipping opened tab because it is not a graph: tab_class=%s, item_id=%s',
+                            type(tab).__name__, graph_id)
                 continue
             graph_root_project_id = self._graph_cache_project_id(graph_item)
-            if root_project_id is not None and graph_root_project_id is not None and graph_root_project_id != root_project_id:
+            logger.info(
+                'Graph cache project id resolved: graph_id=%s, graph_root_project_id=%s',
+                graph_id, graph_root_project_id,
+            )
+            depends = self._graph_depends_on_params(graph_item, changed_params)
+            same_root_known = root_project_id is not None and graph_root_project_id is not None
+            if same_root_known and graph_root_project_id != root_project_id:
+                logger.info(
+                    'Skipping graph due to root mismatch: graph_id=%s, graph_root_project_id=%s, table_root_project_id=%s',
+                    graph_id, graph_root_project_id, root_project_id,
+                )
+                if depends:
+                    logger.info(
+                        'Graph root differs from table root but graph depends on changed params; refreshing anyway: '
+                        'graph_id=%s, graph_root_project_id=%s, table_root_project_id=%s',
+                        graph_id, graph_root_project_id, root_project_id,
+                    )
+                else:
+                    continue
+            if not depends:
                 continue
-            if not self._graph_depends_on_params(graph_item, changed_params):
+            if graph_root_project_id is not None:
+                clear_project_param_cache(graph_root_project_id)
+
+            page = getattr(tab, 'plot_page', None)
+            plot_view = getattr(page, 'plotView', None)
+            if plot_view is None:
+                widget = tab.widget() if hasattr(tab, 'widget') else None
+                plot_view = getattr(widget, 'plotView', None)
+            if plot_view is None:
+                logger.warning(
+                    'Dependent graph tab found but plotView is missing: graph_id=%s, tab_class=%s',
+                    graph_id, type(tab).__name__,
+                )
                 continue
             logger.info(
                 'Refreshing dependent graph: graph_id=%s, graph_name=%s, changed_params=%s',
-                getattr(getattr(graph_item, '_data', None), 'id', None),
+                graph_id,
                 getattr(graph_item, 'graph_name', None),
                 changed_params,
             )
-            page = getattr(tab, 'plot_page', None)
-            plot_view = getattr(page, 'plotView', None)
-            if plot_view is not None:
-                plot_view.reload_data_processor()
-                plot_view.refresh()
+            plot_view.reload_data_processor()
+            plot_view.refresh()
 
     def _project_id(self):
         return getattr(getattr(self.item, '_data', None), 'project_id', None)
@@ -124,10 +235,31 @@ class ProjectTablePage1(TablePage1):
         finally:
             self._autosaving_project_table = False
 
+    def _queue_autosave_pending_table_changes(self, changed_params=None):
+        if not getattr(self.table, 'need_update', None):
+            return
+        pending_params = getattr(self, '_pending_autosave_changed_params', set())
+        if changed_params is None:
+            self._pending_autosave_changed_params = None
+        elif pending_params is not None:
+            pending_params.update(changed_params)
+            self._pending_autosave_changed_params = pending_params
+        if getattr(self, '_project_table_autosave_queued', False):
+            return
+        self._project_table_autosave_queued = True
+
+        def run_autosave():
+            self._project_table_autosave_queued = False
+            params = getattr(self, '_pending_autosave_changed_params', None)
+            self._pending_autosave_changed_params = set()
+            self._autosave_pending_table_changes(params or None)
+
+        QTimer.singleShot(0, run_autosave)
+
     def on_table_item_changed(self, item):
         super().on_table_item_changed(item)
         param_name = getattr(getattr(item, 'key', None), '__getitem__', lambda i: None)(0) if getattr(item, 'key', None) else None
-        self._autosave_pending_table_changes({param_name} if param_name else None)
+        self._queue_autosave_pending_table_changes({param_name} if param_name else None)
 
     def show_row_menu(self, point):
         row = self.table.verticalHeader().logicalIndexAt(point)

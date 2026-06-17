@@ -1,6 +1,7 @@
 from collections import OrderedDict
 from dataclasses import dataclass
 import ast
+import json
 from time import perf_counter
 from types import SimpleNamespace
 
@@ -101,6 +102,25 @@ def parse_list_value(value):
         if isinstance(parsed, tuple):
             return list(parsed)
     return []
+
+
+def parse_json_or_literal_value(value, default=None):
+    """Safely parse JSON/Python-literal containers without reparsing ready objects."""
+    if isinstance(value, (dict, list, tuple)):
+        return value
+    if value is None:
+        return default
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return default
+        for parser in (json.loads, ast.literal_eval):
+            try:
+                return parser(text)
+            except (ValueError, SyntaxError, TypeError):
+                continue
+        logger.debug("Could not parse JSON/literal project value: %r", value)
+    return default
 
 def collect_project_params(db_objects):
     params = {}
