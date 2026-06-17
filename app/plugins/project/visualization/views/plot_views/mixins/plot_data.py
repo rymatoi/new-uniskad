@@ -51,6 +51,10 @@ class PlotDataMixin:
             return self.DATA_PROCESSOR(self.item)
         return None
 
+    def reload_data_processor(self):
+        self.data_processor = self.init_data_processor()
+        return self.data_processor
+
     def add_curve(self, x: Union[list, np.ndarray],
                   y: Union[list, np.ndarray],
                   name: str = "Curve",

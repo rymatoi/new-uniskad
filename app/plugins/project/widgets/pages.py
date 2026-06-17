@@ -381,6 +381,8 @@ class ProjectPlotPage(PlotPage):
         dialog = EditPlaneDialog(self.item)
         if dialog.exec_():  # Если произошло изменение данных
             result = dialog.get_result()
+            if dialog.axis_params_changed:
+                self.plotView.reload_data_processor()
             self.plotView.refresh()
 
     def clear_param_cache(self):
