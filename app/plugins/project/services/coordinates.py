@@ -6,6 +6,8 @@ import logging
 
 import numpy as np
 
+from app import app_logger
+
 from app.plugins.project.core.constants import GraphConstants
 from app.plugins.project.core.exceptions import InvalidCurveDataError, InvalidPointValueError
 from app.plugins.project.services.data_processors.test_dp import TestProcessor
@@ -14,7 +16,7 @@ from app.plugins.project.utils.converters.graph_converter import GraphConverter
 from app.plugins.project.services.approximation import ApproximationService
 from app.plugins.project.services.extrapolation import ExtrapolationService
 
-logger = logging.getLogger(__name__)
+logger = app_logger.get_logger(__name__)
 
 
 class ItemProcessor:
@@ -176,6 +178,7 @@ class ItemProcessor:
             scatter_values = []
             curve_values = []
             skipped_groups = 0
+            skipped_by_parameter = defaultdict(lambda: {'count': 0, 'examples': []})
             # Группируем и обрабатываем данные за один проход
             for _, group in groupby(values, key=lambda x: x[0]):
                 y_values = None
@@ -198,25 +201,22 @@ class ItemProcessor:
                             test_id, parameter, point_index, raw_value,
                         )
 
+                if skipped_values:
+                    skipped_info = skipped_by_parameter[parameter]
+                    skipped_info['count'] += len(skipped_values)
+                    for _, value in skipped_values:
+                        if len(skipped_info['examples']) >= 3:
+                            break
+                        skipped_info['examples'].append(value)
+
                 if not numeric_values:
-                    if skipped_values:
-                        logger.warning(
-                            'Skipping non-numeric epure parameter: test_id=%s, parameter=%s, skipped_points=%s, examples=%s',
-                            test_id, parameter, len(skipped_values), [value for _, value in skipped_values[:3]],
-                        )
-                    else:
+                    if not skipped_values:
                         logger.warning(
                             'Skipping epure group because it has no numeric points: test_id=%s, parameter=%s, raw_points=%s',
                             test_id, parameter, len(raw_group),
                         )
                     skipped_groups += 1
                     continue
-
-                if skipped_values:
-                    logger.warning(
-                        'Skipping non-numeric epure points: test_id=%s, parameter=%s, skipped_points=%s, examples=%s',
-                        test_id, parameter, len(skipped_values), [value for _, value in skipped_values[:3]],
-                    )
 
                 try:
                     y_values = np.fromiter(numeric_values, dtype=float)
@@ -240,6 +240,12 @@ class ItemProcessor:
                 if curve_segment is not None and y_values is not None and x_values is not None:
                     scatter_values.append((y_values, x_values))
                     curve_values.append(curve_segment)
+            for parameter, skipped_info in skipped_by_parameter.items():
+                logger.warning(
+                    'Skipping non-numeric epure parameter: test_id=%s, parameter=%s, skipped_points=%s, examples=%s',
+                    test_id, parameter, skipped_info['count'], skipped_info['examples'],
+                )
+
             if scatter_values and curve_values:
                 yield test_id, scatter_values, curve_values, style
             elif skipped_groups:
