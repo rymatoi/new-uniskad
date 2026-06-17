@@ -418,6 +418,95 @@ class Session:
             logger.exception("Unexpected error executing %s", procedure_name)
             return e
 
+
+    async def copy_import_file_data_records(self, rows):
+        """Load import_file_data rows through a transaction-local temp table."""
+        if self._execute_lock is None:
+            logger.debug("Execute lock missing; initializing async state again")
+            await self._initialize_async_state()
+
+        if self._remote_connection is None or self._remote_connection.is_closed():
+            logger.warning("Remote connection missing or closed before COPY import")
+            if not await self.reconnect_db():
+                raise RuntimeError("Database reconnect failed before COPY import")
+
+        async with self._execute_lock:
+            async with self._remote_connection.transaction():
+                await self._remote_connection.execute("""
+                    CREATE TEMP TABLE tmp_import_file_data_stage (
+                        id_excel_file integer,
+                        file_version integer,
+                        param_prop_name varchar,
+                        date_time_izm timestamp,
+                        zamer_n integer,
+                        rejim_zamer varchar,
+                        prop_value text,
+                        npp integer,
+                        id_name integer
+                    ) ON COMMIT DROP
+                """)
+                copy_started_at = time.perf_counter()
+                await self._remote_connection.copy_records_to_table(
+                    'tmp_import_file_data_stage',
+                    records=rows,
+                    columns=(
+                        'id_excel_file',
+                        'file_version',
+                        'param_prop_name',
+                        'date_time_izm',
+                        'zamer_n',
+                        'rejim_zamer',
+                        'prop_value',
+                        'npp',
+                        'id_name',
+                    ),
+                )
+                logger.info(
+                    "WorkData import COPY completed: records=%s, elapsed=%.4fs",
+                    len(rows),
+                    time.perf_counter() - copy_started_at,
+                )
+                insert_started_at = time.perf_counter()
+                status = await self._remote_connection.execute("""
+                    INSERT INTO sc_ref.import_file_data (
+                        id_excel_file,
+                        file_version,
+                        param_prop_name,
+                        date_time_izm,
+                        zamer_n,
+                        rejim_zamer,
+                        prop_value,
+                        npp,
+                        id_name
+                    )
+                    SELECT
+                        id_excel_file,
+                        file_version,
+                        param_prop_name,
+                        date_time_izm,
+                        zamer_n,
+                        rejim_zamer,
+                        prop_value,
+                        npp,
+                        id_name
+                    FROM tmp_import_file_data_stage
+                """)
+                try:
+                    inserted_count = int(status.rsplit(' ', 1)[-1])
+                except (AttributeError, TypeError, ValueError):
+                    logger.warning("Could not parse INSERT status after COPY import: %s", status)
+                    inserted_count = None
+                logger.info(
+                    "WorkData import INSERT SELECT completed: inserted=%s, elapsed=%.4fs",
+                    inserted_count,
+                    time.perf_counter() - insert_started_at,
+                )
+
+        return inserted_count
+
+    def copy_import_file_data(self, rows):
+        return self.run_sync(self.copy_import_file_data_records(rows))
+
     def call(self, query, *args):
         logger.debug(
             "call invoked for %s with %s argument(s) (main window available: %s)",

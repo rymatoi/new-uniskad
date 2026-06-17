@@ -1,5 +1,6 @@
 import os.path
 import time
+from collections import Counter
 from copy import copy
 from datetime import datetime, timedelta
 
@@ -9,17 +10,54 @@ from openpyxl.reader.excel import load_workbook
 from openpyxl.utils import get_column_letter
 from psycopg2 import DatabaseError
 
-from app import basic_funcs
+from app import basic_funcs, app_logger
 from app.basic_funcs import rgetattr, xls2xlsx_
 from db import session, sp
 from db.tables import PRODUCT
 
+logger = app_logger.get_logger(__name__)
+
 
 def import_file_data(product_name, file, up_node_id):
+    total_started_at = time.perf_counter()
+    logger.info("WorkData import started: file=%s, up_node_id=%s", file, up_node_id)
+
+    def copy_import_file_data(records):
+        logger.info("WorkData import COPY started: records=%s", len(records))
+        copy_started_at = time.perf_counter()
+        copy_rows = [
+            (
+                record[1],
+                record[2],
+                record[3],
+                record[4],
+                record[5],
+                record[6],
+                record[7],
+                0 if record[9] is None else record[9],
+                record[10],
+            )
+            for record in records
+        ]
+        logger.debug(
+            "WorkData import COPY rows prepared: records=%s, elapsed=%.4fs",
+            len(copy_rows),
+            time.perf_counter() - copy_started_at,
+        )
+
+        inserted_count = session.copy_import_file_data(copy_rows)
+        return inserted_count
+
     def get_cells_for_import(filename, excel_id, worksheet=None) -> list:
+        workbook_started_at = time.perf_counter()
         wb = xls2xlsx_(filename)
+        logger.info(
+            "WorkData import workbook loaded: elapsed=%.4fs",
+            time.perf_counter() - workbook_started_at,
+        )
         ws = wb[worksheet] if worksheet else wb.active
 
+        parse_started_at = time.perf_counter()
         # Загружаем данные в pandas DataFrame
         data = pd.DataFrame([[cell.value for cell in row] for row in ws.iter_rows()])
         data = data.dropna(how='all', axis=1)  # Убираем полностью пустые столбцы
@@ -29,11 +67,26 @@ def import_file_data(product_name, file, up_node_id):
         row_names = data.iloc[:, 0].dropna().astype(str).values  # Первая колонка — имена строк
         rows = data.iloc[:, 1:]  # Убираем первую колонку, она уже обработана
         non_empty_columns = list(range(rows.shape[1]))  # Все оставшиеся столбцы (от 0 до n-1)
+        populated_cells = int(rows.notna().sum().sum())
+        logger.info(
+            "WorkData import worksheet parsed: rows=%s, columns=%s, populated_cells=%s, elapsed=%.4fs",
+            len(row_names),
+            len(non_empty_columns),
+            populated_cells,
+            time.perf_counter() - parse_started_at,
+        )
 
         # Получаем IDs параметров
+        sprav_started_at = time.perf_counter()
         param_ids = sp.add_upd_sprav_names_array(row_names.tolist())
+        logger.info(
+            "WorkData import sprav names prepared: unique_names=%s, elapsed=%.4fs",
+            len(set(row_names.tolist())),
+            time.perf_counter() - sprav_started_at,
+        )
 
         # Дата для столбцов с уникальностью
+        records_started_at = time.perf_counter()
         curr_date = datetime.now()
         date_column_dict = {
             i: curr_date + timedelta(milliseconds=i) for i in non_empty_columns
@@ -58,29 +111,17 @@ def import_file_data(product_name, file, up_node_id):
             for i, name in enumerate(row_names)
         ]
 
-        # Формируем данные для ячеек
-        props_to_take = {
-            'value': 'value',
-            'bold': 'font.b',
-            'size': 'font.sz',
-        }
-
         # Преобразование всех данных через генераторы
         def process_cells():
             for i, name in enumerate(row_names):
                 for j, cell_value in enumerate(rows.iloc[i]):
                     if pd.isna(cell_value):
                         continue
-                    for prop, prop_attr in props_to_take.items():
-                        attr_val = cell_value  # Замените, если нужен доступ к реальным свойствам
-                        if prop == 'value':
-                            pass  # Дополнительная логика, если нужно
-                        if attr_val is not None:
-                            yield (
-                                0, excel_id, 0, prop,
-                                date_column_dict[j],  # Уникальная дата из date_column_dict
-                                None, None, str(attr_val), False, 0, param_ids[i]
-                            )
+                    yield (
+                        0, excel_id, 0, 'value',
+                        date_column_dict[j],  # Уникальная дата из date_column_dict
+                        None, None, str(cell_value), False, 0, param_ids[i]
+                    )
                     yield (
                         0, excel_id, 0, 'accuracy',
                         date_column_dict[j],  # Уникальная дата из date_column_dict
@@ -94,7 +135,18 @@ def import_file_data(product_name, file, up_node_id):
 
         result_cells = list(process_cells())
 
-        return result_cells + result_rows + result_columns
+        records = result_cells + result_rows + result_columns
+        by_prop = Counter(record[3] for record in records)
+        by_prop.setdefault('bold', 0)
+        by_prop.setdefault('size', 0)
+        logger.info(
+            "WorkData import records prepared: total_records=%s, by_prop=%s, elapsed=%.4fs",
+            len(records),
+            dict(sorted(by_prop.items())),
+            time.perf_counter() - records_started_at,
+        )
+
+        return records
 
     # TODO нужно ли проверять отдельно каждую функцию?
     product = (None, None, up_node_id, 5, 'name', product_name, None, 0, None)
@@ -109,7 +161,16 @@ def import_file_data(product_name, file, up_node_id):
                                '',
                                '', f.read())
     sp.create_update_import_file_state(datafile.id_datafile, 10, 0)
-    sp.new_excel_data_array(get_cells_for_import(datafile.full_name, datafile.id_datafile))
+    records = get_cells_for_import(datafile.full_name, datafile.id_datafile)
+    try:
+        copy_import_file_data(records)
+    except Exception:
+        logger.exception("Fast COPY import failed, falling back to new_excel_data_array")
+        sp.new_excel_data_array(records)
+    logger.info(
+        "WorkData import completed: total_elapsed=%.4fs",
+        time.perf_counter() - total_started_at,
+    )
     return new_product, version
 
 
