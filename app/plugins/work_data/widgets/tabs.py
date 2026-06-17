@@ -46,7 +46,7 @@ class WorkDataTab(Tab):
         cells.sort(
             key=lambda x: (x.id_record, x.excel_param_name, x.param_prop_name, x.date_time_izm))
 
-        use_table_view = is_feature_enabled('UNISKAD_WORK_DATA_TABLE_VIEW')
+        use_table_view = is_feature_enabled('UNISKAD_WORK_DATA_TABLE_VIEW', default=True)
         page_class = WorkDataTableViewPage if use_table_view else WorkDataTablePage1
         logger.info("Work Data table implementation: %s", page_class.__name__)
         self.table_page = page_class(cells, self.item, self, main_window)

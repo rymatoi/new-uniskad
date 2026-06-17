@@ -61,12 +61,24 @@ def import_file_data(product_name, file, up_node_id):
         update_import_progress(0, total)
 
         def on_copy_progress(imported, total_records):
-            update_import_progress(imported, total_records)
+            update_import_progress(
+                imported,
+                total_records,
+                message='Импорт рабочих данных: загрузка во временную таблицу',
+            )
+
+        def on_insert_progress(imported, total_records):
+            update_import_progress(
+                imported,
+                total_records,
+                message='Импорт рабочих данных: перенос в основную таблицу',
+            )
 
         inserted_count = session.copy_import_file_data(
             copy_rows,
             batch_size=10000,
             progress_callback=on_copy_progress,
+            insert_progress_callback=on_insert_progress,
         )
         update_import_progress(
             total,
@@ -186,7 +198,9 @@ def import_file_data(product_name, file, up_node_id):
         return records
 
     try:
-        session.begin_progress('Импорт рабочих данных', blocking=True)
+        session.begin_progress(
+            'Импорт рабочих данных', blocking=True, suppress_loading_messages=True,
+        )
         # TODO нужно ли проверять отдельно каждую функцию?
         product = (None, None, up_node_id, 5, 'name', product_name, None, 0, None)
         new_product = sp.new_update_product_from_record(product)
