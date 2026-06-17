@@ -175,28 +175,51 @@ class ItemProcessor:
             style['test_id'] = test_id
             scatter_values = []
             curve_values = []
+            skipped_groups = 0
             # Группируем и обрабатываем данные за один проход
             for _, group in groupby(values, key=lambda x: x[0]):
                 y_values = None
                 x_values = None
                 curve_segment = None
+                raw_group = list(group)
+                parameter = raw_group[0][2] if raw_group and len(raw_group[0]) > 2 else None
+                numeric_values = []
+                skipped_values = []
+
+                for point_index, item in enumerate(raw_group):
+                    raw_value = item[1] if len(item) > 1 else None
+                    try:
+                        numeric_values.append(ItemProcessor.get_point_value(raw_value))
+                    except (InvalidCurveDataError, InvalidPointValueError, TypeError, ValueError):
+                        skipped_values.append((point_index, raw_value))
+                    except Exception:
+                        logger.exception(
+                            'Unexpected error while converting epure point: test_id=%s, parameter=%s, point_index=%s, raw_value=%r',
+                            test_id, parameter, point_index, raw_value,
+                        )
+
+                if not numeric_values:
+                    if skipped_values:
+                        logger.warning(
+                            'Skipping non-numeric epure parameter: test_id=%s, parameter=%s, skipped_points=%s, examples=%s',
+                            test_id, parameter, len(skipped_values), [value for _, value in skipped_values[:3]],
+                        )
+                    else:
+                        logger.warning(
+                            'Skipping epure group because it has no numeric points: test_id=%s, parameter=%s, raw_points=%s',
+                            test_id, parameter, len(raw_group),
+                        )
+                    skipped_groups += 1
+                    continue
+
+                if skipped_values:
+                    logger.warning(
+                        'Skipping non-numeric epure points: test_id=%s, parameter=%s, skipped_points=%s, examples=%s',
+                        test_id, parameter, len(skipped_values), [value for _, value in skipped_values[:3]],
+                    )
+
                 try:
-                    raw_group = list(group)
-                    numeric_values = []
-                    for point_index, item in enumerate(raw_group):
-                        raw_value = item[1] if len(item) > 1 else None
-                        try:
-                            numeric_values.append(ItemProcessor.get_point_value(raw_value))
-                        except Exception as exc:
-                            logger.warning(
-                                'Skipping invalid epure point: test_id=%s, parameter=%s, point_index=%s, raw_value=%r, error=%r',
-                                test_id, item[2] if len(item) > 2 else None, point_index, raw_value, exc, exc_info=True,
-                            )
                     y_values = np.fromiter(numeric_values, dtype=float)
-
-                    if y_values.size == 0:
-                        raise InvalidCurveDataError("Empty group")
-
                     x_values = np.arange(1, y_values.size + 1, dtype=float)
 
                     if y_values.size < GraphConstants.EPURE_DIRECT_DRAW_THRESHOLD:
@@ -209,15 +232,18 @@ class ItemProcessor:
                             num_points=num_points
                         )
                         curve_segment = (i_y, i_x)
-
                 except (InvalidCurveDataError, ValueError, IndexError) as exc:
-                    logger.exception('Failed to build epure: test_id=%s, error=%r', test_id, exc)
+                    logger.warning('Skipping invalid epure group: test_id=%s, parameter=%s, error=%s', test_id, parameter, exc)
+                except Exception:
+                    logger.exception('Failed to build epure: test_id=%s, parameter=%s', test_id, parameter)
 
                 if curve_segment is not None and y_values is not None and x_values is not None:
                     scatter_values.append((y_values, x_values))
                     curve_values.append(curve_segment)
             if scatter_values and curve_values:
                 yield test_id, scatter_values, curve_values, style
+            elif skipped_groups:
+                logger.warning('No epure curves were built: test_id=%s, skipped_groups=%s', test_id, skipped_groups)
 
     @staticmethod
     def _calculate_epure_point_count(point_count: int) -> int:
@@ -253,8 +279,9 @@ class ItemProcessor:
                 return GraphConverter.str_to_float(point)
             elif isinstance(point, int) or isinstance(point, float):
                 return point
-        except Exception as exc:
-            logger.warning('Failed to convert point value to float: raw_value=%r, error=%r', point, exc, exc_info=True)
+        except InvalidCurveDataError:
             raise
-        logger.warning('Invalid point value type: raw_value=%r, type=%s', point, type(point).__name__)
-        raise InvalidPointValueError
+        except Exception as exc:
+            logger.warning('Failed to convert point value to float: raw_value=%r, error=%r', point, exc)
+            raise
+        raise InvalidPointValueError(f'Invalid point value type: {type(point).__name__}')

@@ -185,6 +185,83 @@ def get_param_values(project_id, param_name, force_reload=False):
     return values
 
 
+_NON_NUMERIC_PARAM_NAMES = {'дата', 'время'}
+_TEXT_PARAM_NAME_PARTS = ('комментар', 'comment', 'описание', 'description', 'примеч')
+
+
+def get_param_object_value(param_object):
+    """Return a raw value from known DB row shapes used by parameter loaders."""
+    for attr in ('value', 'prop_value', 'project_prop_value'):
+        if hasattr(param_object, attr):
+            return getattr(param_object, attr)
+    return param_object
+
+
+def is_numeric_value(value):
+    """Return True when *value* can be used as a numeric graph/epure value."""
+    if value is None:
+        return False
+    if isinstance(value, bool):
+        return False
+    if isinstance(value, (int, float)):
+        return True
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return False
+        try:
+            float(text.replace(',', '.', 1))
+            return True
+        except ValueError:
+            return False
+    try:
+        float(value)
+        return True
+    except (TypeError, ValueError):
+        return False
+
+
+def is_numeric_project_param(project_id, param_name, sample_size=10):
+    """Return True when a project parameter has at least one numeric sampled value."""
+    if not param_name:
+        return False
+    normalized_name = str(param_name).strip().lower()
+    if normalized_name in _NON_NUMERIC_PARAM_NAMES:
+        return False
+    if any(part in normalized_name for part in _TEXT_PARAM_NAME_PARTS):
+        return False
+
+    values = get_param_values(project_id, param_name)
+    checked = 0
+    for param_object in values:
+        raw_value = get_param_object_value(param_object)
+        if raw_value is None or (isinstance(raw_value, str) and not raw_value.strip()):
+            continue
+        checked += 1
+        if is_numeric_value(raw_value):
+            return True
+        if checked >= sample_size:
+            break
+    return checked == 0
+
+
+def filter_numeric_project_param_names(project_id, param_names):
+    """Filter parameter names for epure/curve numeric value selection UI."""
+    numeric_names = []
+    skipped_names = []
+    for param_name in param_names:
+        if is_numeric_project_param(project_id, param_name):
+            numeric_names.append(param_name)
+        else:
+            skipped_names.append(param_name)
+    if skipped_names:
+        logger.info(
+            "Filtered non-numeric epure parameters: project_id=%s, skipped=%s",
+            project_id, skipped_names,
+        )
+    return numeric_names
+
+
 def clear_project_param_cache(project_id=None):
     """Invalidate cached project parameter names and values for one project, or all projects."""
     if project_id is None:

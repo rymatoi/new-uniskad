@@ -6,12 +6,11 @@ from PySide2.QtGui import QIcon
 from app import basic_funcs
 from app.plugins.base_state.models import TreeModel, Node
 from app.plugins.base_state.widgets import ExtendedComboBox
-from app.plugins.project import utils
 from app.plugins.project.dialogs.OY_setup import OYSetupDialog
 from app.plugins.project.dialogs.extra_param_epure import ExtraParamEpureDialog
 from app.plugins.project.dialogs.select_project_test import ProjectTestSelectionDialog
 from app.plugins.project.dialogs.select_test_data import TestDataSelectionDialog
-from app.plugins.project.utils_ import get_project_params
+from app.plugins.project.utils_ import get_project_params, filter_numeric_project_param_names
 from db import sp
 from db.tables import PROJECT_TABLE
 from dialogs.base import BaseDialog
@@ -166,7 +165,8 @@ class CreateEpureDialog(BaseDialog):
 
     def add_parameters(self):
         self.parameters = get_project_params(self.project_id)
-        dialog = TestDataSelectionDialog(list(self.parameters.keys()))
+        numeric_params = filter_numeric_project_param_names(self.project_id, self.parameters.keys())
+        dialog = TestDataSelectionDialog(numeric_params)
         if dialog.exec_():
             params = [RowParam(param) for param in dialog.res]
             self.model.beginResetModel()
