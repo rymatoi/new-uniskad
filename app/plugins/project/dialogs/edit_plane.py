@@ -1,12 +1,14 @@
 import json
 
-from app import basic_funcs
+from app import app_logger, basic_funcs
 from app.basic_funcs import to_float, to_bool
 from app.plugins.base_state.widgets import ExtendedComboBox
 from app.plugins.project import utils, utils_
 from db import sp
 from dialogs.base import BaseDialog
 from resources.ui.ui_py.ui_edit_plane import Ui_EditPlaneDialog
+
+logger = app_logger.get_logger(__name__)
 
 class Values:
     def __init__(self, max_val, min_val):
@@ -26,7 +28,10 @@ class EditPlaneDialog(BaseDialog):
         self.param_values = {}
         self.project_id = None
 
+        self.XComboBox = ExtendedComboBox(self)
+        self.YComboBox = ExtendedComboBox(self)
         self.ZComboBox = ExtendedComboBox(self)
+        self.axis_params_changed = False
 
         # Инициализация ui объекта
         self.ui = Ui_EditPlaneDialog()
@@ -121,6 +126,16 @@ class EditPlaneDialog(BaseDialog):
         self.ui.xD.setDecimals(5)
         self.ui.yD.setDecimals(5)
 
+        self.ui.gridLayout.replaceWidget(self.ui.xAxisName, self.XComboBox)
+        self.ui.xAxisName.deleteLater()
+        self.ui.xAxisName.hide()
+        self.ui.xAxisName = None
+
+        self.ui.gridLayout_2.replaceWidget(self.ui.yAxisName, self.YComboBox)
+        self.ui.yAxisName.deleteLater()
+        self.ui.yAxisName.hide()
+        self.ui.yAxisName = None
+
         self.ui.formLayout_5.replaceWidget(self.ui.comboBox, self.ZComboBox)
         self.ui.comboBox.deleteLater()
         self.ui.comboBox.hide()
@@ -130,9 +145,19 @@ class EditPlaneDialog(BaseDialog):
 
 
         self.project_id = project_id
-        self.curves = utils_.get_project_params(project_id)
-        curve_list = list(self.curves.keys())
+        curve_list = utils_.get_project_param_names(project_id)
+        self.curves = {name: None for name in curve_list}
         self.ZComboBox.addItems(curve_list)
+        self.XComboBox.addItems(curve_list)
+        self.YComboBox.addItems(curve_list)
+        self._set_axis_combo_value(self.XComboBox, self.x_label)
+        self._set_axis_combo_value(self.YComboBox, self.y_label)
+
+    @staticmethod
+    def _set_axis_combo_value(combo_box, value):
+        if value and combo_box.findText(value) == -1:
+            combo_box.addItem(value)
+        combo_box.setCurrentText(value or '')
 
     def _ensure_param_values(self, param_name):
         if not param_name or param_name in self.param_values:
@@ -174,10 +199,8 @@ class EditPlaneDialog(BaseDialog):
         # Выставляем полученные параметры в поля диалогового окна
         self.ui.plotName.setText(plotview.graph_name)
 
-        self.ui.xAxisName.setText(self.x_label)
-        self.ui.xAxisName.setReadOnly(True)
-        self.ui.yAxisName.setText(self.y_label)
-        self.ui.yAxisName.setReadOnly(True)
+        self._set_axis_combo_value(self.XComboBox, self.x_label)
+        self._set_axis_combo_value(self.YComboBox, self.y_label)
 
         # TODO не записывать None в LineEdit
         self.ui.xMin.setText(plotview.graph_left_x)
@@ -276,9 +299,14 @@ class EditPlaneDialog(BaseDialog):
 
         """Возвращаем выбранные настроки графической области по нажатию на ОК."""
         plotview = self.plotview
+        old_x = plotview.graph_label_x
+        old_y = plotview.graph_label_y
+        new_x = self.XComboBox.currentText()
+        new_y = self.YComboBox.currentText()
+
         plotview.graph_name = self.ui.plotName.text()
-        plotview.graph_label_x = self.ui.xAxisName.text()
-        plotview.graph_label_y = self.ui.yAxisName.text()
+        plotview.graph_label_x = new_x
+        plotview.graph_label_y = new_y
         plotview.graph_left_x = self.ui.xMin.text()
         plotview.graph_right_x = self.ui.xMax.text()
         plotview.graph_bottom_y = self.ui.yMin.text()
@@ -306,6 +334,14 @@ class EditPlaneDialog(BaseDialog):
 
         plotview.graph_group_by = self.get_group_by()
         plotview.graph_constraints = self.get_constraints()
+
+        self.axis_params_changed = old_x != new_x or old_y != new_y
+        if self.axis_params_changed:
+            graph_id = getattr(getattr(plotview, '_data', None), 'id', None)
+            logger.info(
+                'Graph axis params changed: graph_id=%s, old_x=%s, old_y=%s, new_x=%s, new_y=%s',
+                graph_id, old_x, old_y, new_x, new_y,
+            )
 
         self.res = plotview
         self.plotview.update_db_props()
