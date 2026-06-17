@@ -49,6 +49,9 @@ class WorkDataTablePage1(TablePage1):
     def export_excel(self):
         filepath = basic_funcs.export_file(self.item.name.replace('"', '').replace("'", ''), "Экспорт испытания",
                                            "Файл Microsoft Excel (*.xlsx)")
+        if not filepath:
+            logger.info("WorkData export cancelled by user")
+            return
         self.table.export(filepath)
 
     def get_row_db_object(self, param_name, prop_name, prop_value):
