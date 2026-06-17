@@ -439,14 +439,17 @@ class TreeView(QTreeView):
             elif tab_widget is None:
                 logger.info('UI restore entry skipped: active_tab=%s, reason=tab unavailable', active_identifier)
             else:
+                self._active_tab_identifier = str(active_identifier)
+
                 def raise_tab():
                     try:
                         tab_widget.raise_()
                         tab_widget.activateWindow()
-                        ensure_loaded = getattr(tab_widget, 'ensure_loaded', None)
-                        caused_lazy_load = ensure_loaded is not None and not getattr(tab_widget, '_loaded', True)
-                        if ensure_loaded is not None:
-                            ensure_loaded()
+                        caused_lazy_load = (
+                            callable(getattr(tab_widget, 'ensure_loaded', None))
+                            and not getattr(tab_widget, '_loaded', True)
+                        )
+                        self.ensure_active_tab_loaded(reason='tree state restore')
                         logger.info(
                             'Active tab restored: tab=%s, caused_lazy_load=%s',
                             active_identifier, caused_lazy_load,
@@ -454,7 +457,6 @@ class TreeView(QTreeView):
                     except Exception:
                         logger.exception('Не удалось активировать вкладку "%s".', active_identifier)
                 QTimer.singleShot(0, raise_tab)
-                self._active_tab_identifier = str(active_identifier)
 
         scroll_state = state.get('scroll') or {}
 
@@ -491,13 +493,47 @@ class TreeView(QTreeView):
         if identifier and self._active_tab_identifier == str(identifier):
             self._active_tab_identifier = None
 
-    def restore_active_tab(self):
+    def current_tab_widget(self):
         identifier = self._active_tab_identifier
-        tab = self._opened_tabs.get(str(identifier)) if identifier is not None else None
+        if identifier is None:
+            return None
+        tab = self._opened_tabs.get(str(identifier))
+        if tab is not None and not isValid(tab):
+            self._opened_tabs.pop(str(identifier), None)
+            if self._active_tab_identifier == str(identifier):
+                self._active_tab_identifier = None
+            logger.info('Stale active tab removed before lazy load: tab=%s', identifier)
+            return None
+        return tab
+
+    def ensure_active_tab_loaded(self, reason='restore'):
+        tab = self.current_tab_widget()
+        if tab is None:
+            return None
+        ensure_loaded = getattr(tab, 'ensure_loaded', None)
+        if not callable(ensure_loaded):
+            return tab
+
+        tab_title = getattr(tab, 'windowTitle', lambda: None)()
+        logger.info('Lazy restore completed, ensuring active tab is loaded: tab=%s', tab_title)
+        if getattr(tab, '_loaded', False):
+            logger.info('Active lazy tab already loaded: tab=%s', tab_title)
+            return tab.widget()
+
+        widget = ensure_loaded()
+        if getattr(tab, '_loaded', False):
+            logger.info('Active lazy tab loaded after restore: tab=%s', tab_title)
+        else:
+            logger.info('Active lazy tab already loaded: tab=%s', tab_title)
+        return widget
+
+    def restore_active_tab(self):
+        tab = self.current_tab_widget()
         if tab is not None:
             tab.show()
             tab.raise_()
             tab.activateWindow()
+            self.ensure_active_tab_loaded(reason='window layout restore')
         return tab is not None
 
     def _refresh_removed_items_if_enabled(self):
@@ -1308,6 +1344,8 @@ class TreeView(QTreeView):
                 logger.exception('Не удалось активировать ранее открытую вкладку.')
             if identifier:
                 self._active_tab_identifier = str(identifier)
+            if not self._restoring_tabs:
+                self.ensure_active_tab_loaded(reason='raise existing tab')
             return existing_tab
 
         item = index.internalPointer()
@@ -1352,9 +1390,7 @@ class TreeView(QTreeView):
         tab.show()
         tab.raise_()
         if not self._restoring_tabs:
-            ensure_loaded = getattr(tab, 'ensure_loaded', None)
-            if ensure_loaded is not None:
-                ensure_loaded()
+            self.ensure_active_tab_loaded(reason='open new tab')
         return tab
 
     def change_property(self, prop, index):
