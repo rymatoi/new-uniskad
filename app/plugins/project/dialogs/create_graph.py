@@ -5,7 +5,7 @@ from PySide2.QtWidgets import QDialogButtonBox, QComboBox
 
 from app.plugins.base_state.widgets import ExtendedComboBox
 from app.plugins.project import utils
-from app.plugins.project.utils_ import Values, get_param_values, get_project_param_names
+from app.plugins.project.utils_ import Values, build_graph_name, get_param_values, get_project_param_names
 from db import sp
 from dialogs.base import BaseDialog
 from resources.ui.ui_py.ui_create_graph import Ui_CreateGraphDialog
@@ -94,7 +94,7 @@ class CreateGraphDialog(BaseDialog):
         self.ui.comboBox = None
 
     def update_name(self):
-        self.ui.nameLineEdit.setText(f'{self.YComboBox.currentText()} от {self.XComboBox.currentText()}')
+        self.ui.nameLineEdit.setText(build_graph_name(self.XComboBox.currentText(), self.YComboBox.currentText()))
 
     def update_values(self):
         self._ensure_param_values(self.ZComboBox.currentText())
