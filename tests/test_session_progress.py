@@ -23,6 +23,7 @@ def make_session():
     session._last_progress_message = None
     session._progress_state = None
     session._progress_started_at = None
+    session._suppress_loading_bar_messages = False
     return session
 
 
@@ -59,3 +60,20 @@ def test_progress_context_always_ends_after_exception():
     assert session.has_active_progress is False
     assert session._progress_state is None
     assert session._progress_emitter.progress.values[-1] is None
+
+
+def test_loading_bar_update_can_be_suppressed_during_active_progress():
+    session = make_session()
+    session.begin_progress(
+        'Импорт WorkData',
+        total=36,
+        suppress_loading_messages=True,
+    )
+    session.update_progress(current=12, message='Импортировано 12 из 36, осталось 24')
+
+    state = session.update_loading_bar('Загрузка')
+
+    assert state.title == 'Импорт WorkData'
+    assert state.message == 'Импортировано 12 из 36, осталось 24'
+    assert state.current == 12
+    assert state.total == 36

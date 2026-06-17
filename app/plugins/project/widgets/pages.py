@@ -33,7 +33,7 @@ class ProjectTablePage1(TablePage1):
     TABLE = ProjectTableWidget
 
     def __init__(self, cells, item, parent=None, main_window=None):
-        use_table_view = is_feature_enabled('UNISKAD_PROJECT_TABLE_VIEW')
+        use_table_view = is_feature_enabled('UNISKAD_PROJECT_TABLE_VIEW', default=True)
         self.TABLE = ProjectTableView if use_table_view else ProjectTableWidget
         logger.info("Project table implementation: %s", self.TABLE.__name__)
         self._autosave_in_progress = False

@@ -69,9 +69,14 @@ class _ProgressEmitter(QObject):
 
 
 class _ProgressContext:
-    def __init__(self, session, title, total=None, blocking=False, detail=None):
+    def __init__(
+        self, session, title, total=None, blocking=False, detail=None,
+        suppress_loading_messages=False,
+    ):
         self.session = session
-        self.state = session.begin_progress(title, total, blocking, detail)
+        self.state = session.begin_progress(
+            title, total, blocking, detail, suppress_loading_messages=suppress_loading_messages,
+        )
 
     def update(self, **kwargs):
         self.state = self.session.update_progress(**kwargs)
@@ -108,6 +113,7 @@ class Session:
         self._last_progress_message = None
         self._progress_state = None
         self._progress_started_at = None
+        self._suppress_loading_bar_messages = False
 
         logger.info("Session initialized. Event loop thread: %s", self._loop_thread.name)
 
@@ -269,12 +275,15 @@ class Session:
             return
         self._progress_emitter.progress.emit(state)
 
-    def begin_progress(self, title, total=None, blocking=False, detail=None):
+    def begin_progress(
+        self, title, total=None, blocking=False, detail=None, suppress_loading_messages=False,
+    ):
         current = 0 if total is not None else None
         self._progress_state = ProgressState(
             title=title, detail=detail, current=current, total=total, blocking=blocking,
         )
         self._last_progress_message = title
+        self._suppress_loading_bar_messages = suppress_loading_messages
         self._progress_started_at = time.perf_counter()
         logger.info("Progress started: title=%s, total=%s", title, total)
         self._emit_progress(self._progress_state)
@@ -311,15 +320,26 @@ class Session:
             )
         self._progress_state = None
         self._progress_started_at = None
+        self._suppress_loading_bar_messages = False
         self._last_progress_message = None
         self._emit_progress(None)
 
-    def progress(self, title, total=None, blocking=False, detail=None):
-        return _ProgressContext(self, title, total, blocking, detail)
+    def progress(
+        self, title, total=None, blocking=False, detail=None, suppress_loading_messages=False,
+    ):
+        return _ProgressContext(
+            self, title, total, blocking, detail, suppress_loading_messages,
+        )
 
     def update_loading_bar(self, message):
         """Backward-compatible string progress update."""
         if self.has_active_progress:
+            if getattr(self, '_suppress_loading_bar_messages', False):
+                logger.debug(
+                    "Ignored loading bar message during active progress: %s",
+                    message,
+                )
+                return self._progress_state
             return self.update_progress(message=message)
         self._last_progress_message = message
         self._progress_state = ProgressState(title=message)
@@ -419,7 +439,9 @@ class Session:
             return e
 
 
-    async def copy_import_file_data_records(self, rows, batch_size=None, progress_callback=None):
+    async def copy_import_file_data_records(
+        self, rows, batch_size=None, progress_callback=None, insert_progress_callback=None,
+    ):
         """Load import_file_data rows through a transaction-local temp table."""
         if self._execute_lock is None:
             logger.debug("Execute lock missing; initializing async state again")
@@ -434,6 +456,7 @@ class Session:
             async with self._remote_connection.transaction():
                 await self._remote_connection.execute("""
                     CREATE TEMP TABLE tmp_import_file_data_stage (
+                        stage_id bigserial PRIMARY KEY,
                         id_excel_file integer,
                         file_version integer,
                         param_prop_name varchar,
@@ -483,60 +506,62 @@ class Session:
                     total_rows,
                     time.perf_counter() - copy_started_at,
                 )
-                if progress_callback is not None:
-                    self.update_progress(
-                        current=total_rows,
-                        total=total_rows,
-                        message='Импорт рабочих данных: INSERT SELECT в sc_ref.import_file_data...',
-                    )
                 insert_started_at = time.perf_counter()
-                status = await self._remote_connection.execute("""
-                    INSERT INTO sc_ref.import_file_data (
-                        id_excel_file,
-                        file_version,
-                        param_prop_name,
-                        date_time_izm,
-                        zamer_n,
-                        rejim_zamer,
-                        prop_value,
-                        npp,
-                        id_name
-                    )
-                    SELECT
-                        id_excel_file,
-                        file_version,
-                        param_prop_name,
-                        date_time_izm,
-                        zamer_n,
-                        rejim_zamer,
-                        prop_value,
-                        npp,
-                        id_name
-                    FROM tmp_import_file_data_stage
-                """)
-                try:
-                    inserted_count = int(status.rsplit(' ', 1)[-1])
-                except (AttributeError, TypeError, ValueError):
-                    logger.warning("Could not parse INSERT status after COPY import: %s", status)
-                    inserted_count = None
+                insert_batch_size = batch_size or 10000
+                inserted_total = 0
+                if insert_progress_callback is not None:
+                    insert_progress_callback(0, total_rows)
+                for start_id in range(1, total_rows + 1, insert_batch_size):
+                    end_id = min(start_id + insert_batch_size - 1, total_rows)
+                    status = await self._remote_connection.execute("""
+                        INSERT INTO sc_ref.import_file_data (
+                            id_excel_file,
+                            file_version,
+                            param_prop_name,
+                            date_time_izm,
+                            zamer_n,
+                            rejim_zamer,
+                            prop_value,
+                            npp,
+                            id_name
+                        )
+                        SELECT
+                            id_excel_file,
+                            file_version,
+                            param_prop_name,
+                            date_time_izm,
+                            zamer_n,
+                            rejim_zamer,
+                            prop_value,
+                            npp,
+                            id_name
+                        FROM tmp_import_file_data_stage
+                        WHERE stage_id BETWEEN $1 AND $2
+                        ORDER BY stage_id
+                    """, start_id, end_id)
+                    try:
+                        inserted_count = int(status.rsplit(' ', 1)[-1])
+                    except (AttributeError, TypeError, ValueError):
+                        logger.warning("Could not parse INSERT status after COPY import: %s", status)
+                        inserted_count = end_id - start_id + 1
+                    inserted_total += inserted_count
+                    if insert_progress_callback is not None:
+                        insert_progress_callback(inserted_total, total_rows)
                 logger.info(
                     "WorkData import INSERT SELECT completed: inserted=%s, elapsed=%.4fs",
-                    inserted_count,
+                    inserted_total,
                     time.perf_counter() - insert_started_at,
                 )
-                if progress_callback is not None:
-                    inserted = inserted_count if inserted_count is not None else total_rows
-                    self.update_progress(
-                        current=inserted,
-                        total=total_rows,
-                        message=f'Импорт рабочих данных: импортировано {inserted} из {total_rows}',
-                    )
 
-        return inserted_count
+        return inserted_total
 
-    def copy_import_file_data(self, rows, batch_size=None, progress_callback=None):
+    def copy_import_file_data(
+        self, rows, batch_size=None, progress_callback=None, insert_progress_callback=None,
+    ):
         return self.run_sync(
-            self.copy_import_file_data_records(rows, batch_size, progress_callback)
+            self.copy_import_file_data_records(
+                rows, batch_size, progress_callback, insert_progress_callback,
+            )
         )
 
     def call(self, query, *args):
