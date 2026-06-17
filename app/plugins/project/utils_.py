@@ -14,6 +14,11 @@ _project_params_cache = {}
 _param_values_cache = {}
 
 
+def build_graph_name(x_param: str, y_param: str) -> str:
+    """Build the default graph name from axis parameter names."""
+    return f'{y_param or ""} от {x_param or ""}'
+
+
 @dataclass
 class Values:
     max_val: float

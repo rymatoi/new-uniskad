@@ -4,6 +4,7 @@ from app import app_logger, basic_funcs
 from app.basic_funcs import to_float, to_bool
 from app.plugins.base_state.widgets import ExtendedComboBox
 from app.plugins.project import utils, utils_
+from app.plugins.project.utils_ import build_graph_name
 from db import sp
 from dialogs.base import BaseDialog
 from resources.ui.ui_py.ui_edit_plane import Ui_EditPlaneDialog
@@ -304,7 +305,30 @@ class EditPlaneDialog(BaseDialog):
         new_x = self.XComboBox.currentText()
         new_y = self.YComboBox.currentText()
 
-        plotview.graph_name = self.ui.plotName.text()
+        current_name = self.ui.plotName.text()
+        new_name = current_name
+        self.axis_params_changed = old_x != new_x or old_y != new_y
+        if self.axis_params_changed:
+            graph_id = getattr(getattr(plotview, '_data', None), 'id', None)
+            old_auto_name = build_graph_name(old_x, old_y)
+            new_auto_name = build_graph_name(new_x, new_y)
+            if current_name == old_auto_name:
+                new_name = new_auto_name
+                self.ui.plotName.setText(new_name)
+                logger.info(
+                    'Graph name rebuilt after axis params change: graph_id=%s, old_name=%s, '
+                    'new_name=%s, old_x=%s, old_y=%s, new_x=%s, new_y=%s',
+                    graph_id, current_name, new_name, old_x, old_y, new_x, new_y,
+                )
+            else:
+                logger.info(
+                    'Graph name was not rebuilt because current name appears to be custom: '
+                    'graph_id=%s, current_name=%s, expected_old_auto_name=%s',
+                    graph_id, current_name, old_auto_name,
+                )
+
+        plotview.name = new_name
+        plotview.graph_name = new_name
         plotview.graph_label_x = new_x
         plotview.graph_label_y = new_y
         plotview.graph_left_x = self.ui.xMin.text()
@@ -335,15 +359,8 @@ class EditPlaneDialog(BaseDialog):
         plotview.graph_group_by = self.get_group_by()
         plotview.graph_constraints = self.get_constraints()
 
-        self.axis_params_changed = old_x != new_x or old_y != new_y
-        if self.axis_params_changed:
-            graph_id = getattr(getattr(plotview, '_data', None), 'id', None)
-            logger.info(
-                'Graph axis params changed: graph_id=%s, old_x=%s, old_y=%s, new_x=%s, new_y=%s',
-                graph_id, old_x, old_y, new_x, new_y,
-            )
-
         self.res = plotview
         self.plotview.update_db_props()
+        plotview.update(plotview, 'name', new_name)
         # Закрываем окно
         self.accept()

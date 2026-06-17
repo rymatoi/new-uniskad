@@ -383,6 +383,12 @@ class ProjectPlotPage(PlotPage):
             result = dialog.get_result()
             if dialog.axis_params_changed:
                 self.plotView.reload_data_processor()
+            parent_tab = self.parent()
+            if parent_tab is not None:
+                parent_tab.setWindowTitle(self.item.data())
+                index = getattr(parent_tab, 'index', None)
+                if index is not None and index.isValid():
+                    index.model().dataChanged.emit(index, index)
             self.plotView.refresh()
 
     def clear_param_cache(self):
