@@ -96,12 +96,49 @@ class GraphTab(Tab):
 
     def __init__(self, index, parent, main_window=None):
         super().__init__(index, parent, main_window)
-        self.plot_page = ProjectPlotPage(self.item, self, main_window)
-        self.setWidget(self.plot_page)
+        self._loaded = False
+        self._loading = False
+        self._refresh_pending = False
+        self.plot_page = None
+        self._placeholder = QLabel('График будет загружен при открытии.', self)
+        self._placeholder.setAlignment(Qt.AlignCenter)
+        self.setWidget(self._placeholder)
+        self.visibilityChanged.connect(self._load_when_visible)
+        logger.info(
+            "Project graph tab registered as placeholder: node_id=%s, title=%s",
+            getattr(self.item._data, 'id', None),
+            self.windowTitle(),
+        )
+
+    def _load_when_visible(self, visible):
+        if visible and not getattr(self._parent, '_restoring_tabs', False):
+            self.ensure_loaded()
+
+    def ensure_loaded(self):
+        if self._loaded:
+            return self.widget()
+        if self._loading:
+            return self.widget()
+
+        self._loading = True
+        logger.info(
+            "Project graph page first load: node_id=%s, title=%s",
+            getattr(self.item._data, 'id', None),
+            self.windowTitle(),
+        )
+        try:
+            self.plot_page = ProjectPlotPage(self.item, self, self.main_window)
+            self.setWidget(self.plot_page)
+            self._loaded = True
+            self._refresh_pending = False
+            return self.plot_page
+        finally:
+            self._loading = False
 
     def closeEvent(self, event) -> None:
         super().closeEvent(event)
-        self.plot_page.closeEvent(event)
+        if self.plot_page is not None:
+            self.plot_page.closeEvent(event)
 
     def refresh(self, index):
         """
@@ -109,6 +146,13 @@ class GraphTab(Tab):
         :param index:
         :return:
         """
+        if not self._loaded:
+            self._refresh_pending = True
+            logger.debug(
+                "Project graph refresh deferred until first load: node_id=%s",
+                getattr(self.item._data, 'id', None),
+            )
+            return
         self.setWindowTitle(self.item.data())
         plot_view = getattr(self.plot_page, 'plotView', None)
         if plot_view is not None and getattr(self.item, 'internal_type', lambda: None)() == 'graph':
