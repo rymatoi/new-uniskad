@@ -1,4 +1,3 @@
-import ast
 from copy import copy
 
 from PySide2.QtCore import QSortFilterProxyModel
@@ -7,6 +6,7 @@ from PySide2.QtGui import QIcon
 from app import basic_funcs
 from app.plugins.base_state.models import TreeModel, Node
 from app.plugins.project import utils
+from app.plugins.project.utils_ import parse_list_value
 from app.plugins.project.dialogs.OY_setup import OYSetupDialog
 from app.plugins.project.dialogs.extra_param_epure import ExtraParamEpureDialog
 from app.plugins.project.dialogs.select_project_test import ProjectTestSelectionDialog
@@ -77,8 +77,8 @@ class EditEpureDialog(BaseDialog):
 
         self.parameters = None
 
-        self.param_list = ast.literal_eval(self.item.param_list)
-        self.oy_list = self.item.oy_list
+        self.param_list = parse_list_value(self.item.param_list)
+        self.oy_list = parse_list_value(self.item.oy_list)
         self.extra_param = self.item.extra_param
         self.extra_param_values = self.item.extra_param_values
 
