@@ -991,7 +991,7 @@ class TestNode(ProjectRoot):
 
 
 class GraphNode(ProjectRoot):
-    has_customization = False
+    has_customization = True
 
     def __init__(self, data):
         super().__init__(data)
@@ -1046,6 +1046,16 @@ class GraphNode(ProjectRoot):
         if self.icon:
             return QIcon(self.icon)
         return QIcon(":/graph.png")
+
+    def data(self, column=0):
+        return self.name or self.graph_name or getattr(self._data, 'project_prop_value', None) or getattr(self._data, 'prop_value', None)
+
+    def customize(self):
+        from app.plugins.project.dialogs.edit_plane import EditPlaneDialog
+
+        dialog = EditPlaneDialog(self)
+        if dialog.exec_():
+            return self
 
     @staticmethod
     def add(up_node_id, parent):
