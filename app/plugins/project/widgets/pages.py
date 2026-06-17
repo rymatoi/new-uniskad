@@ -1,4 +1,5 @@
 from datetime import datetime
+import json
 from PySide2.QtGui import QCursor, QIcon, QPixmap, QPainter, Qt
 from PySide2.QtPrintSupport import QPrinter, QPrintDialog
 from PySide2.QtWidgets import QAction, QMenu
@@ -15,7 +16,7 @@ from app.plugins.base_state.widgets import TablePage1
 from app.plugins.project.dialogs.edit_plane import EditPlaneDialog
 from app.plugins.project.plot.plot_page import PlotPage
 from app.plugins.project.widgets.table import ProjectTableView, ProjectTableWidget
-from app.plugins.project.utils_ import clear_project_param_cache
+from app.plugins.project.utils_ import clear_project_param_cache, resolve_project_param_cache_project_id
 
 from app.utils import convert, excel
 from db import sp
@@ -32,6 +33,11 @@ class ProjectTablePage1(TablePage1):
         self.TABLE = ProjectTableView if use_table_view else ProjectTableWidget
         logger.info("Project table implementation: %s", self.TABLE.__name__)
         super().__init__(cells, item, parent, main_window)
+
+        if hasattr(self, "saveAction"):
+            self.toolbar.removeAction(self.saveAction)
+            self.saveAction.deleteLater()
+            del self.saveAction
 
         self.add_toolbar_action('_edit_formula_list', QAction(QIcon(":formula.png"), 'Список шаблонных формул', self,
                                                               triggered=lambda: self.edit_formula_list()))
@@ -50,6 +56,12 @@ class ProjectTablePage1(TablePage1):
         get_tabs = getattr(tree_view, 'get_opened_tabs', None)
         return list(get_tabs()) if callable(get_tabs) else []
 
+    def _cache_project_id(self):
+        return resolve_project_param_cache_project_id(item=self.item) or self._project_id()
+
+    def _graph_cache_project_id(self, graph_item):
+        return resolve_project_param_cache_project_id(item=graph_item)
+
     def _graph_depends_on_params(self, graph_item, changed_params):
         if changed_params is None:
             return True
@@ -60,32 +72,37 @@ class ProjectTablePage1(TablePage1):
         constraints = getattr(graph_item, 'graph_constraints', None)
         if constraints:
             try:
-                dependencies.update(json.loads(constraints).keys())
+                parsed = json.loads(constraints) if isinstance(constraints, str) else constraints
+                if isinstance(parsed, dict):
+                    dependencies.update(parsed.keys())
             except Exception:
                 logger.debug('Could not parse graph constraints while checking dependencies', exc_info=True)
         return bool({p for p in dependencies if p} & set(changed_params))
 
     def notify_project_data_changed(self, project_id, changed_params=None):
-        logger.info('Project data changed: project_id=%s, changed_params=%s', project_id, changed_params)
-        if project_id is None:
+        root_project_id = self._cache_project_id()
+        logger.info('Project data changed: project_id=%s, root_project_id=%s, changed_params=%s',
+                    project_id, root_project_id, changed_params)
+        if root_project_id is None:
             logger.warning('Project data changed but cache project_id could not be determined; clearing all project param cache')
             clear_project_param_cache()
         else:
-            clear_project_param_cache(project_id)
+            clear_project_param_cache(root_project_id)
 
         for tab in self._opened_graph_tabs():
             graph_item = getattr(tab, 'item', None)
             if graph_item is None or getattr(graph_item, 'internal_type', lambda: None)() != 'graph':
                 continue
-            graph_project_id = getattr(getattr(graph_item, '_data', None), 'project_id', None)
-            if project_id is not None and graph_project_id != project_id:
+            graph_root_project_id = self._graph_cache_project_id(graph_item)
+            if root_project_id is not None and graph_root_project_id is not None and graph_root_project_id != root_project_id:
                 continue
             if not self._graph_depends_on_params(graph_item, changed_params):
                 continue
             logger.info(
-                'Refreshing dependent graph: graph_id=%s, graph_name=%s',
+                'Refreshing dependent graph: graph_id=%s, graph_name=%s, changed_params=%s',
                 getattr(getattr(graph_item, '_data', None), 'id', None),
                 getattr(graph_item, 'graph_name', None),
+                changed_params,
             )
             page = getattr(tab, 'plot_page', None)
             plot_view = getattr(page, 'plotView', None)
@@ -131,7 +148,7 @@ class ProjectTablePage1(TablePage1):
         menu.popup(QCursor.pos())
 
     def clear_param_cache(self):
-        clear_project_param_cache(self.item._data.project_id)
+        clear_project_param_cache(self._cache_project_id())
 
     def export_excel(self):
         filepath = basic_funcs.export_file(self.item.name.replace('"', '').replace("'", ''), "Экспорт испытания",
@@ -232,7 +249,6 @@ class ProjectTablePage1(TablePage1):
                     cells.append(self.get_cell_db_object(new_param_name, 'formula', str(formula), i))
             new_cells = sp.new_project_data_array(cells)
             self.table.add_row(new_cells, insert_position)
-            self.notify_project_data_changed(self._project_id(), {new_param_name})
 
             new_row_obj = self.table.rows.get((new_param_name, None), {}).get('row_npp')
             if new_row_obj is not None:
@@ -455,7 +471,7 @@ class ProjectPlotPage(PlotPage):
             self.plotView.refresh()
 
     def clear_param_cache(self):
-        clear_project_param_cache(self.item._data.project_id)
+        clear_project_param_cache(resolve_project_param_cache_project_id(item=self.item))
 
     def export_excel(self):
         file_path = export_file("123.xlsx", "Экспорт графика", "Файл EXCEL (*.xlsx)")

@@ -442,20 +442,24 @@ class ProjectRoot(Node):
         :param prop_value:
         :return:
         """
+        item_type = getattr(item, 'internal_type', lambda: None)()
         data = item._data
         data.project_prop = prop_name
         data.project_prop_value = prop_value
         project_record = data.table_fit(PROJECT_TABLE)
         item = sp.new_update_project_from_record(project_record)
         if item:
-            invalidate_project_param_cache_after_update(item_id=getattr(data, 'id', None), item=item, data=data)
+            if item_type not in {'graph', 'epure'}:
+                invalidate_project_param_cache_after_update(item_id=getattr(data, 'id', None), item=item, data=data)
             return item
 
     @staticmethod
     def bulk_update(item, props):
         project_id = resolve_project_param_cache_project_id(item=item)
         sp.new_update_project_from_record_array(props)
-        invalidate_project_param_cache_after_update(item_id=getattr(item._data, 'id', None), cache_project_id=project_id, item=item)
+        item_type = getattr(item, 'internal_type', lambda: None)()
+        if item_type not in {'graph', 'epure'}:
+            invalidate_project_param_cache_after_update(item_id=getattr(item._data, 'id', None), cache_project_id=project_id, item=item)
 
     @staticmethod
     def remove(item, final=False):

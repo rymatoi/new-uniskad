@@ -1,5 +1,6 @@
 from collections import OrderedDict
 from dataclasses import dataclass
+import ast
 from time import perf_counter
 from types import SimpleNamespace
 
@@ -76,6 +77,30 @@ SYMBOLS = [
 def get_next_default_combination(num):
     return LINE_STYLES[num % len(LINE_STYLES)], COLORS[num % len(COLORS)], SYMBOLS[num % len(SYMBOLS)][0]
 
+
+
+def parse_list_value(value):
+    """Safely coerce stored list-like project fields to a Python list."""
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return value
+    if isinstance(value, tuple):
+        return list(value)
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return []
+        try:
+            parsed = ast.literal_eval(text)
+        except (ValueError, SyntaxError):
+            logger.debug("Could not parse list-like value", exc_info=True)
+            return []
+        if isinstance(parsed, list):
+            return parsed
+        if isinstance(parsed, tuple):
+            return list(parsed)
+    return []
 
 def collect_project_params(db_objects):
     params = {}
