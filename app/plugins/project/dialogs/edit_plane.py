@@ -33,6 +33,7 @@ class EditPlaneDialog(BaseDialog):
         self.YComboBox = ExtendedComboBox(self)
         self.ZComboBox = ExtendedComboBox(self)
         self.axis_params_changed = False
+        self._initializing = True
 
         # Инициализация ui объекта
         self.ui = Ui_EditPlaneDialog()
@@ -45,6 +46,7 @@ class EditPlaneDialog(BaseDialog):
         self.create_connections()
         self.init_values(project_item._data.project_id)
         self.refresh()
+        self._initializing = False
 
     def create_connections(self):
         """Функция привязки слотов"""
@@ -61,6 +63,8 @@ class EditPlaneDialog(BaseDialog):
         self.ui.yMajor.textChanged.connect(lambda: self.manually_checked())
         self.ui.yMinor.textChanged.connect(lambda: self.manually_checked())
 
+        self.XComboBox.currentTextChanged.connect(self.rebuild_plot_name_from_axes)
+        self.YComboBox.currentTextChanged.connect(self.rebuild_plot_name_from_axes)
         self.ZComboBox.currentTextChanged.connect(self.update_values)
         self.ui.acceptPushButton.clicked.connect(self.add_param)
         self.ui.deletePushButton.clicked.connect(self.delete_param)
@@ -68,6 +72,19 @@ class EditPlaneDialog(BaseDialog):
 
         self.ui.toDoubleSpinBox.valueChanged.connect(self.save_to_value)
         self.ui.fromDoubleSpinBox.valueChanged.connect(self.save_from_value)
+
+
+    def rebuild_plot_name_from_axes(self):
+        if self._initializing:
+            return
+        x = self.XComboBox.currentText().strip()
+        y = self.YComboBox.currentText().strip()
+        new_name = build_graph_name(x, y)
+        self.ui.plotName.setText(new_name)
+        logger.info(
+            'Graph name rebuilt in dialog: graph_id=%s, new_name=%s, x=%s, y=%s',
+            getattr(getattr(self.plotview, '_data', None), 'id', None), new_name, x, y,
+        )
 
     def change_selected_param(self, index):
         if index.isValid():
@@ -305,27 +322,20 @@ class EditPlaneDialog(BaseDialog):
         new_x = self.XComboBox.currentText()
         new_y = self.YComboBox.currentText()
 
-        current_name = self.ui.plotName.text()
-        new_name = current_name
+        old_name = plotview.graph_name
+        new_name = self.ui.plotName.text().strip()
         self.axis_params_changed = old_x != new_x or old_y != new_y
+        graph_id = getattr(getattr(plotview, '_data', None), 'id', None)
         if self.axis_params_changed:
-            graph_id = getattr(getattr(plotview, '_data', None), 'id', None)
-            old_auto_name = build_graph_name(old_x, old_y)
-            new_auto_name = build_graph_name(new_x, new_y)
-            if current_name == old_auto_name:
-                new_name = new_auto_name
-                self.ui.plotName.setText(new_name)
-                logger.info(
-                    'Graph name rebuilt after axis params change: graph_id=%s, old_name=%s, '
-                    'new_name=%s, old_x=%s, old_y=%s, new_x=%s, new_y=%s',
-                    graph_id, current_name, new_name, old_x, old_y, new_x, new_y,
-                )
-            else:
-                logger.info(
-                    'Graph name was not rebuilt because current name appears to be custom: '
-                    'graph_id=%s, current_name=%s, expected_old_auto_name=%s',
-                    graph_id, current_name, old_auto_name,
-                )
+            logger.info(
+                'Graph axis params changed: graph_id=%s, old_x=%s, old_y=%s, new_x=%s, new_y=%s',
+                graph_id, old_x, old_y, new_x, new_y,
+            )
+        if old_name != new_name:
+            logger.info(
+                'Graph name saved: graph_id=%s, old_name=%s, new_name=%s',
+                graph_id, old_name, new_name,
+            )
 
         plotview.name = new_name
         plotview.graph_name = new_name
@@ -361,6 +371,14 @@ class EditPlaneDialog(BaseDialog):
 
         self.res = plotview
         self.plotview.update_db_props()
-        plotview.update(plotview, 'name', new_name)
+        if hasattr(plotview._data, 'project_prop_value'):
+            plotview._data.project_prop_value = new_name
+        if hasattr(plotview._data, 'prop_value'):
+            plotview._data.prop_value = new_name
+        updated = plotview.update(plotview, 'name', new_name)
+        if updated is not None:
+            plotview.name = new_name
+            plotview.graph_name = new_name
+
         # Закрываем окно
         self.accept()

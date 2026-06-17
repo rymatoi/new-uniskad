@@ -43,6 +43,75 @@ class ProjectTablePage1(TablePage1):
                                 QAction(QIcon(":export_excel.png"), 'Экспорт Excel', self,
                                         triggered=lambda: self.export_excel()))
 
+
+    def _opened_graph_tabs(self):
+        parent_tab = self.parent()
+        tree_view = getattr(parent_tab, '_parent', None)
+        get_tabs = getattr(tree_view, 'get_opened_tabs', None)
+        return list(get_tabs()) if callable(get_tabs) else []
+
+    def _graph_depends_on_params(self, graph_item, changed_params):
+        if changed_params is None:
+            return True
+        dependencies = {
+            getattr(graph_item, 'graph_label_x', None),
+            getattr(graph_item, 'graph_label_y', None),
+        }
+        constraints = getattr(graph_item, 'graph_constraints', None)
+        if constraints:
+            try:
+                dependencies.update(json.loads(constraints).keys())
+            except Exception:
+                logger.debug('Could not parse graph constraints while checking dependencies', exc_info=True)
+        return bool({p for p in dependencies if p} & set(changed_params))
+
+    def notify_project_data_changed(self, project_id, changed_params=None):
+        logger.info('Project data changed: project_id=%s, changed_params=%s', project_id, changed_params)
+        if project_id is None:
+            logger.warning('Project data changed but cache project_id could not be determined; clearing all project param cache')
+            clear_project_param_cache()
+        else:
+            clear_project_param_cache(project_id)
+
+        for tab in self._opened_graph_tabs():
+            graph_item = getattr(tab, 'item', None)
+            if graph_item is None or getattr(graph_item, 'internal_type', lambda: None)() != 'graph':
+                continue
+            graph_project_id = getattr(getattr(graph_item, '_data', None), 'project_id', None)
+            if project_id is not None and graph_project_id != project_id:
+                continue
+            if not self._graph_depends_on_params(graph_item, changed_params):
+                continue
+            logger.info(
+                'Refreshing dependent graph: graph_id=%s, graph_name=%s',
+                getattr(getattr(graph_item, '_data', None), 'id', None),
+                getattr(graph_item, 'graph_name', None),
+            )
+            page = getattr(tab, 'plot_page', None)
+            plot_view = getattr(page, 'plotView', None)
+            if plot_view is not None:
+                plot_view.reload_data_processor()
+                plot_view.refresh()
+
+    def _project_id(self):
+        return getattr(getattr(self.item, '_data', None), 'project_id', None)
+
+    def _autosave_pending_table_changes(self, changed_params=None):
+        if getattr(self, '_autosaving_project_table', False):
+            return
+        if not getattr(self.table, 'need_update', None):
+            return
+        self._autosaving_project_table = True
+        try:
+            self.table.update_table()
+        finally:
+            self._autosaving_project_table = False
+
+    def on_table_item_changed(self, item):
+        super().on_table_item_changed(item)
+        param_name = getattr(getattr(item, 'key', None), '__getitem__', lambda i: None)(0) if getattr(item, 'key', None) else None
+        self._autosave_pending_table_changes({param_name} if param_name else None)
+
     def show_row_menu(self, point):
         row = self.table.verticalHeader().logicalIndexAt(point)
         column = max(self.table.currentColumn(), 0)
@@ -114,7 +183,7 @@ class ProjectTablePage1(TablePage1):
             c = cell.cell['type']
             result_list.append(self.get_cell_db_object(c.excel_param_name, prop_name, prop_value, c.date_time_izm))
         sp.new_upd_project_data_array(result_list)
-        self.clear_param_cache()
+        self.notify_project_data_changed(self._project_id(), {c.cell['type'].excel_param_name for c in cells})
 
     def add_row(self, index, name=None, formula=None):
         ord_rows = list(self.table.ord_rows)
@@ -163,7 +232,7 @@ class ProjectTablePage1(TablePage1):
                     cells.append(self.get_cell_db_object(new_param_name, 'formula', str(formula), i))
             new_cells = sp.new_project_data_array(cells)
             self.table.add_row(new_cells, insert_position)
-            self.clear_param_cache()
+            self.notify_project_data_changed(self._project_id(), {new_param_name})
 
             new_row_obj = self.table.rows.get((new_param_name, None), {}).get('row_npp')
             if new_row_obj is not None:
@@ -186,7 +255,7 @@ class ProjectTablePage1(TablePage1):
                     next_npp_value += 1
                 if update_data:
                     sp.new_upd_project_data_array(update_data)
-            self.clear_param_cache()
+            self.notify_project_data_changed(self._project_id(), None)
 
             self.update_formula_context()
             self._set_formula_target(self.table.currentItem())
@@ -223,7 +292,7 @@ class ProjectTablePage1(TablePage1):
 
         if result:
             self.table.ord_rows.remove(item.key[0])
-            self.clear_param_cache()
+            self.notify_project_data_changed(self._project_id(), {item.key[0]})
             del self.table.rows[item.key[0], None]
             self.table.removeRow(item.row())
             for cell in cells_to_delete:
@@ -249,7 +318,7 @@ class ProjectTablePage1(TablePage1):
              column_npp] + cells)
 
         self.table.add_column(new_columns)
-        self.clear_param_cache()
+        self.notify_project_data_changed(self._project_id(), None)
         self.update_formula_context()
         self._set_formula_target(self.table.currentItem())
 
@@ -280,7 +349,7 @@ class ProjectTablePage1(TablePage1):
 
         if result:
             self.table.removeColumn(item.column())
-            self.clear_param_cache()
+            self.notify_project_data_changed(self._project_id(), None)
             self.table.ord_columns.remove(item.key[1])
             del self.table.columns[None, item.key[1]]
             self._set_formula_target(self.table.currentItem())
@@ -311,6 +380,7 @@ class ProjectTablePage1(TablePage1):
         success = sp.new_upd_project_data_record(record)
         if success:
             self.table.update_row_obj(name, prop_name, success)
+            self.notify_project_data_changed(self._project_id(), {name})
 
     def update_column_prop(self, name, prop_name, prop_value):
         if prop_name in self.table.columns[(None, name)]:
@@ -322,6 +392,7 @@ class ProjectTablePage1(TablePage1):
         success = sp.new_upd_project_data_record(record)
         if success:
             self.table.update_column_obj(name, prop_name, success)
+            self.notify_project_data_changed(self._project_id(), None)
 
     def edit_formula_list(self):
         dialog = ManageUserFormulasDialog(self, self.mw)
@@ -335,11 +406,6 @@ class ProjectPlotPage(PlotPage):
 
         # Определяем действия тулбара в виде словаря
         toolbar_actions = {
-            '_save': {
-                'icon': ':diskette.png',
-                'text': 'Сохранить изменения',
-                'triggered': self.save_changes
-            },
             '_plane_settings': {
                 'icon': ':settings.png',
                 'text': 'Настройка графика',
@@ -373,9 +439,6 @@ class ProjectPlotPage(PlotPage):
                 action.toggled.connect(props['toggled'])
 
             self.add_toolbar_action(action_name, action)
-
-    def save_changes(self):
-        self.plotView.commit_changes()
 
     def plane_settings(self):
         dialog = EditPlaneDialog(self.item)

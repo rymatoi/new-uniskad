@@ -109,6 +109,10 @@ class GraphTab(Tab):
         :param index:
         :return:
         """
+        self.setWindowTitle(self.item.data())
+        plot_view = getattr(self.plot_page, 'plotView', None)
+        if plot_view is not None and getattr(self.item, 'internal_type', lambda: None)() == 'graph':
+            plot_view.reload_data_processor()
         self.plot_page.refresh(index)
 
 
