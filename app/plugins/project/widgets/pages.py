@@ -2,7 +2,7 @@ from datetime import datetime
 from PySide2.QtCore import QTimer
 from PySide2.QtGui import QCursor, QIcon, QPixmap, QPainter, Qt
 from PySide2.QtPrintSupport import QPrinter, QPrintDialog
-from PySide2.QtWidgets import QAction, QMenu, QMessageBox
+from PySide2.QtWidgets import QAction, QMenu, QLabel, QToolBar, QVBoxLayout
 from pyqtgraph import InfiniteLine
 
 from app import _menu, app_logger, basic_funcs
@@ -559,13 +559,20 @@ class ProjectTablePage1(TablePage1):
 
 
 class ProjectPlotPage(PlotPage):
+    INVALID_GRAPH_PLACEHOLDER_TEXT = (
+        'У графика не заданы параметры X/Y.\n'
+        'Откройте настройки графика и выберите параметры осей.'
+    )
+
     def __init__(self, item, parent=None, main_window=None):
-        super().__init__(item, parent, main_window)
         x_param = str(getattr(item, 'graph_label_x', '') or '').strip()
         y_param = str(getattr(item, 'graph_label_y', '') or '').strip()
-        if not x_param or not y_param:
+        is_graph = getattr(item, 'internal_type', lambda: None)() == 'graph'
+        if is_graph and (not x_param or not y_param):
             logger.warning('Graph opened without axis params: graph_id=%s', getattr(getattr(item, '_data', None), 'id', None))
-            QMessageBox.warning(self, 'Некорректный график', 'У графика не заданы параметры X/Y.')
+            self._init_invalid_graph_placeholder(item, parent, main_window)
+        else:
+            super().__init__(item, parent, main_window)
 
         # Определяем действия тулбара в виде словаря
         toolbar_actions = {
@@ -591,6 +598,9 @@ class ProjectPlotPage(PlotPage):
             }
         }
 
+        if getattr(self, 'plotView', None) is None:
+            toolbar_actions = {'_plane_settings': toolbar_actions['_plane_settings']}
+
         # Создаем действия из словаря
         for action_name, props in toolbar_actions.items():
             action = QAction(QIcon(props['icon']), props['text'], self)
@@ -603,19 +613,58 @@ class ProjectPlotPage(PlotPage):
 
             self.add_toolbar_action(action_name, action)
 
+
+    def _init_invalid_graph_placeholder(self, item, parent=None, main_window=None):
+        super(PlotPage, self).__init__(parent)
+        self.main_window = main_window
+        self.item = item
+        self.plotView = None
+        self.centralLayout = QVBoxLayout()
+        self.toolbar = QToolBar(parent)
+        self.placeholder_label = QLabel(self.INVALID_GRAPH_PLACEHOLDER_TEXT, self)
+        self.placeholder_label.setAlignment(Qt.AlignCenter)
+        self.placeholder_label.setWordWrap(True)
+        self.centralLayout.addWidget(self.placeholder_label)
+        self.setLayout(self.centralLayout)
+        self._init_toolbar()
+
+    def _has_valid_axis_params(self):
+        x_param = str(getattr(self.item, 'graph_label_x', '') or '').strip()
+        y_param = str(getattr(self.item, 'graph_label_y', '') or '').strip()
+        return bool(x_param and y_param)
+
+    def _reload_parent_tab(self):
+        parent_tab = self.parent()
+        if parent_tab is None:
+            return False
+        page = ProjectPlotPage(self.item, parent_tab, self.main_window)
+        parent_tab.plot_page = page
+        parent_tab.setWidget(page)
+        return True
+
     def plane_settings(self):
         dialog = EditPlaneDialog(self.item)
         if dialog.exec_():  # Если произошло изменение данных
             result = dialog.get_result()
-            if dialog.axis_params_changed:
-                self.plotView.reload_data_processor()
+            plot_view = getattr(self, 'plotView', None)
+            if plot_view is None and self._has_valid_axis_params():
+                if self._reload_parent_tab():
+                    return
+            if dialog.axis_params_changed and plot_view is not None:
+                plot_view.reload_data_processor()
             parent_tab = self.parent()
             if parent_tab is not None:
                 parent_tab.setWindowTitle(self.item.data())
                 index = getattr(parent_tab, 'index', None)
                 if index is not None and index.isValid():
                     index.model().dataChanged.emit(index, index)
-            self.plotView.refresh()
+            if plot_view is not None:
+                plot_view.refresh()
+
+    def refresh(self, index=None):
+        plot_view = getattr(self, 'plotView', None)
+        if plot_view is not None:
+            plot_view.refresh()
 
     def clear_param_cache(self):
         clear_project_param_cache(resolve_project_param_cache_project_id(item=self.item))
