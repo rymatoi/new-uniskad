@@ -53,3 +53,41 @@ def test_blank_param_name_skips_db(monkeypatch):
     assert utils_.get_param_values(1, None) == []
     assert utils_.get_param_values(1, '') == []
     assert value_calls == []
+
+
+class _Data:
+    def __init__(self, **kwargs):
+        self.__dict__.update(kwargs)
+
+
+class _Item:
+    def __init__(self, type_, data, parent=None):
+        self._type = type_
+        self._data = data
+        self._parent = parent
+
+    def internal_type(self):
+        return self._type
+
+    def parent(self):
+        return self._parent
+
+
+def test_invalidate_uses_root_project_id_for_child_items(monkeypatch):
+    cleared = []
+    monkeypatch.setattr(utils_, 'clear_project_param_cache', lambda project_id=None: cleared.append(project_id))
+    project = _Item('project', _Data(id=3424, project_id=3424))
+    graph = _Item('graph', _Data(id=3468, project_id=3468, project_id_up=3424), project)
+
+    utils_.invalidate_project_param_cache_after_update(item=graph)
+
+    assert cleared == [3424]
+
+
+def test_invalidate_falls_back_to_all_projects_when_project_id_unknown(monkeypatch):
+    cleared = []
+    monkeypatch.setattr(utils_, 'clear_project_param_cache', lambda project_id=None: cleared.append(project_id))
+
+    utils_.invalidate_project_param_cache_after_update(item_id=3468)
+
+    assert cleared == [None]

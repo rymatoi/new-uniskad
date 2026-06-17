@@ -19,6 +19,7 @@ from app.plugins.project.dialogs.create_approx import ApproxDialog
 from app.plugins.project.dialogs.create_interpolation import InterpDialog
 from app.plugins.project.dialogs.extrapolation_dialog import ExtrapolationDialog
 from app.plugins.project.dialogs.edit_line import EditLineDialog, visual_style_to_dialog_style
+from app.plugins.project.utils_ import invalidate_project_param_cache_after_update
 
 logger = logging.getLogger(__name__)
 
@@ -490,6 +491,7 @@ class PlotContextMenuMixin:
             updated_props = sp.new_update_project_from_record_array(props)
             if hasattr(node, 'update_class_props'):
                 node.update_class_props(updated_props)
+            invalidate_project_param_cache_after_update(item_id=getattr(data, 'id', None), item=node, data=data)
         except Exception:
             logger.exception("Could not persist ProjectData curve style")
 

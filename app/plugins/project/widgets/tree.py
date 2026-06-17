@@ -6,7 +6,7 @@ from app.plugins.project.dialogs.select_project import ProjectSelectionDialog
 from app.plugins.project.dialogs.select_project_test import ProjectTestSelectionDialog
 from app.plugins.project.models import GraphNode, TestNode, EpureNode, ProductFolderNode, FileNode
 from app.plugins.project.widgets.tabs import TestTableTab, GraphTab, FileTab
-from app.plugins.project.utils_ import clear_project_param_cache
+from app.plugins.project.utils_ import invalidate_project_param_cache_after_update, resolve_project_param_cache_project_id
 from db import sp
 
 logger = app_logger.get_logger(__name__)
@@ -34,21 +34,21 @@ class ProjectTreeView(TreeView):
     def add_item(self, type_, index):
         super().add_item(type_, index)
         item = index.internalPointer() if index.isValid() else None
-        clear_project_param_cache(getattr(getattr(item, '_data', None), 'project_id', None))
+        invalidate_project_param_cache_after_update(item=item)
         self.model().update_external_graphs()
 
     def remove(self, index, final=False):
         item = index.internalPointer() if index.isValid() else None
-        project_id = getattr(getattr(item, '_data', None), 'project_id', None)
+        project_id = resolve_project_param_cache_project_id(item=item)
         super().remove(index, final)
-        clear_project_param_cache(project_id)
+        invalidate_project_param_cache_after_update(item_id=getattr(getattr(item, '_data', None), 'id', None), cache_project_id=project_id)
         self.model().update_external_graphs()
 
     def restore(self, index):
         item = index.internalPointer() if index.isValid() else None
-        project_id = getattr(getattr(item, '_data', None), 'project_id', None)
+        project_id = resolve_project_param_cache_project_id(item=item)
         super().restore(index)
-        clear_project_param_cache(project_id)
+        invalidate_project_param_cache_after_update(item_id=getattr(getattr(item, '_data', None), 'id', None), cache_project_id=project_id)
         self.model().update_external_graphs()
 
     def import_test(self, index):
@@ -76,7 +76,7 @@ class ProjectTreeView(TreeView):
                     result = sp.copy_tree_project_bunch(list(set(data_objects)), parent_id,
                                                         up_node_id)
                     if result:
-                        clear_project_param_cache(up_node_id)
+                        invalidate_project_param_cache_after_update(item_id=up_node_id, cache_project_id=up_node_id)
 
     def save_graph_template(self, index):
         folder = index.internalPointer()

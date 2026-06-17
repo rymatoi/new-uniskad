@@ -161,6 +161,57 @@ def clear_project_param_cache(project_id=None):
     )
 
 
+def resolve_project_param_cache_project_id(item=None, data=None):
+    """Return the root project id used by project parameter loaders.
+
+    Parameter names and values are loaded with the root project node id, not
+    necessarily the currently edited tree item id (for example graph/test ids).
+    Prefer the nearest ancestor ProjectNode when a tree item is available.
+    """
+    current = item
+    while current is not None:
+        current_data = getattr(current, '_data', None)
+        internal_type = getattr(current, 'internal_type', None)
+        try:
+            if callable(internal_type) and internal_type() == 'project':
+                return getattr(current_data, 'id', None) or getattr(current_data, 'project_id', None)
+        except Exception:
+            logger.debug("Could not resolve project param cache id from item ancestor", exc_info=True)
+            break
+        parent = getattr(current, 'parent', None)
+        current = parent() if callable(parent) else None
+
+    data = data or getattr(item, '_data', None)
+    if data is None:
+        return None
+
+    return (
+        getattr(data, 'project_id_up', None)
+        or getattr(data, 'id_up', None)
+        or getattr(data, 'project_id', None)
+        or getattr(data, 'id', None)
+    )
+
+
+def invalidate_project_param_cache_after_update(item_id=None, cache_project_id=None, item=None, data=None):
+    """Invalidate parameter cache after a successful write using the loader project id."""
+    actual_project_id = cache_project_id
+    if actual_project_id is None:
+        actual_project_id = resolve_project_param_cache_project_id(item=item, data=data)
+    if item_id is None:
+        source_data = data or getattr(item, '_data', None)
+        item_id = getattr(source_data, 'id', None) or getattr(source_data, 'project_id', None)
+
+    logger.info(
+        "Invalidating project param cache after project data update: item_id=%s, cache_project_id=%s",
+        item_id, actual_project_id,
+    )
+    if actual_project_id is None:
+        clear_project_param_cache()
+    else:
+        clear_project_param_cache(actual_project_id)
+
+
 def clear_project_params(project_id=None):
     """Backward-compatible alias for clear_project_param_cache."""
     clear_project_param_cache(project_id)
