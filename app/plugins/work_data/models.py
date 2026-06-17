@@ -1,4 +1,5 @@
 from PySide2.QtGui import QIcon
+from PySide2.QtWidgets import QApplication
 
 from app import basic_funcs
 from app.plugins.base_state.models import Node, TreeModel
@@ -302,14 +303,41 @@ class TestNode(WorkDataNode):
         return self.name + f' - Версия {getattr(self, "final_version", 0)}'
 
     @staticmethod
+    def _get_main_window():
+        active_window = QApplication.activeWindow()
+        if active_window and hasattr(active_window, 'run_with_progress'):
+            return active_window
+
+        for widget in QApplication.topLevelWidgets():
+            if hasattr(widget, 'run_with_progress'):
+                return widget
+
+        return None
+
+    @staticmethod
     def add(up_node_id, parent):
         files = basic_funcs.get_files("Открытие исходных файлов Excel", "Файл Microsoft Excel (*.xls *.xlsx)",
                                       single_selection=False)
         result_items = []
+        main_window = TestNode._get_main_window()
         for file in files:
-            new_product, version = import_file_data(file.split('/')[-1], file, up_node_id)
-            new_product.type_ = 'test'
+            def run_import(import_file=file):
+                return import_file_data(import_file.split('/')[-1], import_file, up_node_id)
+
+            if main_window and hasattr(main_window, 'run_with_progress'):
+                result = main_window.run_with_progress(
+                    run_import,
+                    progress_text='Импорт рабочих данных',
+                )
+            else:
+                result = run_import()
+
+            if isinstance(result, Exception):
+                raise result
+
+            new_product, version = result
             if new_product:
+                new_product.type_ = 'test'
                 result_items += [TestNode(new_product), TestNode(version)]
         return tuple(result_items)
 
