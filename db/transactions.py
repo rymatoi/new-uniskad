@@ -22,6 +22,18 @@ def import_file_data(product_name, file, up_node_id):
     total_started_at = time.perf_counter()
     logger.info("WorkData import started: file=%s, up_node_id=%s", file, up_node_id)
 
+    def progress_message(imported, total):
+        remaining = max(total - imported, 0)
+        return f'Импортировано {imported} из {total}, осталось {remaining}'
+
+    def update_import_progress(imported, total, message=None):
+        session.update_progress(
+            current=imported,
+            total=total,
+            message=message or progress_message(imported, total),
+            detail=progress_message(imported, total),
+        )
+
     def copy_import_file_data(records):
         logger.info("WorkData import COPY started: records=%s", len(records))
         copy_started_at = time.perf_counter()
@@ -45,11 +57,27 @@ def import_file_data(product_name, file, up_node_id):
             time.perf_counter() - copy_started_at,
         )
 
-        inserted_count = session.copy_import_file_data(copy_rows)
+        total = len(copy_rows)
+        update_import_progress(0, total)
+
+        def on_copy_progress(imported, total_records):
+            update_import_progress(imported, total_records)
+
+        inserted_count = session.copy_import_file_data(
+            copy_rows,
+            batch_size=10000,
+            progress_callback=on_copy_progress,
+        )
+        update_import_progress(
+            total,
+            total,
+            message=f'Импорт рабочих данных: импортировано {total} из {total}',
+        )
         return inserted_count
 
     def get_cells_for_import(filename, excel_id, worksheet=None) -> list:
         workbook_started_at = time.perf_counter()
+        session.update_loading_bar('Импорт рабочих данных: чтение файла...')
         wb = xls2xlsx_(filename)
         logger.info(
             "WorkData import workbook loaded: elapsed=%.4fs",
@@ -57,6 +85,7 @@ def import_file_data(product_name, file, up_node_id):
         )
         ws = wb[worksheet] if worksheet else wb.active
 
+        session.update_loading_bar('Импорт рабочих данных: разбор листа...')
         parse_started_at = time.perf_counter()
         # Загружаем данные в pandas DataFrame
         data = pd.DataFrame([[cell.value for cell in row] for row in ws.iter_rows()])
@@ -77,6 +106,7 @@ def import_file_data(product_name, file, up_node_id):
         )
 
         # Получаем IDs параметров
+        session.update_loading_bar('Импорт рабочих данных: подготовка справочника имён...')
         sprav_started_at = time.perf_counter()
         param_ids = sp.add_upd_sprav_names_array(row_names.tolist())
         logger.info(
@@ -86,6 +116,7 @@ def import_file_data(product_name, file, up_node_id):
         )
 
         # Дата для столбцов с уникальностью
+        session.update_loading_bar('Импорт рабочих данных: подготовка записей...')
         records_started_at = time.perf_counter()
         curr_date = datetime.now()
         date_column_dict = {
@@ -145,33 +176,44 @@ def import_file_data(product_name, file, up_node_id):
             dict(sorted(by_prop.items())),
             time.perf_counter() - records_started_at,
         )
+        session.update_progress(
+            current=0,
+            total=len(records),
+            message=f'Импорт рабочих данных: подготовлено {len(records)} записей',
+            detail=progress_message(0, len(records)),
+        )
 
         return records
 
-    # TODO нужно ли проверять отдельно каждую функцию?
-    product = (None, None, up_node_id, 5, 'name', product_name, None, 0, None)
-    new_product = sp.new_update_product_from_record(product)
-    version = copy(new_product)
-    version.prod_prop = 'final_version'
-    version.prod_prop_value = '0'
-    version = sp.new_update_product_from_record(version.table_fit(PRODUCT))
-    datafile = sp.new_uniskad_datafile(int(new_product.id), 'input_excel', product_name[:30], file, "")
-    with open(file, 'rb') as f:
-        sp.new_uniskad_binfile(datafile.id_datafile, datafile.full_name, 'xlsx',
-                               '',
-                               '', f.read())
-    sp.create_update_import_file_state(datafile.id_datafile, 10, 0)
-    records = get_cells_for_import(datafile.full_name, datafile.id_datafile)
     try:
-        copy_import_file_data(records)
-    except Exception:
-        logger.exception("Fast COPY import failed, falling back to new_excel_data_array")
-        sp.new_excel_data_array(records)
-    logger.info(
-        "WorkData import completed: total_elapsed=%.4fs",
-        time.perf_counter() - total_started_at,
-    )
-    return new_product, version
+        session.begin_progress('Импорт рабочих данных', blocking=True)
+        # TODO нужно ли проверять отдельно каждую функцию?
+        product = (None, None, up_node_id, 5, 'name', product_name, None, 0, None)
+        new_product = sp.new_update_product_from_record(product)
+        version = copy(new_product)
+        version.prod_prop = 'final_version'
+        version.prod_prop_value = '0'
+        version = sp.new_update_product_from_record(version.table_fit(PRODUCT))
+        datafile = sp.new_uniskad_datafile(int(new_product.id), 'input_excel', product_name[:30], file, "")
+        with open(file, 'rb') as f:
+            sp.new_uniskad_binfile(datafile.id_datafile, datafile.full_name, 'xlsx',
+                                   '',
+                                   '', f.read())
+        sp.create_update_import_file_state(datafile.id_datafile, 10, 0)
+        records = get_cells_for_import(datafile.full_name, datafile.id_datafile)
+        try:
+            copy_import_file_data(records)
+        except Exception:
+            logger.exception("Fast COPY import failed, falling back to new_excel_data_array")
+            sp.new_excel_data_array(records)
+        session.update_loading_bar('Импорт рабочих данных: обновление таблицы...')
+        logger.info(
+            "WorkData import completed: total_elapsed=%.4fs",
+            time.perf_counter() - total_started_at,
+        )
+        return new_product, version
+    finally:
+        session.end_progress()
 
 
 # @session.transaction

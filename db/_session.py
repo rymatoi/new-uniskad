@@ -419,7 +419,7 @@ class Session:
             return e
 
 
-    async def copy_import_file_data_records(self, rows):
+    async def copy_import_file_data_records(self, rows, batch_size=None, progress_callback=None):
         """Load import_file_data rows through a transaction-local temp table."""
         if self._execute_lock is None:
             logger.debug("Execute lock missing; initializing async state again")
@@ -446,26 +446,49 @@ class Session:
                     ) ON COMMIT DROP
                 """)
                 copy_started_at = time.perf_counter()
-                await self._remote_connection.copy_records_to_table(
-                    'tmp_import_file_data_stage',
-                    records=rows,
-                    columns=(
-                        'id_excel_file',
-                        'file_version',
-                        'param_prop_name',
-                        'date_time_izm',
-                        'zamer_n',
-                        'rejim_zamer',
-                        'prop_value',
-                        'npp',
-                        'id_name',
-                    ),
+                columns = (
+                    'id_excel_file',
+                    'file_version',
+                    'param_prop_name',
+                    'date_time_izm',
+                    'zamer_n',
+                    'rejim_zamer',
+                    'prop_value',
+                    'npp',
+                    'id_name',
                 )
+                total_rows = len(rows)
+                if batch_size and batch_size > 0:
+                    copied_rows = 0
+                    for offset in range(0, total_rows, batch_size):
+                        batch = rows[offset:offset + batch_size]
+                        await self._remote_connection.copy_records_to_table(
+                            'tmp_import_file_data_stage',
+                            records=batch,
+                            columns=columns,
+                        )
+                        copied_rows += len(batch)
+                        if progress_callback is not None:
+                            progress_callback(copied_rows, total_rows)
+                else:
+                    await self._remote_connection.copy_records_to_table(
+                        'tmp_import_file_data_stage',
+                        records=rows,
+                        columns=columns,
+                    )
+                    if progress_callback is not None:
+                        progress_callback(total_rows, total_rows)
                 logger.info(
                     "WorkData import COPY completed: records=%s, elapsed=%.4fs",
-                    len(rows),
+                    total_rows,
                     time.perf_counter() - copy_started_at,
                 )
+                if progress_callback is not None:
+                    self.update_progress(
+                        current=total_rows,
+                        total=total_rows,
+                        message='Импорт рабочих данных: INSERT SELECT в sc_ref.import_file_data...',
+                    )
                 insert_started_at = time.perf_counter()
                 status = await self._remote_connection.execute("""
                     INSERT INTO sc_ref.import_file_data (
@@ -501,11 +524,20 @@ class Session:
                     inserted_count,
                     time.perf_counter() - insert_started_at,
                 )
+                if progress_callback is not None:
+                    inserted = inserted_count if inserted_count is not None else total_rows
+                    self.update_progress(
+                        current=inserted,
+                        total=total_rows,
+                        message=f'Импорт рабочих данных: импортировано {inserted} из {total_rows}',
+                    )
 
         return inserted_count
 
-    def copy_import_file_data(self, rows):
-        return self.run_sync(self.copy_import_file_data_records(rows))
+    def copy_import_file_data(self, rows, batch_size=None, progress_callback=None):
+        return self.run_sync(
+            self.copy_import_file_data_records(rows, batch_size, progress_callback)
+        )
 
     def call(self, query, *args):
         logger.debug(
