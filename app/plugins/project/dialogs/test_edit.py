@@ -1,4 +1,3 @@
-import ast
 import json
 
 from PySide2.QtCore import QSortFilterProxyModel, QModelIndex, QRegExp, Qt, QItemSelection
@@ -280,7 +279,7 @@ class EditProjectItemDialog(BaseDialog):
         self.container_lay.addStretch()
 
         if self.item.conditions:
-            conditions = ast.literal_eval(self.item.conditions)
+            conditions = utils.parse_list_value(self.item.conditions)
             for condition in conditions:
                 self.add_condition(condition)
 
@@ -291,7 +290,7 @@ class EditProjectItemDialog(BaseDialog):
         self.f_container_lay.addStretch()
 
         if self.item.filters:
-            filters = ast.literal_eval(self.item.filters)
+            filters = utils.parse_list_value(self.item.filters)
             for filter in filters:
                 self.add_filter(filter)
 

@@ -1,6 +1,7 @@
 from typing import Any, Union, List, Dict, Set, Callable
 
 from app.plugins.project.visualization.widgets.curve import CurveItem
+from app.plugins.project.utils_ import parse_list_value
 import numpy as np
 import pyqtgraph as pg
 
@@ -235,7 +236,6 @@ class PlotDataMixin:
         Returns:
             словарь {условие: (отфильтрованные x, y, стиль)}
         """
-        import ast
         from app.plugins.project.utils.converters.graph_converter import GraphConverter
 
         def to_float(val):
@@ -273,7 +273,7 @@ class PlotDataMixin:
             return result_groups
 
         # Парсим условия
-        conditions = ast.literal_eval(test_node.conditions)
+        conditions = parse_list_value(test_node.conditions)
         if not conditions:
             return result_groups
 
