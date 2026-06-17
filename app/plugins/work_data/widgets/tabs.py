@@ -20,11 +20,30 @@ class WorkDataTab(Tab):
     @timing_decorator
     def __init__(self, index, parent, main_window=None):
         super().__init__(index, parent, main_window)
-        dc = main_window.data_cache
+        self._loaded = False
+        self._loading = False
+        self._refresh_pending = False
+        self.table_page = None
+        self._placeholder = QLabel('Таблица будет загружена при открытии.', self)
+        self._placeholder.setAlignment(Qt.AlignCenter)
+        self.setWidget(self._placeholder)
+        self.visibilityChanged.connect(self._load_when_visible)
+        logger.info(
+            "WorkData table tab registered as placeholder: product_id=%s, title=%s",
+            getattr(self.item._data, 'id', None),
+            self.windowTitle(),
+        )
+
+    def _load_when_visible(self, visible):
+        if visible and not getattr(self._parent, '_restoring_tabs', False):
+            self.ensure_loaded()
+
+    def _load_cells(self):
+        dc = self.main_window.data_cache
         datafile = sp.get_product_uniskad_files(self.item._data.id, 'input_excel')
         if not datafile:
-            main_window.show_notification('Данные для открытия таблицы отсутствуют.')
-            return
+            self.main_window.show_notification('Данные для открытия таблицы отсутствуют.')
+            return None
 
         logger.debug(
             "Loading work data for id_datafile=%s, file_version=%s",
@@ -45,12 +64,53 @@ class WorkDataTab(Tab):
         logger.info('WorkDataTab: enrichment took %.4f seconds', time.perf_counter() - enrichment_started)
         cells.sort(
             key=lambda x: (x.id_record, x.excel_param_name, x.param_prop_name, x.date_time_izm))
+        return cells
 
-        use_table_view = is_feature_enabled('UNISKAD_WORK_DATA_TABLE_VIEW', default=True)
-        page_class = WorkDataTableViewPage if use_table_view else WorkDataTablePage1
-        logger.info("Work Data table implementation: %s", page_class.__name__)
-        self.table_page = page_class(cells, self.item, self, main_window)
-        self.setWidget(self.table_page)
+    def ensure_loaded(self):
+        if self._loaded:
+            logger.info(
+                "WorkData table page load reused from cache: product_id=%s, title=%s",
+                getattr(self.item._data, 'id', None),
+                self.windowTitle(),
+            )
+            return self.widget()
+        if self._loading:
+            return self.widget()
+
+        self._loading = True
+        logger.info(
+            "WorkData table page first load: product_id=%s, title=%s",
+            getattr(self.item._data, 'id', None),
+            self.windowTitle(),
+        )
+        try:
+            cells = self._load_cells()
+            if cells is None:
+                return self.widget()
+            use_table_view = is_feature_enabled('UNISKAD_WORK_DATA_TABLE_VIEW', default=True)
+            page_class = WorkDataTableViewPage if use_table_view else WorkDataTablePage1
+            logger.info("Work Data table implementation: %s", page_class.__name__)
+            self.table_page = page_class(cells, self.item, self, self.main_window)
+            self.setWidget(self.table_page)
+            self._loaded = True
+            self._refresh_pending = False
+            return self.table_page
+        finally:
+            self._loading = False
+
+    def refresh(self, index):
+        if not self._loaded:
+            self._refresh_pending = True
+            logger.debug(
+                "WorkData table refresh deferred until first load: product_id=%s",
+                getattr(self.item._data, 'id', None),
+            )
+            return
+        cells = self._load_cells()
+        if cells is None:
+            return
+        if self.table_page is not None:
+            self.table_page.init_table(cells)
 
     @timing_decorator
     def process_data(self, cells, sprav_names, sprav_eizm, secret_grantness_level):
@@ -163,8 +223,49 @@ class GraphTab(Tab):
 
     def __init__(self, index, parent, main_window=None):
         super().__init__(index, parent, main_window)
-        self.plot_page = ProjectPlotPage(self.item, self)
-        self.setWidget(self.plot_page)
+        self._loaded = False
+        self._loading = False
+        self._refresh_pending = False
+        self.plot_page = None
+        self._placeholder = QLabel('График будет загружен при открытии.', self)
+        self._placeholder.setAlignment(Qt.AlignCenter)
+        self.setWidget(self._placeholder)
+        self.visibilityChanged.connect(self._load_when_visible)
+        logger.info(
+            "Project graph tab registered as placeholder: node_id=%s, title=%s",
+            getattr(self.item._data, 'id', None),
+            self.windowTitle(),
+        )
+
+    def _load_when_visible(self, visible):
+        if visible and not getattr(self._parent, '_restoring_tabs', False):
+            self.ensure_loaded()
+
+    def ensure_loaded(self):
+        if self._loaded:
+            return self.widget()
+        if self._loading:
+            return self.widget()
+
+        self._loading = True
+        logger.info(
+            "Project graph page first load: node_id=%s, title=%s",
+            getattr(self.item._data, 'id', None),
+            self.windowTitle(),
+        )
+        try:
+            self.plot_page = ProjectPlotPage(self.item, self)
+            self.setWidget(self.plot_page)
+            self._loaded = True
+            self._refresh_pending = False
+            return self.plot_page
+        finally:
+            self._loading = False
+
+    def closeEvent(self, event) -> None:
+        super().closeEvent(event)
+        if self.plot_page is not None:
+            self.plot_page.closeEvent(event)
 
     def refresh(self, index):
         """
@@ -172,6 +273,17 @@ class GraphTab(Tab):
         :param index:
         :return:
         """
+        if not self._loaded:
+            self._refresh_pending = True
+            logger.debug(
+                "Project graph refresh deferred until first load: node_id=%s",
+                getattr(self.item._data, 'id', None),
+            )
+            return
+        self.setWindowTitle(self.item.data())
+        plot_view = getattr(self.plot_page, 'plotView', None)
+        if plot_view is not None and getattr(self.item, 'internal_type', lambda: None)() == 'graph':
+            plot_view.reload_data_processor()
         self.plot_page.refresh(index)
 
 
