@@ -6,11 +6,11 @@ from PySide2 import QtWidgets
 from PySide2.QtCore import QEventLoop, QSize, Slot
 from PySide2.QtGui import QIcon, QCloseEvent, Qt, QKeySequence, QFont
 from PySide2.QtWidgets import QMenu, QToolBar, QHBoxLayout, QToolButton, QWidget, QDialog, QShortcut, QDockWidget, \
-    QAction, QProgressBar, QLabel
+    QAction, QLabel
 from app import app_logger, _menu, basic_funcs
 from app.cache import DataCache
 from app.history_manager.history_manager import EventStack
-from app.notifications import StackedNotifications
+from app.notifications import NotificationCenter, ProgressToastNotification, ToastLevel
 from app.plugins import *
 from app.plugins.admin_users.widgets.docks import AdminUsersDockWidget
 from app.plugins.base_state.widgets import TreeView, DockWidget
@@ -117,14 +117,12 @@ class MainWindow(QtWidgets.QMainWindow):
             self.PROJECT: Dock_('Дерево проекта', self.PROJECT_TREE, Qt.LeftDockWidgetArea, ProjectDockWidget)
         }
 
-        self.progress_bar = QProgressBar()
-        self.progress_bar.setRange(0, 0)  # Indeterminate mode
-        self.progress_bar.setVisible(False)
         self._current_progress_message = ''
+        self._progress_toast: Optional[ProgressToastNotification] = None
+        self._progress_outcome: Optional[str] = None
 
         self.status_label = QLabel()
 
-        self.statusBar().addWidget(self.progress_bar)
         self.statusBar().addWidget(self.status_label)
 
         self.work_data = None
@@ -153,7 +151,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.connect_triggered_funcs()
 
-        self.notification = None
+        self.notification_center: Optional[NotificationCenter] = None
         self.notifications_enabled = True
         self.notifications_timeout = 10000
         self.init_notifications()
@@ -176,18 +174,42 @@ class MainWindow(QtWidgets.QMainWindow):
         """
         Инициализация виджета уведомлений
         """
-        self.notification = StackedNotifications(self)
-        self.notification.setGeometry(100, 100, 600, 100)
-        self.notification.hide()
+        self.notification_center = NotificationCenter(self)
+        self.notification_center.hide()
 
-    def show_notification(self, text):
+    def show_notification(self, text, *, level: str = 'info', details: Optional[str] = None,
+                           timeout: Optional[int] = None, force: bool = False):
         """
         Показывает окошко с уведомлением
         """
-        if not self.notifications_enabled:
-            return
-        self.notification.show()
-        self.notification.add_notification(text, self.notifications_timeout)
+        if (not self.notifications_enabled and not force) or not self.notification_center:
+            return None
+
+        timeout_ms = self.notifications_timeout if timeout is None else timeout
+        if timeout_ms is not None and timeout_ms <= 0:
+            timeout_ms = None
+
+        return self.notification_center.show_message(
+            text,
+            level=level,
+            timeout=timeout_ms,
+            details=details,
+        )
+
+    def notify_error(self, text: str, *, details: Optional[str] = None) -> None:
+        logger.error("%s%s", text, f" ({details})" if details else "")
+        toast = self.show_notification(text, level=ToastLevel.ERROR.value, details=details, timeout=None, force=True)
+        if toast and details:
+            toast.details_button.setChecked(True)
+            toast.details_panel.setVisible(True)
+
+    def notify_warning(self, text: str, *, details: Optional[str] = None, timeout: Optional[int] = None) -> None:
+        logger.warning("%s%s", text, f" ({details})" if details else "")
+        self.show_notification(text, level=ToastLevel.WARNING.value, details=details, timeout=timeout)
+
+    def notify_info(self, text: str, *, details: Optional[str] = None, timeout: Optional[int] = None) -> None:
+        logger.info("%s%s", text, f" ({details})" if details else "")
+        self.show_notification(text, level=ToastLevel.INFO.value, details=details, timeout=timeout)
 
     def set_statusbar_text(self, text):
         """
@@ -420,8 +442,26 @@ class MainWindow(QtWidgets.QMainWindow):
         logger.info("Выход из программы.")
         super().closeEvent(event)
 
+    def moveEvent(self, event):  # noqa: D401 - Qt override
+        super().moveEvent(event)
+        if self.notification_center:
+            self.notification_center.reposition()
+
+    def resizeEvent(self, event):  # noqa: D401 - Qt override
+        super().resizeEvent(event)
+        if self.notification_center:
+            self.notification_center.reposition()
+
     def handle_result(self, result):
-        self.result = result
+        if isinstance(result, Exception):
+            self._progress_outcome = 'error'
+            summary = self._current_progress_message or 'Ошибка выполнения операции'
+            details = f'{type(result).__name__}: {result}'
+            self.notify_error(summary, details=details)
+            self.result = None
+        else:
+            self._progress_outcome = 'success'
+            self.result = result
 
     def display_result(self, result):
         if isinstance(result, str):
@@ -433,22 +473,27 @@ class MainWindow(QtWidgets.QMainWindow):
     def on_worker_started(self):
         if not self._current_progress_message:
             self._current_progress_message = 'Загрузка...'
-        self.progress_bar.setRange(0, 0)
-        self.set_progress_bar_status(self._current_progress_message)
-        self.progress_bar.setVisible(True)
+        self._show_progress_toast(self._current_progress_message)
 
     @Slot(str)
     def set_progress_bar_status(self, message):
         self._current_progress_message = message
-        self.progress_bar.setFormat(message + '..')
+        self._show_progress_toast(message)
 
     @Slot()
     def on_worker_finished(self):
-        self.progress_bar.setRange(0, 100)
-        self.progress_bar.setValue(100)
+        if self._progress_toast:
+            if self._progress_outcome == 'error':
+                error_message = self._current_progress_message or 'Ошибка'
+                self._progress_toast.fail(message=error_message)
+            else:
+                self._progress_toast.complete(message='Готово')
+            self._progress_toast = None
+        self._progress_outcome = None
 
     def run_with_progress(self, func, progress_text="Загрузка..."):
         self.result = None
+        self._progress_outcome = None
         self._current_progress_message = progress_text or self._current_progress_message
         worker = Worker(func)
         worker.setParent(self)
@@ -460,13 +505,22 @@ class MainWindow(QtWidgets.QMainWindow):
         # self.status_label.setText(progress_text)
         event_loop = QEventLoop()
         worker.finished.connect(event_loop.quit)
+        self._show_progress_toast(self._current_progress_message)
         worker.start()
         event_loop.exec_()
 
         # self.status_label.clear()
-        self.progress_bar.setVisible(False)
-
         return self.result
+
+    def _show_progress_toast(self, message: Optional[str] = None, details: Optional[str] = None) -> None:
+        if self.notification_center is None:
+            return
+        display_message = message or self._current_progress_message or 'Загрузка...'
+        if self._progress_toast is None:
+            self._progress_toast = self.notification_center.show_progress(display_message, details=details)
+        else:
+            self._progress_toast.update_progress(message=display_message, details=details)
+        self.notification_center.reposition()
 
     @staticmethod
     def _coerce_tree_states(raw_value):
@@ -817,9 +871,13 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def _apply_notification_settings(self, enabled: bool, timeout_seconds: int) -> None:
         self.notifications_enabled = enabled
-        self.notifications_timeout = max(1, int(timeout_seconds)) * 1000
-        if not enabled and self.notification is not None:
-            self.notification.hide()
+        timeout_value = max(1, int(timeout_seconds)) if timeout_seconds else 1
+        self.notifications_timeout = timeout_value * 1000
+        if self.notification_center:
+            if not enabled:
+                self.notification_center.hide_all()
+            else:
+                self.notification_center.reposition()
 
     @staticmethod
     def _coerce_bool(value: Any, default: bool = False) -> bool:
